@@ -1319,6 +1319,7 @@ def verify_dns(domain, email, code, prefix):
             datastore_client.put(domain_record)
 
         threading.Thread(target=process_single_domain, args=(domain,)).start()
+        print("D-1")
         #TODO: To be verified and trimmed
         # if process_result["status"] == "Processing completed":
         #    print("Success")
@@ -1394,12 +1395,24 @@ def process_single_domain(domain):
     summary of breaches per domain.
     """
     client = datastore.Client()
+    def list_transactions_for_domain(domain):
+        client = datastore.Client()
 
-    def list_transactions_for_domain():
+        # Create a query and add a filter based on the "domain" column
         query = client.query(kind="xon")
-        return [tx for tx in query.fetch() if tx["domain"] == domain]
+        query.add_filter("domain", "=", domain)
 
-    domain_transactions = list_transactions_for_domain()
+        result = []
+
+        try:
+            result = [tx for tx in query.fetch()]
+        except Exception as e:
+            print(f"Error during query.fetch(): {e}")
+
+        return result
+
+
+    domain_transactions = list_transactions_for_domain(domain)
     # Optional check for null records
     if not domain_transactions:
         entity_key = client.key("xon_domains_summary", domain + "+No_Breaches")
@@ -1433,7 +1446,7 @@ def process_single_domain(domain):
         entity = datastore.Entity(key=entity_key)
         entity.update({"domain": domain, "breach": breach, "email_count": count})
         client.put(entity)
-
+    #TODO: Need to send an email afer processing completed
     return {"status": "Processing completed"}
 
 
@@ -2257,7 +2270,6 @@ def send_domain_breaches():
         client = datastore.Client()
         alert_key = client.key("xon_domains_session", email)
         alert_task = client.get(alert_key)
-
         # If no matching session or token doesn't match or more than 24 hours passed
         if not alert_task or alert_task.get("domain_magic") != verification_token:
             return make_response(jsonify({"Error": "Invalid session"}), 400)
