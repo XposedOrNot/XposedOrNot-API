@@ -861,13 +861,11 @@ def get_breaches_analytics(breaches, sensitive_breaches):
                 logo = query.get("logo", "default_logo.jpg")
                 details = (
                     "<img src='"
-                  #  + logo_url
                     + logo
                     + "' style='height:40px;width:65px;' />"
                     "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
                     + bid
                     + "'> &nbsp;"
-                    # + bid
                     + "Details</a>"
                 )
 
@@ -927,13 +925,11 @@ def get_breaches_analytics(breaches, sensitive_breaches):
                 breach_logo = bid
                 details = (
                     "<img src='"
-                   # + logo_url
                     + logo
                     + "' style='height:40px;width:65px;' />"
                     "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
                     + bid
                     + "'> &nbsp;"
-                    # + bid
                     + "Details</a>"
                 )
 
@@ -1284,7 +1280,7 @@ def verify_email(domain, email):
         domain_record = datastore_client.get(domain_key)
         token = generate_confirmation_token(email)
 
-        if domain_record is None:  # ToDo: revisit logic
+        if domain_record is None:  # TODO: revisit logic
             create_new_record(domain, "", token, "email", datastore_client)
 
         threading.Thread(target=process_single_domain, args=(domain,)).start()
@@ -1349,9 +1345,6 @@ def verify_html(domain, email, code, prefix):
             # TODO: Individual records processing to be initiated
             # process_result = process_single_domain(domain)
         else:
-            # domain_record["emails"] = domain_record["emails"] + ";" + email
-            # mode html_file to be updated if record is updated
-            # domain_record["last_timestamp"] = datetime.datetime.now()
             domain_record["last_verified"] = datetime.datetime.now()
             datastore_client.put(domain_record)
 
@@ -1799,11 +1792,6 @@ def subscribe_to_alert_me(user_email):
                 )
                 datastore_client.put(alert_task_data)
 
-            #client_ip_address = request.headers.get("X-Forwarded-For")
-            #location = fetch_location_by_ip(client_ip_address)
-            #client_ip_address = request.headers.get("X-Forwarded-For")
-            #print(client_ip_address)
-
             if 'X-Forwarded-For' in request.headers:
                 client_ip_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
             elif 'X-Real-IP' in request.headers:
@@ -1823,7 +1811,7 @@ def subscribe_to_alert_me(user_email):
             browser_type = (
                 user_agent.browser.family + " " + user_agent.browser.version_string
             )
-            client_platform = user_agent.os.family# + " " + user_agent.os.version_string
+            client_platform = user_agent.os.family
 
             send_alert_confirmation(
                 user_email,
@@ -1864,7 +1852,6 @@ def alert_me_verification(verification_token):
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
-        #print(4)
 
         if alert_task["verified"]:
             return error_template
@@ -1881,7 +1868,6 @@ def alert_me_verification(verification_token):
             if len(exposure_info) == 0 and len(sensitive_exposure_info) == 0:
                 return verification_template
             else:
-                # breaches_info = exposure_info
                 # Domain to be updated  TODO
                 breaches_link = f"https://beta.xposedornot.com/email-report.html?email={user_email}&token={verification_token}"
                 return render_template(
@@ -2237,10 +2223,8 @@ def domain_verify(verification_token):
         user_email = confirm_token(verification_token)
 
         if user_email:
-            # enforce 24 hour restriction for token
             #TODO: URL to be updated
             dashboard_link = f"https://beta.xposedornot.com/breach-dashboard.html?email={user_email}&token={verification_token}"
-            #print(dashboard_link)
             success_template = render_template(
                 "domain_dashboard_success.html", link=dashboard_link
             )
@@ -2348,7 +2332,6 @@ def send_domain_breaches():
                 breach_logo = all_breaches_logo[breach]
                 details = (
                     "<img src='"
-                 #   + logo_url
                     + breach_logo
                     + "' style='height:40px;width:65px;' />"
                     "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
@@ -2423,14 +2406,12 @@ def activate_shield(email):
                 datastore_client.put(alert_entity)
             client_ip_address = request.headers.get("X-Forwarded-For")
             location = fetch_location_by_ip(client_ip_address)
-            # location = get_location(client_ip_address)
-            # This needs to be checked. location is unused
             user_agent_string = request.headers.get("User-Agent")
             user_agent = parse(user_agent_string)
             browser_type = (
                 user_agent.browser.family + " " + user_agent.browser.version_string
             )
-            client_platform = user_agent.os.family + " " + user_agent.os.version_string
+            client_platform = user_agent.os.family
 
             send_shield_email(
                 email,
@@ -2619,29 +2600,18 @@ def get_xdomains():
 def domain_verification():
     """Used for validating domain ownership/authority"""
     try:
-        #print(1)
         command = request.args.get("z")
-        #print(command)
         domain = request.args.get("d")
-        #print(domain)
         email = request.args.get("a", "catch-all@xposedornot.com")  # To be revisited
         email = email.lower()
-        #print(email)
         code = request.args.get("v", "xon-is-good")  # To be revisited
-        #print(code)
         prefix = "xon_verification"
-        #print(1)
-        #print(validate_domain(domain))
-        #print (validate_email_with_tld(email))
-        #print(validate_url)
         if (
             not validate_domain(domain)
             or not validate_email_with_tld(email)
             or not validate_url()
         ):
-        #    print(2)
             return make_response(jsonify({"Error": "Not found"}), 404)
-            # return not_found()
         # TODO: Simple validation for completed verifications & emails
         command_dict = {
             "c": lambda: check_emails(domain),
@@ -2649,13 +2619,11 @@ def domain_verification():
             "e": lambda: verify_dns(domain, email, code, prefix),
             "a": lambda: verify_html(domain, email, code, prefix),
         }
-        #print(3)
 
         if command in command_dict:
             return command_dict[command]()
         else:
             return jsonify({"domainVerification": "Failure"})
-        #print(4)
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
