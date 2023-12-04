@@ -109,7 +109,7 @@ Please read [CONTRIBUTING.md](https://github.com/XposedOrNot/XposedOrNot-API/blo
 
 ## Authors
 
-* **Devanand Premkumar** - *Initial work* - [XposedOrNot](https://github.com/XposedOrNot-API)
+* **Devanand Premkumar** - *Initial work* - [XposedOrNot-API](https://github.com/XposedOrNot/XposedOrNot-API)
 
 ## License
 
