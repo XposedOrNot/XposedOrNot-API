@@ -73,6 +73,7 @@ LIMITER = Limiter(
     app=XON,
     key_func=get_remote_address,
     default_limits=["100 per hour"],
+    headers_enabled=True
 )
 
 
@@ -85,12 +86,25 @@ def not_found(error):
 @XON.errorhandler(429)
 def ratelimit_handler(error):
     """Returns response for 429"""
+    rate_limit_info = re.search(r'(\d+)\sper\s(\d+\s\w+)', str(error.description))
+    if rate_limit_info:
+        count, period = rate_limit_info.groups()
+        period_seconds = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}[period.split()[1]]
+        retry_after = period_seconds // int(count)
+    else:
+        retry_after = "unknown"  # TODO: Revisit logic
+
     if "hour" in error.description:
         #pass
         block_hour(ip_address=request.headers.get("X-Forwarded-For")) # TODO
     elif "day" in error.description:
         block_day(ip_address=request.headers.get("X-Forwarded-For")) # TODO
-    return make_response(jsonify(error=f"Ratelimit exceeded {error.description}"), 429)
+
+    response = make_response(jsonify(
+        error=f"Ratelimit exceeded {error.description}",
+        retry_after_seconds=retry_after
+    ), 429)
+    return response
 
 @XON.route('/robots.txt')
 @LIMITER.limit("500 per day;100 per hour")
