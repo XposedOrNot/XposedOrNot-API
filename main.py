@@ -1333,14 +1333,6 @@ def verify_dns(domain, email, code, prefix):
             datastore_client.put(domain_record)
 
         threading.Thread(target=process_single_domain, args=(domain,)).start()
-        print("D-1")
-        #TODO: To be verified and trimmed
-        # if process_result["status"] == "Processing completed":
-        #    print("Success")
-        # Generate or retrieve the confirmation token
-        # token = generate_or_retrieve_token(domain, email)
-        # Send the confirmation email
-        # send_domain_confirmation_email(email, token, client_ip_address, browser_type, client_platform)
         return jsonify({"domainVerification": "Success"})
     else:
         return jsonify({"domainVerification": "Failure"})
@@ -1357,8 +1349,6 @@ def verify_html(domain, email, code, prefix):
         domain_record = datastore_client.get(domain_key)
         if domain_record is None:
             create_new_record(domain, email, code, "html_file", datastore_client)
-            # TODO: Individual records processing to be initiated
-            # process_result = process_single_domain(domain)
         else:
             domain_record["last_verified"] = datetime.datetime.now()
             datastore_client.put(domain_record)
@@ -1423,7 +1413,6 @@ def process_single_domain(domain):
         except Exception as e:
             print(f"Error during query.fetch(): {e}")
 
-        return result
 
 
     domain_transactions = list_transactions_for_domain(domain)
@@ -1461,7 +1450,6 @@ def process_single_domain(domain):
         entity.update({"domain": domain, "breach": breach, "email_count": count})
         client.put(entity)
     #TODO: Need to send an email afer processing completed
-    return {"status": "Processing completed"}
 
 
 @XON.route("/v1/unblock_cf/<token>", methods=["GET"])
