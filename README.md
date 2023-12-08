@@ -6,14 +6,14 @@
 <a href="https://github.com/psf/black" ><img src="https://img.shields.io/static/v1?label=code%20style&message=black&color=blue"></a>
 <a href=""> <img src="https://img.shields.io/badge/code%20style-pep8-blue.svg"</img></a>
 <a href="https://github.com/devaonbreaches/XposedOrNot/blob/master/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributions-Welcome-brightgreen"></a>
-
  <p align="center">     
     <a href="https://xposedornot.docs.apiary.io/" target="_blank">XposedOrNot API Playground</a>    ·
     <a href="https://xposedornot.com" target="_blank"> XposedOrNot.com</a>
   </p> <br>  
- </p>
-  
-![XposedOrNot demo](https://github.com/DevaOnBreaches/PassPower-Chrome/blob/master/pics/demo.gif)
+ </p>  
+<p align="center">
+  <img src="https://github.com/XposedOrNot/XposedOrNot-Website/blob/master/static/images/xon.webp" alt="XposedOrNot demo">
+</p>
 
 ## What is XposedOrNot API?
 
