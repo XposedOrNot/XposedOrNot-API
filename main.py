@@ -73,7 +73,7 @@ LIMITER = Limiter(
     app=XON,
     key_func=get_remote_address,
     default_limits=["100 per hour"],
-    headers_enabled=True
+    headers_enabled=True,
 )
 
 
@@ -86,31 +86,38 @@ def not_found(error):
 @XON.errorhandler(429)
 def ratelimit_handler(error):
     """Returns response for 429"""
-    rate_limit_info = re.search(r'(\d+)\sper\s(\d+\s\w+)', str(error.description))
+    rate_limit_info = re.search(r"(\d+)\sper\s(\d+\s\w+)", str(error.description))
     if rate_limit_info:
         count, period = rate_limit_info.groups()
-        period_seconds = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}[period.split()[1]]
+        period_seconds = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}[
+            period.split()[1]
+        ]
         retry_after = period_seconds // int(count)
     else:
         retry_after = "unknown"  # TODO: Revisit logic
 
     if "hour" in error.description:
-        #pass
-        block_hour(ip_address=request.headers.get("X-Forwarded-For")) # TODO
+        # pass
+        block_hour(ip_address=request.headers.get("X-Forwarded-For"))  # TODO
     elif "day" in error.description:
-        block_day(ip_address=request.headers.get("X-Forwarded-For")) # TODO
+        block_day(ip_address=request.headers.get("X-Forwarded-For"))  # TODO
 
-    response = make_response(jsonify(
-        error=f"Ratelimit exceeded {error.description}",
-        retry_after_seconds=retry_after
-    ), 429)
+    response = make_response(
+        jsonify(
+            error=f"Ratelimit exceeded {error.description}",
+            retry_after_seconds=retry_after,
+        ),
+        429,
+    )
     return response
 
-@XON.route('/robots.txt')
+
+@XON.route("/robots.txt")
 @LIMITER.limit("500 per day;100 per hour")
 def serve_robots_txt():
     """Returns robots.txt"""
-    return send_from_directory(XON.static_folder, 'robots.txt')
+    return send_from_directory(XON.static_folder, "robots.txt")
+
 
 @XON.route("/", methods=["GET"])
 @LIMITER.limit("5000 per day;1000 per hour;100 per second")
@@ -262,7 +269,7 @@ def get_preferred_ip_address(x_forwarded_for):
     from the X-Forwarded-For header value.
     """
     # Split the header value by commas to get individual IP addresses
-    ip_addresses = x_forwarded_for.split(',')
+    ip_addresses = x_forwarded_for.split(",")
 
     # First, search for an IPv4 address
     for ip in ip_addresses:
@@ -284,6 +291,7 @@ def get_preferred_ip_address(x_forwarded_for):
 
     # Return None if no valid IP address is found
     return None
+
 
 def get_breaches(breaches):
     """Returns the exposed breaches"""
@@ -547,7 +555,7 @@ def get_breaches_data(breaches: str) -> dict:
         breach_list = breaches.split(";")
 
         data_categories = {
-             #TODO: Revise the labels to suit after xon-data
+            # TODO: Revise the labels to suit after xon-data
             "Names": {"category": "👤 Personal Identification", "group": "A"},
             "Usernames": {"category": "👤 Personal Identification", "group": "A"},
             "Genders": {"category": "👤 Personal Identification", "group": "A"},
@@ -874,9 +882,7 @@ def get_breaches_analytics(breaches, sensitive_breaches):
                 breach_logo = bid
                 logo = query.get("logo", "default_logo.jpg")
                 details = (
-                    "<img src='"
-                    + logo
-                    + "' style='height:40px;width:65px;' />"
+                    "<img src='" + logo + "' style='height:40px;width:65px;' />"
                     "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
                     + bid
                     + "'> &nbsp;"
@@ -938,9 +944,7 @@ def get_breaches_analytics(breaches, sensitive_breaches):
 
                 breach_logo = bid
                 details = (
-                    "<img src='"
-                    + logo
-                    + "' style='height:40px;width:65px;' />"
+                    "<img src='" + logo + "' style='height:40px;width:65px;' />"
                     "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
                     + bid
                     + "'> &nbsp;"
@@ -1160,7 +1164,13 @@ def get_pastes_metrics(pastes):
             y2017
         ) = (
             y2016
-        ) = y2015 = y2015 = y2014 = y2013 = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
+        ) = (
+            y2015
+        ) = (
+            y2015
+        ) = (
+            y2014
+        ) = y2013 = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
         for index_count, count in enumerate(breaches):
             key = ds_client.key("xon_paste_master", count)
             query = ds_client.get(key)
@@ -1311,10 +1321,11 @@ def verify_email(domain, email):
         send_domain_confirmation_email(
             email, token, client_ip_address, browser_type, client_platform
         )
-        #TODO: To be cleaned
+        # TODO: To be cleaned
         return jsonify({"domainVerification": "Success"})
     else:
         return jsonify({"domainVerification": "Failure"})
+
 
 def verify_dns(domain, email, code, prefix):
     """Validates email and code, verifies the domain via DNS TXT record, creates or updates
@@ -1399,6 +1410,7 @@ def process_single_domain(domain):
     summary of breaches per domain.
     """
     client = datastore.Client()
+
     def list_transactions_for_domain(domain):
         client = datastore.Client()
 
@@ -1412,8 +1424,6 @@ def process_single_domain(domain):
             result = [tx for tx in query.fetch()]
         except Exception as e:
             print(f"Error during query.fetch(): {e}")
-
-
 
     domain_transactions = list_transactions_for_domain(domain)
     # Optional check for null records
@@ -1449,7 +1459,7 @@ def process_single_domain(domain):
         entity = datastore.Entity(key=entity_key)
         entity.update({"domain": domain, "breach": breach, "email_count": count})
         client.put(entity)
-    #TODO: Need to send an email afer processing completed
+    # TODO: Need to send an email afer processing completed
 
 
 @XON.route("/v1/unblock_cf/<token>", methods=["GET"])
@@ -1737,7 +1747,7 @@ def domcheck_subscribe(domain):
         domain = domain.lower()
         if not validate_domain(domain):
             return make_response(jsonify({"Error": "Not found"}), 404)
-        #domain = domain.lower()
+        # domain = domain.lower()
         token = generate_confirmation_token(domain)
         confirm_url = url_for("domcheck_verification", token=token, _external=True)
         return confirm_url
@@ -1807,10 +1817,12 @@ def subscribe_to_alert_me(user_email):
                 )
                 datastore_client.put(alert_task_data)
 
-            if 'X-Forwarded-For' in request.headers:
-                client_ip_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
-            elif 'X-Real-IP' in request.headers:
-                client_ip_address = request.headers['X-Real-IP'].strip()
+            if "X-Forwarded-For" in request.headers:
+                client_ip_address = (
+                    request.headers["X-Forwarded-For"].split(",")[0].strip()
+                )
+            elif "X-Real-IP" in request.headers:
+                client_ip_address = request.headers["X-Real-IP"].strip()
             else:
                 client_ip_address = request.remote_addr
 
@@ -2047,9 +2059,7 @@ def protected():
     """Retrieves the data breaches and related metrics for an API-key"""
     try:
         api_key = request.headers.get("x-api-key")
-        if (
-            not api_key or api_key.strip() == "" or not validate_url()
-        ):
+        if not api_key or api_key.strip() == "" or not validate_url():
             return (
                 jsonify({"status": "error", "message": "Invalid or missing API key"}),
                 401,
@@ -2175,7 +2185,6 @@ def domain_alert(user_email):
         query = datastore_client.query(kind="xon_domains")
         query.add_filter("email", "=", user_email)
         domain_task = list(query.fetch())
-        
 
         if domain_task:
             alert_key = datastore_client.key("xon_domains_session", user_email)
@@ -2196,11 +2205,13 @@ def domain_alert(user_email):
                 }
             )
             datastore_client.put(alert_task_data)
-            
-            if 'X-Forwarded-For' in request.headers:
-                client_ip_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
-            elif 'X-Real-IP' in request.headers:
-                client_ip_address = request.headers['X-Real-IP'].strip()
+
+            if "X-Forwarded-For" in request.headers:
+                client_ip_address = (
+                    request.headers["X-Forwarded-For"].split(",")[0].strip()
+                )
+            elif "X-Real-IP" in request.headers:
+                client_ip_address = request.headers["X-Real-IP"].strip()
             else:
                 client_ip_address = request.remote_addr
 
@@ -2238,7 +2249,7 @@ def domain_alert(user_email):
 @LIMITER.limit("50 per day;10 per hour;1 per second")
 def domain_verify(verification_token):
     """Verify domain alerts using MAGIC and send breaches if any."""
-    #TODO: all templates here to be revisited
+    # TODO: all templates here to be revisited
     try:
         error_template = render_template("domain_dashboard_error.html")
         if (
@@ -2250,7 +2261,7 @@ def domain_verify(verification_token):
         user_email = confirm_token(verification_token)
 
         if user_email:
-            #TODO: URL to be updated
+            # TODO: URL to be updated
             dashboard_link = f"https://beta.xposedornot.com/breach-dashboard.html?email={user_email}&token={verification_token}"
             success_template = render_template(
                 "domain_dashboard_success.html", link=dashboard_link
@@ -2265,7 +2276,7 @@ def domain_verify(verification_token):
 
 
 @XON.route("/v1/send_domain_breaches", methods=["GET"])
-@LIMITER.limit("500 per day;100 per hour;1 per second") #TODO
+@LIMITER.limit("500 per day;100 per hour;1 per second")  # TODO
 def send_domain_breaches():
     """Retrieves and sends the data breaches validated by token and email"""
     try:
@@ -2357,9 +2368,7 @@ def send_domain_breaches():
             for breach, count in breaches.items():
                 breach_logo = all_breaches_logo[breach]
                 details = (
-                    "<img src='"
-                    + breach_logo
-                    + "' style='height:40px;width:65px;' />"
+                    "<img src='" + breach_logo + "' style='height:40px;width:65px;' />"
                     "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
                     + breach
                     + "'> &nbsp;"
@@ -2367,7 +2376,7 @@ def send_domain_breaches():
                 )
                 breach_node = {
                     "description": details,
-                    "tooltip": "Click here for " + breach +" details👇",
+                    "tooltip": "Click here for " + breach + " details👇",
                     "children": [],
                 }
                 year_node["children"].append(breach_node)

@@ -15,6 +15,7 @@ from google.cloud import datastore
 AUTH_EMAIL = os.environ["AUTH_EMAIL"]
 AUTH_KEY = os.environ["AUTHKEY"]
 
+
 def update_cf_trans(ip_address):
     """
     Update the Cloud Firestore transaction with the given IP address.
@@ -103,7 +104,7 @@ def block_day(ip_address):
         + '"},"notes":"Day block enforced"}'
     )
     response = requests.post(url, headers=headers, data=payload)
-    #update_cf_trans(response.content)
+    # update_cf_trans(response.content)
     if response.status_code in [200, 201]:
         update_cf_trans(response.content)
 
@@ -142,10 +143,9 @@ def unblock():
             url = base_url + firewall_rule_id
             response = requests.request("DELETE", url, headers=headers)
             if response.status_code != 200:
-                raise Exception(f"Failed to delete firewall rule: {firewall_rule_id}. Response code: {response.status_code}, Response: {response.text}")
-            entity.update({
-                'release_timestamp': datetime.datetime.utcnow().isoformat()
-            })
+                raise Exception(
+                    f"Failed to delete firewall rule: {firewall_rule_id}. Response code: {response.status_code}, Response: {response.text}"
+                )
+            entity.update({"release_timestamp": datetime.datetime.utcnow().isoformat()})
             datastore_client.put(entity)
     return True
-
