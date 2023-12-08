@@ -1649,14 +1649,14 @@ def search_email(email):
         alert_record = data_store.get(alert_key)
 
         if alert_record and alert_record["shieldOn"]:
-            abort(404)
+            return make_response(jsonify({"Error": "Not found"}), 404)
 
         if xon_record:
             domains = xon_record["site"].split(";")
             exposed_breaches["breaches"].append(domains)
             return jsonify(exposed_breaches)
         else:
-            abort(404)
+            return make_response(jsonify({"Error": "Not found"}), 404)
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
