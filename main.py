@@ -2196,15 +2196,28 @@ def domain_alert(user_email):
                 }
             )
             datastore_client.put(alert_task_data)
+            
+            if 'X-Forwarded-For' in request.headers:
+                client_ip_address = request.headers['X-Forwarded-For'].split(',')[0].strip()
+            elif 'X-Real-IP' in request.headers:
+                client_ip_address = request.headers['X-Real-IP'].strip()
+            else:
+                client_ip_address = request.remote_addr
 
-            client_ip_address = request.headers.get("X-Forwarded-For")
-            location = fetch_location_by_ip(client_ip_address)
+            preferred_ip = get_preferred_ip_address(client_ip_address)
+
+            if preferred_ip:
+                location = fetch_location_by_ip(preferred_ip)
+            else:
+                # To be revisited
+                pass
             user_agent_string = request.headers.get("User-Agent")
             user_agent = parse(user_agent_string)
             browser_type = (
                 user_agent.browser.family + " " + user_agent.browser.version_string
             )
-            client_platform = user_agent.os.family + " " + user_agent.os.version_string
+            client_platform = user_agent.os.family
+
             send_dashboard_email_confirmation(
                 user_email,
                 confirmation_url,
@@ -2227,7 +2240,6 @@ def domain_verify(verification_token):
     """Verify domain alerts using MAGIC and send breaches if any."""
     #TODO: all templates here to be revisited
     try:
-        #print(1)
         error_template = render_template("domain_dashboard_error.html")
         if (
             not verification_token
