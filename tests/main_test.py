@@ -2,6 +2,7 @@ import json
 import unittest
 from main import XON
 
+
 class BasicTestCase(unittest.TestCase):
     """
     BasicTestCase contains unit tests for testing the routes in the XON application.
@@ -21,7 +22,7 @@ class BasicTestCase(unittest.TestCase):
 
     def test_index(self):
         """
-        Test case for the index route. 
+        Test case for the index route.
         It verifies that the response status code is 200 (OK).
         """
         response = self.app.get("/", follow_redirects=True)
@@ -69,6 +70,7 @@ class BasicTestCase(unittest.TestCase):
         self.assertIn("PastesSummary", json_data)
         self.assertIn("ExposedPastes", json_data)
         self.assertIn("PasteMetrics", json_data)
+
 
 if __name__ == "__main__":
     unittest.main()
