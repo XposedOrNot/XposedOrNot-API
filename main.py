@@ -1262,9 +1262,9 @@ def check_emails(domain):
     Sends a request to the WhoisXML API to get the 'whois' record of the given domain and
     extracts the registrant's email from the response.
     """
-    # TODO: Timeout
     response = requests.get(
-        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON"
+        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
+        timeout=20,
     )
     if response.status_code != 200:
         return jsonify({"domainVerification": "Failure"})
@@ -1287,9 +1287,9 @@ def verify_email(domain, email):
     Verifies if the provided email matches with the registrant's email from the 'whois' record
     of the given domain (using WhoisXML API).
     """
-    # TODO: Timeout
     response = requests.get(
-        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON"
+        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
+        timeout=20,
     )
 
     if response.status_code != 200:
