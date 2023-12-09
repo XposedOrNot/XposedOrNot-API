@@ -1263,9 +1263,11 @@ def check_emails(domain):
     extracts the registrant's email from the response.
     """
     response = requests.get(
-        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
+        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?"
+        f"apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
         timeout=20,
     )
+
     if response.status_code != 200:
         return jsonify({"domainVerification": "Failure"})
 
@@ -1288,7 +1290,8 @@ def verify_email(domain, email):
     of the given domain (using WhoisXML API).
     """
     response = requests.get(
-        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
+        f"https://www.whoisxmlapi.com/whoisserver/WhoisService?"
+        f"apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
         timeout=20,
     )
 
