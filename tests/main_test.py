@@ -2,21 +2,36 @@ import json
 import unittest
 from main import XON
 
-
 class BasicTestCase(unittest.TestCase):
+    """
+    BasicTestCase contains unit tests for testing the routes in the XON application.
+    """
+
     def setUp(self):
+        """
+        Set up the test client for XON application before each test case.
+        """
         self.app = XON.test_client()
 
     def tearDown(self):
+        """
+        Tear down operations after each test case. Currently, it does nothing.
+        """
         pass
 
-    # Test case for the index route
     def test_index(self):
+        """
+        Test case for the index route. 
+        It verifies that the response status code is 200 (OK).
+        """
         response = self.app.get("/", follow_redirects=True)
         self.assertEqual(response.status_code, 200)
 
-    # Test case for the /v1/metrics route
     def test_metrics(self):
+        """
+        Test case for the /v1/metrics route.
+        It checks the response status code and verifies specific keys in the JSON response.
+        """
         response = self.app.get("/v1/metrics/", follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         json_data = json.loads(response.data.decode("utf8"))
@@ -25,8 +40,11 @@ class BasicTestCase(unittest.TestCase):
         self.assertIn("Pastes_Count", json_data)
         self.assertIn("Pastes_Records", json_data)
 
-    # Test case for the /v1/check-email/<email> route
     def test_check_email(self):
+        """
+        Test case for the /v1/check-email/<email> route.
+        It checks the response status code and verifies specific keys in the JSON response.
+        """
         response = self.app.get(
             "/v1/check-email/test@example.com", follow_redirects=True
         )
@@ -35,8 +53,11 @@ class BasicTestCase(unittest.TestCase):
         self.assertIn("Exposed_Breaches", json_data)
         self.assertIn("domains", json_data)
 
-    # Test case for the /v1/breach-analytics/<email> route
     def test_breach_analytics(self):
+        """
+        Test case for the /v1/breach-analytics/<email> route.
+        It checks the response status code and verifies specific keys in the JSON response.
+        """
         response = self.app.get(
             "/v1/breach-analytics/test@example.com", follow_redirects=True
         )
@@ -48,7 +69,6 @@ class BasicTestCase(unittest.TestCase):
         self.assertIn("PastesSummary", json_data)
         self.assertIn("ExposedPastes", json_data)
         self.assertIn("PasteMetrics", json_data)
-
 
 if __name__ == "__main__":
     unittest.main()
