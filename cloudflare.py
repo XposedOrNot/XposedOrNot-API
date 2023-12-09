@@ -74,7 +74,7 @@ def block_hour(ip_address):
         + ip_address
         + '"},"notes":"Hour block enforced"}'
     )
-    response = requests.post(url, headers=headers, data=payload)
+    response = requests.post(url, headers=headers, data=payload, timeout=20)
     if response.status_code in [200, 201]:
         update_cf_trans(response.content)
 
@@ -106,7 +106,7 @@ def block_day(ip_address):
         + ip_address
         + '"},"notes":"Day block enforced"}'
     )
-    response = requests.post(url, headers=headers, data=payload)
+    response = requests.post(url, headers=headers, data=payload, timeout=20)
     if response.status_code in [200, 201]:
         update_cf_trans(response.content)
 
@@ -144,7 +144,7 @@ def unblock():
         current_time_stamp = time.time()
         if float(current_time_stamp) - float(created_time_in_seconds) > 3600:
             url = base_url + firewall_rule_id
-            response = requests.request("DELETE", url, headers=headers)
+            response = requests.request("DELETE", url, headers=headers, timeout=20)
             if response.status_code != 200:
                 raise Exception(
                     f"Failed to delete firewall rule: {firewall_rule_id}. "
