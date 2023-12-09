@@ -1,19 +1,22 @@
 <p align="center"><h1 align="center">XposedOrNot API </p></h1>
  
-<p align="center"
-🎉 Your free API for real-time data breach monitoring and analytics. 
-<a href=""><img src="https://img.shields.io/badge/license-MIT-blue"></a>
-<a href="https://github.com/psf/black" ><img src="https://img.shields.io/static/v1?label=code%20style&message=black&color=blue"></a>
-<a href=""> <img src="https://img.shields.io/badge/code%20style-pep8-blue.svg"</img></a>
-<a href="https://github.com/devaonbreaches/XposedOrNot/blob/master/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributions-Welcome-brightgreen"></a>
- <p align="center">     
+<p align="center">
+🎉 Your free API for real-time data breach monitoring and analytics. <br>
+<a href="https://github.com/XposedOrNot/XposedOrNot-API/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue"></a>
+<a href="https://github.com/psf/black"><img src="https://img.shields.io/static/v1?label=code%20style&message=black&color=blue"></a>
+<a href=""><img src="https://img.shields.io/badge/code%20style-pep8-blue.svg"></a>
+<a href="https://github.com/XposedOrNot/XposedOrNot-API/blob/master/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributions-Welcome-brightgreen"></a>
+<img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/black.yml/badge.svg" alt="Black">
+<img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pylint.yml/badge.svg" alt="Pylint">
+<p align="center">     
     <a href="https://xposedornot.docs.apiary.io/" target="_blank">XposedOrNot API Playground</a>    ·
     <a href="https://xposedornot.com" target="_blank"> XposedOrNot.com</a>
-  </p> <br>  
- </p>  
+</p> <br>  
+</p>  
 <p align="center">
   <img src="https://github.com/XposedOrNot/XposedOrNot-Website/blob/master/static/images/xon.webp" alt="XposedOrNot demo">
 </p>
+
 
 ## What is XposedOrNot API?
 
