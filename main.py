@@ -1899,7 +1899,12 @@ def alert_me_verification(verification_token):
                 return verification_template
             else:
                 # Domain to be updated  TODO
-                breaches_link = f"https://beta.xposedornot.com/email-report.html?email={user_email}&token={verification_token}"
+                base_url = "https://beta.xposedornot.com/"
+                email_param = f"email={user_email}"
+                token_param = f"&token={verification_token}"
+                breaches_link = (
+                    base_url + "email-report.html?" + email_param + "&" + token_param
+                )
                 return render_template(
                     "email_success.html", breaches_link=breaches_link
                 )
@@ -2265,7 +2270,12 @@ def domain_verify(verification_token):
 
         if user_email:
             # TODO: URL to be updated
-            dashboard_link = f"https://beta.xposedornot.com/breach-dashboard.html?email={user_email}&token={verification_token}"
+            base_url = "https://beta.xposedornot.com/"
+            email_param = f"email={user_email}"
+            token_param = f"&token={verification_token}"
+            dashboard_link = (
+                base_url + "breach-dashboard.html?" + email_param + "&" + token_param
+            )
             success_template = render_template(
                 "domain_dashboard_success.html", link=dashboard_link
             )
@@ -2674,7 +2684,8 @@ def domain_verification():
 # TODO try/except
 def get_xposed_breaches():
     """
-    Fetches and returns the details of data breaches for a specified domain, or for all domains if no domain is specified.
+    Fetches and returns the details of data breaches for a specified domain,
+    or for all domains if no domain is specified.
     """
     client = datastore.Client()
     domain = request.args.get("domain")
