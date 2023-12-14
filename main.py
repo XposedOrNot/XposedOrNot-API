@@ -2297,10 +2297,8 @@ def domain_verify(verification_token):
 def send_domain_breaches():
     """Retrieves and sends the data breaches validated by token and email"""
     try:
-        # print(1)
         email = request.args.get("email").lower()
         verification_token = request.args.get("token")
-        # print(2)
 
         # Validate email and token
         if (
@@ -2308,56 +2306,44 @@ def send_domain_breaches():
             or not validate_variables(verification_token)
             or not validate_url()
         ):
-            # print(3)
             return make_response(jsonify({"Error": "Invalid email or token"}), 400)
 
         # Check for matching session in xon_domains_session
         client = datastore.Client()
         alert_key = client.key("xon_domains_session", email)
         alert_task = client.get(alert_key)
-        # print(4)
         # If no matching session or token doesn't match or more than 24 hours passed
         if not alert_task or alert_task.get("domain_magic") != verification_token:
-            # print(5)
             return make_response(jsonify({"Error": "Invalid session"}), 400)
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
             tzinfo=None
         ) > timedelta(hours=24):
-            # print(6)
             return make_response(jsonify({"Error": "Session expired"}), 400)
 
         # fetch domains where the given email was used for verification
         query = client.query(kind="xon_domains")
         query.add_filter("email", "=", email)
         verified_domains = [entity["domain"] for entity in query.fetch()]
-        # print(7)
         current_year = datetime.datetime.utcnow().year
         yearly_summary = defaultdict(int)
         domain_summary = defaultdict(int)
         yearly_summary = {str(year): 0 for year in range(current_year, 2006, -1)}
-        # print(8)
 
         yearly_breach_summary = {
             str(year): defaultdict(int) for year in range(current_year, 2006, -1)
         }
-        # print(9)
 
         # count records in xon_domains_summary for each domain
         breach_summary = defaultdict(int)
         breach_details = []
         detailed_breach_info = {}
         all_breaches_logo = {}
-        # print(10)
         for domain in verified_domains:
-            # print(11)
             domain_summary[domain] = 0
             query = client.query(kind="xon_domains_summary")
             query.add_filter("domain", "=", domain)
             for entity in query.fetch():
-                # print(12)
-                # print(entity)
                 if entity["breach"] == "No_Breaches":
-                    #    print(13)
                     continue
                 # fetch the breach to get the breach date and details
                 breach_key = client.key("xon_breaches", entity["breach"])
@@ -2369,7 +2355,6 @@ def send_domain_breaches():
                 yearly_breach_summary[breach_year][entity["breach"]] += entity[
                     "email_count"
                 ]
-                # print(14)
                 # count the occurrences of each breach
                 breach_summary[entity["breach"]] += entity["email_count"]
                 domain_summary[domain] += entity["email_count"]
@@ -2382,13 +2367,10 @@ def send_domain_breaches():
                     "xposed_records": breach["xposed_records"],
                     "xposure_desc": breach["xposure_desc"],
                 }
-                # print(15)
             # fetch the breach details for the given domain
             query = client.query(kind="xon_domains_details")
             query.add_filter("domain", "=", domain)
-            # print(16)
             for entity in query.fetch():
-                # print(17)
                 breach_details.append(
                     {
                         "email": entity["email"],
@@ -2398,12 +2380,9 @@ def send_domain_breaches():
                 )
 
         yearly_breach_hierarchy = {"description": "Data Breaches", "children": []}
-        # print(18)
         for year, breaches in yearly_breach_summary.items():
-            # print(19)
             year_node = {"description": year, "children": []}
             for breach, count in breaches.items():
-                # print(20)
                 breach_logo = all_breaches_logo[breach]
                 details = (
                     "<img src='" + breach_logo + "' style='height:40px;width:65px;' />"
@@ -2419,7 +2398,6 @@ def send_domain_breaches():
                 }
                 year_node["children"].append(breach_node)
             yearly_breach_hierarchy["children"].append(year_node)
-            # print(21)
         top10_breaches = sorted(
             breach_summary.items(), key=itemgetter(1), reverse=True
         )[:5]
@@ -2432,13 +2410,11 @@ def send_domain_breaches():
             "Detailed_Breach_Info": detailed_breach_info,
             "Verified_Domains": verified_domains,
         }
-        # print(22)
         metrics["Yearly_Breach_Hierarchy"] = yearly_breach_hierarchy
 
         return jsonify(metrics)
 
     except Exception as exception_details:
-        print(exception_details)
         log_except(request.url, exception_details)
         abort(404)
 
@@ -2676,20 +2652,17 @@ def get_xdomains():
 def domain_verification():
     """Used for validating domain ownership/authority"""
     try:
-        # print(1)
         command = request.args.get("z")
         domain = request.args.get("d")
         email = request.args.get("a", "catch-all@xposedornot.com")  # To be revisited
         email = email.lower()
         code = request.args.get("v", "xon-is-good")  # To be revisited
         prefix = "xon_verification"
-        # print(2)
         if (
             not validate_domain(domain)
             or not validate_email_with_tld(email)
             or not validate_url()
         ):
-            # print(3)
             return make_response(jsonify({"Error": "Not found"}), 404)
         # TODO: Simple validation for completed verifications & emails
         command_dict = {
@@ -2698,17 +2671,13 @@ def domain_verification():
             "e": lambda: verify_dns(domain, email, code, prefix),
             "a": lambda: verify_html(domain, email, code, prefix),
         }
-        # print(4)
 
         if command in command_dict:
-            # print(5)
             return command_dict[command]()
         else:
-            # print(6)
             return jsonify({"domainVerification": "Failure"})
 
     except Exception as exception_details:
-        # print(exception_details)
         log_except(request.url, exception_details)
         abort(404)
     return jsonify({"domainVerification": "Failure"})
