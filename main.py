@@ -251,6 +251,9 @@ def fetch_location_by_ip(ip_address: str) -> str:
     """
     Returns the nearest city and country based on the given IP address.
     """
+    if not is_valid_ip(ip_address):
+        return "Error: Invalid IP address format"
+
     ip_api_url = f"http://ip-api.com/json/{ip_address}"
     default_timeout = 20
 
@@ -261,6 +264,20 @@ def fetch_location_by_ip(ip_address: str) -> str:
         return f'Near {location_data["city"]}, {location_data["country"]}'
     except (requests.Timeout, requests.HTTPError, requests.RequestException, KeyError):
         return "Error"
+
+
+
+def is_valid_ip(ip_address: str) -> bool:
+    """
+    Validates the IP address format for both IPv4 and IPv6.
+    """
+    ipv4_pattern = r"^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+    ipv6_pattern = r"^([\da-fA-F]{1,4}:){7}([\da-fA-F]{1,4})$"
+
+    return (
+        re.match(ipv4_pattern, ip_address) is not None
+        or re.match(ipv6_pattern, ip_address) is not None
+    )
 
 
 def get_preferred_ip_address(x_forwarded_for):
@@ -1235,7 +1252,12 @@ def get_pastes_metrics(pastes):
 
 
 def check_file(domain, prefix, code):
-    """Supports domain verification using html file check process"""
+    """
+    Supports domain verification using HTML file check process.
+    """
+    if not validate_domain(domain) or not validate_variables([code]):
+        return False
+
     headers = {
         "User-Agent": "XposedOrNot-DomainCheck 1.0 (+https://XposedOrNot.com) ",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -1246,6 +1268,7 @@ def check_file(domain, prefix, code):
     }
     url = f"https://{domain}/{code}.html"
     token = f"{prefix}={code}"
+
     try:
         response = requests.get(url, headers=headers, timeout=20)
         data = response.content[:1000]
@@ -1254,7 +1277,9 @@ def check_file(domain, prefix, code):
                 return True
     except requests.exceptions.RequestException as exception_details:
         print(f"Error: {exception_details}")
+
     return False
+
 
 
 def check_emails(domain):
@@ -2648,15 +2673,18 @@ def get_xdomains():
 
 
 @XON.route("/v1/domain_verification", methods=["GET"])
-@LIMITER.limit("50 per day;20 per hour;1 per second")  # to be revisited
+@LIMITER.limit("50 per day;20 per hour;1 per second")
 def domain_verification():
     """Used for validating domain ownership/authority"""
     try:
-        command = request.args.get("z")
-        domain = request.args.get("d")
-        email = request.args.get("a", "catch-all@xposedornot.com")  # To be revisited
-        email = email.lower()
-        code = request.args.get("v", "xon-is-good")  # To be revisited
+        command = request.args.get("z", "")
+        domain = request.args.get("d", "")
+        email = request.args.get("a", "catch-all@xposedornot.com").lower()
+        code = request.args.get("v", "xon-is-good")
+
+        if not validate_variables([command, domain, email, code]):
+            return make_response(jsonify({"Error": "Invalid input"}), 400)
+
         prefix = "xon_verification"
         if (
             not validate_domain(domain)
@@ -2664,7 +2692,7 @@ def domain_verification():
             or not validate_url()
         ):
             return make_response(jsonify({"Error": "Not found"}), 404)
-        # TODO: Simple validation for completed verifications & emails
+
         command_dict = {
             "c": lambda: check_emails(domain),
             "d": lambda: verify_email(domain, email),
@@ -2680,7 +2708,9 @@ def domain_verification():
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
+
     return jsonify({"domainVerification": "Failure"})
+
 
 
 @XON.route("/v1/breaches", methods=["GET"])
