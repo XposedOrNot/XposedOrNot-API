@@ -1988,15 +1988,18 @@ def send_verification():
                 xon_record = ds_xon.get(xon_key)
                 if xon_record is not None:
                     # TODO: null validation for sensitive_site and site needs to be enabled
-                    site = str(xon_record["site"])
-                    sensitive_site = str(xon_record["sensitive_site"])
+                    site = str(xon_record["site"]) if "site" in xon_record else ""
+                    sensitive_site = (
+                        str(xon_record["sensitive_site"])
+                        if "sensitive_site" in xon_record
+                        else ""
+                    )
 
-                    if sensitive_site:
-                        sensitive_site_breaches = get_breaches(sensitive_site)
+                    if site or sensitive_site:
+                        sensitive_site_breaches = (
+                            get_breaches(sensitive_site) if sensitive_site else ""
+                        )
                         breach_metrics = get_breaches_analytics(site, sensitive_site)
-                    else:
-                        sensitive_site_breaches = ""
-                        breach_metrics = get_breaches_analytics(site, "")
 
                     return make_response(
                         jsonify(
@@ -2675,8 +2678,8 @@ def get_xdomains():
 def domain_verification():
     """Used for validating domain ownership/authority"""
     try:
-        command = request.args.get("z", "")
-        domain = request.args.get("d", "")
+        command = request.args.get("z")
+        domain = request.args.get("d")
         email = request.args.get("a", "catch-all@xposedornot.com").lower()
         code = request.args.get("v", "xon-is-good")
 
