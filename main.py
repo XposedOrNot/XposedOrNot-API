@@ -1333,30 +1333,22 @@ def verify_email(domain, email):
 def verify_dns(domain, email, code, prefix):
     """Validates email and code, verifies the domain via DNS TXT record, creates or updates
     the domain record in datastore, and processes the domain."""
-    #print("dns-1")
     if not validate_email_with_tld(email) or not validate_variables(code):
-        #print("dns-2")
         return jsonify({"domainVerification": "Failure"})
     if domcheck.check(domain, prefix, code, strategies="dns_txt"):
-        #print("dns-3")
         datastore_client = datastore.Client()
         domain_key = datastore_client.key("xon_domains", domain + "_" + email)
         domain_record = datastore_client.get(domain_key)
-        #print("dns-4")
 
         if domain_record is None:
             create_new_record(domain, email, code, "dns_txt", datastore_client)
-            #print("dns-5")
         else:
             domain_record["last_verified"] = datetime.datetime.now()
             datastore_client.put(domain_record)
-            #print("dns-6")
 
         threading.Thread(target=process_single_domain, args=(domain,)).start()
-        #print("dns-7")
         return jsonify({"domainVerification": "Success"})
     else:
-        #print("dns-8")
         return jsonify({"domainVerification": "Failure"})
 
 
@@ -1414,7 +1406,6 @@ def send_domain_confirmation_email(
         email, confirm_url, ip_address, browser_type, client_platform
     )
 
-'''
 def process_single_domain(domain):
     """
     Processes transactions for a given domain, populates breach details, and updates a
@@ -1433,89 +1424,21 @@ def process_single_domain(domain):
 
         try:
             result = [tx for tx in query.fetch()]
-            print("Result->  ",result)
         except Exception as e:
-            print(f"Error during query.fetch(): {e}")
-
-    domain_transactions = list_transactions_for_domain(domain)
-    print("Domain transactions -> ", domain_transactions)
-    # Optional check for null records
-    if not domain_transactions:
-        entity_key = client.key("xon_domains_summary", domain + "+No_Breaches")
-        entity = datastore.Entity(key=entity_key)
-        entity.update({"domain": domain, "breach": "No_Breaches", "email_count": 0})
-        client.put(entity)
-    print("Domains summary initiated")
-        #return {"status": "No transactions for domain"}
-
-    breach_summary = defaultdict(int)
-    for tx in domain_transactions:
-        breaches = tx["site"].split(";")
-        for breach in breaches:
-            email_from_key = tx.key.name
-            entity_key = client.key(
-                "xon_domains_details", breach + "_" + email_from_key
-            )
-            entity = datastore.Entity(key=entity_key)
-            entity.update(
-                {
-                    "breach_email": breach + "_" + email_from_key,
-                    "domain": domain,
-                    "breach": breach,
-                    "email": email_from_key,
-                }
-            )
-            client.put(entity)
-            breach_summary[(domain, breach)] += 1
-    print("Domains details updated")
-
-    for (domain, breach), count in breach_summary.items():
-        entity_key = client.key("xon_domains_summary", domain + "+" + breach)
-        entity = datastore.Entity(key=entity_key)
-        entity.update({"domain": domain, "breach": breach, "email_count": count})
-        client.put(entity)
-    print("Domains summary updated")
-    # TODO: Need to send an email afer processing completed
-'''
-
-def process_single_domain(domain):
-    """
-    Processes transactions for a given domain, populates breach details, and updates a
-    summary of breaches per domain.
-    """
-    client = datastore.Client()
-
-    def list_transactions_for_domain(domain):
-        client = datastore.Client()
-
-        # Create a query and add a filter based on the "domain" column
-        query = client.query(kind="xon")
-        query.add_filter("domain", "=", domain)
-
-        result = []
-
-        try:
-            result = [tx for tx in query.fetch()]
-            #print("Result->  ", result)
-        except Exception as e:
-            #print(f"Error during query.fetch(): {e}")
             return []
 
         return result
 
     domain_transactions = list_transactions_for_domain(domain)
-    #print("Domain transactions -> ", domain_transactions)
 
     if not domain_transactions:
         entity_key = client.key("xon_domains_summary", domain + "+No_Breaches")
         entity = datastore.Entity(key=entity_key)
         entity.update({"domain": domain, "breach": "No_Breaches", "email_count": 0})
         client.put(entity)
-        #print("Domains summary initiated")
 
     breach_summary = defaultdict(int)
     for tx in domain_transactions:
-        # Check if 'site' field exists and is not empty
         if "site" in tx and tx["site"]:
             breaches = tx["site"].split(";")
             for breach in breaches:
@@ -1534,14 +1457,12 @@ def process_single_domain(domain):
                 breach_summary[(domain, breach)] += 1
         else:
             print(f"Transaction {tx.key.name} does not contain site information.")
-        #print("Domains details updated")
 
     for (domain, breach), count in breach_summary.items():
         entity_key = client.key("xon_domains_summary", domain + "+" + breach)
         entity = datastore.Entity(key=entity_key)
         entity.update({"domain": domain, "breach": breach, "email_count": count})
         client.put(entity)
-        #print("Domains summary updated")
     # TODO: Need to send an email afer processing completed
 
 
