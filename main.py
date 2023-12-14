@@ -266,7 +266,6 @@ def fetch_location_by_ip(ip_address: str) -> str:
         return "Error"
 
 
-
 def is_valid_ip(ip_address: str) -> bool:
     """
     Validates the IP address format for both IPv4 and IPv6.
@@ -1279,7 +1278,6 @@ def check_file(domain, prefix, code):
         print(f"Error: {exception_details}")
 
     return False
-
 
 
 def check_emails(domain):
@@ -2710,7 +2708,6 @@ def domain_verification():
         abort(404)
 
     return jsonify({"domainVerification": "Failure"})
-
 
 
 @XON.route("/v1/breaches", methods=["GET"])
