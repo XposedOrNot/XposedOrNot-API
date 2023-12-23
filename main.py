@@ -2573,6 +2573,7 @@ def verify_shield(token_shield):
         log_except(request.url, exception_details)
         return render_template("email_shield_error.html")
 
+
 @XON.route("/v1/unsubscribe-on/<email>", methods=["GET"])
 @LIMITER.limit("20 per day;5 per hour;1 per second")
 def unsubscribe(email):
