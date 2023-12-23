@@ -237,7 +237,7 @@ def generate_confirmation_token(email):
     return serializer.dumps(email, salt=SECURITY_SALT)
 
 
-def confirm_token(token, expiration=43200):
+def confirm_token(token, expiration=1296000):
     """Returns status of confirmation used for validation"""
     try:
         serializer = URLSafeTimedSerializer(SECRET_APIKEY)
@@ -261,7 +261,7 @@ def fetch_location_by_ip(ip_address: str) -> str:
         response = requests.get(ip_api_url, timeout=default_timeout)
         response.raise_for_status()
         location_data = response.json()
-        return f'Near {location_data["city"]}, {location_data["country"]}'
+        return f' Near {location_data["city"]}, {location_data["country"]}'
     except (requests.Timeout, requests.HTTPError, requests.RequestException, KeyError):
         return "Error"
 
@@ -2482,12 +2482,26 @@ def activate_shield(email):
                     }
                 )
                 datastore_client.put(alert_entity)
-            client_ip_address = request.headers.get("X-Forwarded-For")
-            location = fetch_location_by_ip(client_ip_address)
+
+            if "X-Forwarded-For" in request.headers:
+                client_ip_address = (
+                    request.headers["X-Forwarded-For"].split(",")[0].strip()
+                )
+            elif "X-Real-IP" in request.headers:
+                client_ip_address = request.headers["X-Real-IP"].strip()
+            else:
+                client_ip_address = request.remote_addr
+
+            preferred_ip = get_preferred_ip_address(client_ip_address)
+
+            if preferred_ip:
+                location = fetch_location_by_ip(preferred_ip)
+            else:
+                pass
             user_agent_string = request.headers.get("User-Agent")
             user_agent = parse(user_agent_string)
             browser_type = (
-                user_agent.browser.family + " " + user_agent.browser.version_string
+                str(user_agent.browser.family) + " " + str(user_agent.browser)
             )
             client_platform = user_agent.os.family
 
@@ -2534,20 +2548,30 @@ def verify_shield(token_shield):
             return render_template("email_shield_error.html")
 
         email = confirm_token(token_shield)
+
+        if not email:
+            return render_template("email_shield_error.html")
+
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", email)
         alert_task = datastore_client.get(alert_key)
 
-        alert_task["insert_timestamp"] = datetime.datetime.now()
-        alert_task["shield_timestamp"] = datetime.datetime.now()
-        alert_task["shieldOn"] = True
-        datastore_client.put(alert_task)
+        if alert_task:
+            alert_task["shield_timestamp"] = datetime.datetime.now()
+            alert_task["shieldOn"] = True
+            datastore_client.put(alert_task)
+        else:
+            alert_task = datastore.Entity(key=alert_key)
+            alert_task["insert_timestamp"] = datetime.datetime.now()
+            alert_task["shield_timestamp"] = datetime.datetime.now()
+            alert_task["shieldOn"] = True
+            datastore_client.put(alert_task)
+
         return render_template("email_shield_verify.html")
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
         return render_template("email_shield_error.html")
-
 
 @XON.route("/v1/unsubscribe-on/<email>", methods=["GET"])
 @LIMITER.limit("20 per day;5 per hour;1 per second")
