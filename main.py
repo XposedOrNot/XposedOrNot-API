@@ -859,6 +859,7 @@ def get_breaches_data(breaches: str) -> dict:
         abort(404)
 
 
+'''
 def get_breaches_analytics(breaches, sensitive_breaches):
     """Returns the metrics of exposed breaches"""
     try:
@@ -1038,6 +1039,189 @@ def get_breaches_analytics(breaches, sensitive_breaches):
 
         return get_details
     except Exception:
+        abort(404)
+'''
+
+
+def get_breaches_analytics(breaches, sensitive_breaches):
+    """Returns the metrics of exposed breaches"""
+    try:
+        ds_client = datastore.Client()
+        get_details = {"description": "Data Breaches", "children": []}
+
+        # Year-wise dictionaries
+        yy2023 = {"description": "2023", "children": []}
+        yy2022 = {"description": "2022", "children": []}
+        yy2021 = {"description": "2021", "children": []}
+        yy2020 = {"description": "2020", "children": []}
+        yy2019 = {"description": "2019", "children": []}
+        yy2018 = {"description": "2018", "children": []}
+        yy2017 = {"description": "2017", "children": []}
+        yy2016 = {"description": "2016", "children": []}
+        yy2015 = {"description": "2015", "children": []}
+        yy2014 = {"description": "2014", "children": []}
+        yy2013 = {"description": "2013", "children": []}
+        yy2012 = {"description": "2012", "children": []}
+        yy2011 = {"description": "2011", "children": []}
+        yy2010 = {"description": "2010", "children": []}
+        yy2009 = {"description": "2009", "children": []}
+        yy2008 = {"description": "2008", "children": []}
+        yy2007 = {"description": "2007", "children": []}
+
+        # Process regular breaches
+        if breaches and len(breaches) > 0:
+            breaches = breaches.split(";")
+            for breach in breaches:
+                breach_logo = details = ""
+                key = ds_client.key("xon_breaches", breach)
+                query = ds_client.get(key)
+                parts_s = str(key).split(",")
+                bid = parts_s[1][:-2][2:]
+                breach_logo = bid
+                logo = query.get("logo", "default_logo.jpg")
+                details = (
+                    "<img src='" + logo + "' style='height:40px;width:65px;' />"
+                    "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
+                    + bid
+                    + "'> &nbsp;"
+                    + "Details</a>"
+                )
+
+                child = {"description": breach_logo, "children": []}
+                child["children"].append(
+                    {
+                        "description": details,
+                        "tooltip": "Click here 👇",
+                        "children": [],
+                    }
+                )
+                if (query["breached_date"].year) == 2023:
+                    yy2023["children"].append(child)
+                elif (query["breached_date"].year) == 2022:
+                    yy2022["children"].append(child)
+                elif (query["breached_date"].year) == 2021:
+                    yy2021["children"].append(child)
+                elif (query["breached_date"].year) == 2020:
+                    yy2020["children"].append(child)
+                elif (query["breached_date"].year) == 2019:
+                    yy2019["children"].append(child)
+                elif (query["breached_date"].year) == 2018:
+                    yy2018["children"].append(child)
+                elif (query["breached_date"].year) == 2017:
+                    yy2017["children"].append(child)
+                elif (query["breached_date"].year) == 2016:
+                    yy2016["children"].append(child)
+                elif (query["breached_date"].year) == 2015:
+                    yy2015["children"].append(child)
+                elif (query["breached_date"].year) == 2014:
+                    yy2014["children"].append(child)
+                elif (query["breached_date"].year) == 2013:
+                    yy2013["children"].append(child)
+                elif (query["breached_date"].year) == 2012:
+                    yy2012["children"].append(child)
+                elif (query["breached_date"].year) == 2011:
+                    yy2011["children"].append(child)
+                elif (query["breached_date"].year) == 2010:
+                    yy2010["children"].append(child)
+                elif (query["breached_date"].year) == 2009:
+                    yy2009["children"].append(child)
+                elif (query["breached_date"].year) == 2008:
+                    yy2008["children"].append(child)
+                elif (query["breached_date"].year) == 2007:
+                    yy2007["children"].append(child)
+
+        # Process sensitive breaches
+        if sensitive_breaches and len(sensitive_breaches) > 0:
+            sensitive_breaches = sensitive_breaches.split(";")
+            for breach in sensitive_breaches:
+                breach_logo = details = ""
+                key = ds_client.key("xon_breaches", breach)
+                query = ds_client.get(key)
+                parts_s = str(key).split(",")
+                bid = parts_s[1][:-2][2:]
+
+                breach_logo = bid
+                logo = query.get("logo", "default_logo.jpg")
+                details = (
+                    "<img src='" + logo + "' style='height:40px;width:65px;' />"
+                    "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
+                    + bid
+                    + "'> &nbsp;"
+                    + "Details</a>"
+                )
+
+                child = {"description": breach_logo, "children": []}
+                child["children"].append(
+                    {
+                        "description": details,
+                        "tooltip": "Click here ...",
+                        "children": [],
+                    }
+                )
+
+                if (query["breached_date"].year) == 2023:
+                    yy2023["children"].append(child)
+                elif (query["breached_date"].year) == 2022:
+                    yy2022["children"].append(child)
+                elif (query["breached_date"].year) == 2021:
+                    yy2021["children"].append(child)
+                elif (query["breached_date"].year) == 2020:
+                    yy2020["children"].append(child)
+                elif (query["breached_date"].year) == 2019:
+                    yy2019["children"].append(child)
+                elif (query["breached_date"].year) == 2018:
+                    yy2018["children"].append(child)
+                elif (query["breached_date"].year) == 2017:
+                    yy2017["children"].append(child)
+                elif (query["breached_date"].year) == 2016:
+                    yy2016["children"].append(child)
+                elif (query["breached_date"].year) == 2015:
+                    yy2015["children"].append(child)
+                elif (query["breached_date"].year) == 2014:
+                    yy2014["children"].append(child)
+                elif (query["breached_date"].year) == 2013:
+                    yy2013["children"].append(child)
+                elif (query["breached_date"].year) == 2012:
+                    yy2012["children"].append(child)
+                elif (query["breached_date"].year) == 2011:
+                    yy2011["children"].append(child)
+                elif (query["breached_date"].year) == 2010:
+                    yy2010["children"].append(child)
+                elif (query["breached_date"].year) == 2009:
+                    yy2009["children"].append(child)
+                elif (query["breached_date"].year) == 2008:
+                    yy2008["children"].append(child)
+                elif (query["breached_date"].year) == 2007:
+                    yy2007["children"].append(child)
+
+        # Combine years into get_details
+        years = [
+            yy2023,
+            yy2022,
+            yy2021,
+            yy2020,
+            yy2019,
+            yy2018,
+            yy2017,
+            yy2016,
+            yy2015,
+            yy2014,
+            yy2013,
+            yy2012,
+            yy2011,
+            yy2010,
+            yy2009,
+            yy2008,
+            yy2007,
+        ]
+
+        for year in years:
+            if year["children"]:
+                get_details["children"].append(year)
+
+        return get_details
+    except Exception as e:
+        print(f"An error occurred: {e}")
         abort(404)
 
 
@@ -1994,13 +2178,23 @@ def send_verification():
                         if "sensitive_site" in xon_record
                         else ""
                     )
-
+                    # TODO: Sensitive site only and site empty situation is not handled
+                    if site or sensitive_site:
+                        sensitive_site_breaches = (
+                            get_breaches(sensitive_site) if sensitive_site else ""
+                        )
+                        breach_metrics = (
+                            get_breaches_analytics(site, sensitive_site)
+                            if site or sensitive_site
+                            else {}
+                        )
+                    """
                     if site or sensitive_site:
                         sensitive_site_breaches = (
                             get_breaches(sensitive_site) if sensitive_site else ""
                         )
                         breach_metrics = get_breaches_analytics(site, sensitive_site)
-
+                    """
                     return make_response(
                         jsonify(
                             {
