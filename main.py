@@ -859,7 +859,6 @@ def get_breaches_data(breaches: str) -> dict:
         abort(404)
 
 
-
 def get_breaches_analytics(breaches, sensitive_breaches):
     """Returns the metrics of exposed breaches"""
     try:
