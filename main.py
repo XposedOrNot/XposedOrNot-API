@@ -866,6 +866,7 @@ def get_breaches_analytics(breaches, sensitive_breaches):
         get_details = {"description": "Data Breaches", "children": []}
 
         # Year-wise dictionaries
+        yy2024 = {"description": "2024", "children": []}
         yy2023 = {"description": "2023", "children": []}
         yy2022 = {"description": "2022", "children": []}
         yy2021 = {"description": "2021", "children": []}
@@ -911,7 +912,9 @@ def get_breaches_analytics(breaches, sensitive_breaches):
                         "children": [],
                     }
                 )
-                if (query["breached_date"].year) == 2023:
+                if (query["breached_date"].year) == 2024:
+                    yy2024["children"].append(child)
+                elif (query["breached_date"].year) == 2023:
                     yy2023["children"].append(child)
                 elif (query["breached_date"].year) == 2022:
                     yy2022["children"].append(child)
@@ -975,7 +978,9 @@ def get_breaches_analytics(breaches, sensitive_breaches):
                     }
                 )
 
-                if (query["breached_date"].year) == 2023:
+                if (query["breached_date"].year) == 2024:
+                    yy2024["children"].append(child)
+                elif (query["breached_date"].year) == 2023:
                     yy2023["children"].append(child)
                 elif (query["breached_date"].year) == 2022:
                     yy2022["children"].append(child)
@@ -1012,6 +1017,7 @@ def get_breaches_analytics(breaches, sensitive_breaches):
 
         # Combine years into get_details
         years = [
+            yy2024,
             yy2023,
             yy2022,
             yy2021,
@@ -1186,11 +1192,15 @@ def get_pastes_metrics(pastes):
             y2015
         ) = (
             y2014
-        ) = y2013 = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
+        ) = (
+            y2013
+        ) = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = y2024 = 0
         for index_count, count in enumerate(breaches):
             key = ds_client.key("xon_paste_master", count)
             query = ds_client.get(key)
-            if (query["insrt_tmpstmp"].year) == 2023:
+            if (query["insrt_tmpstmp"].year) == 2024:
+                y2024 += 1
+            elif (query["insrt_tmpstmp"].year) == 2023:
                 y2023 += 1
             elif (query["insrt_tmpstmp"].year) == 2022:
                 y2022 += 1
@@ -1226,6 +1236,7 @@ def get_pastes_metrics(pastes):
                 y2007 += 1
         get_metrics["yearwise_details"].append(
             {
+                "y2024": y2024,
                 "y2023": y2023,
                 "y2022": y2022,
                 "y2021": y2021,
