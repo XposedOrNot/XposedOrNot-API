@@ -368,7 +368,7 @@ def get_breaches_metrics(breaches):
         }
         date_list = []
 
-        year_counts = {year: 0 for year in range(2007, 2024)}
+        year_counts = {year: 0 for year in range(2007, 2025)}
         count_plaintext = count_easy = count_hard = count_unknown = 0
         count_aero = (
             count_tran
@@ -1038,8 +1038,7 @@ def get_breaches_analytics(breaches, sensitive_breaches):
         ]
 
         for year in years:
-            if year["children"]:
-                get_details["children"].append(year)
+            get_details["children"].append(year)
 
         return get_details
     except Exception as e:
@@ -1192,15 +1191,11 @@ def get_pastes_metrics(pastes):
             y2015
         ) = (
             y2014
-        ) = (
-            y2013
-        ) = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = y2024 = 0
+        ) = y2013 = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
         for index_count, count in enumerate(breaches):
             key = ds_client.key("xon_paste_master", count)
             query = ds_client.get(key)
-            if (query["insrt_tmpstmp"].year) == 2024:
-                y2024 += 1
-            elif (query["insrt_tmpstmp"].year) == 2023:
+            if (query["insrt_tmpstmp"].year) == 2023:
                 y2023 += 1
             elif (query["insrt_tmpstmp"].year) == 2022:
                 y2022 += 1
@@ -1236,7 +1231,6 @@ def get_pastes_metrics(pastes):
                 y2007 += 1
         get_metrics["yearwise_details"].append(
             {
-                "y2024": y2024,
                 "y2023": y2023,
                 "y2022": y2022,
                 "y2021": y2021,
