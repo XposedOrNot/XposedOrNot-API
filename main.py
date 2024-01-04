@@ -2915,13 +2915,11 @@ def xon_alerts_teams():
                 f"🔑 Your verification token is: `{verify_token}`\n\n"
                 f"\n\n✅ **What to do next?**\n"
                 f"\n\n1️⃣ Copy this verification token.\n"
-                f"\n\n2️⃣ Paste it back into your application to complete the verification process.\n\n"
+                f"\n\n2️⃣ Paste it back into your Channel verification page to complete the verification process.\n\n"
                 f"\n\n_Thank you for using XON!_"
             )
             message = {"text": message_content}
             response = requests.post(decrypted_webhook, json=message)
-            # message = {"text": f"Verification token: {verify_token}"}
-            # response = requests.post(decrypted_webhook, json=message)
             if response.status_code != 200:
                 print("Failed to send message to Teams channel")
                 return (
@@ -2997,11 +2995,11 @@ def xon_alerts_teams():
         abort(404)
 
 
-"""
-@XON.route("/v1/xon_alerts_teams", methods=["POST"])
-def xon_alerts_teams():
+@CSRF.exempt
+@XON.route("/v1/xon_alerts_slack", methods=["POST"])
+def xon_alerts_slack():
     try:
-        print("Received request for xon_alerts_teams")
+        print("Received request for xon_alerts_slack")
 
         # Extracting data from the request
         data = request.json
@@ -3015,7 +3013,10 @@ def xon_alerts_teams():
         # Validate mandatory fields
         if not validate_variables([token, domain, webhook, action]):
             print("Validation failed for input variables")
-            return jsonify({"status": "error", "message": "Invalid input variables"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid input variables"}),
+                400,
+            )
 
         # Session validation
         print("Performing session validation")
@@ -3029,120 +3030,40 @@ def xon_alerts_teams():
             return jsonify({"status": "error", "message": "Invalid session token"}), 400
 
         email = user_session[0].key.name
-        record_key = client.key("xon_teams_channel", f"{email}_{domain}")
+
+        # Domain verification check
+        domain_query = client.query(kind="xon_domains")
+        domain_query.add_filter("domain", "=", domain)
+        domain_query.add_filter("email", "=", email)
+        domain_record = list(domain_query.fetch())
+
+        if not domain_record or not domain_record[0].get("verified"):
+            print("Domain not verified for the given email")
+            return (
+                jsonify(
+                    {"status": "error", "message": "Domain not verified for this email"}
+                ),
+                400,
+            )
+
+        record_key = client.key("xon_slack_channel", f"{email}_{domain}")
 
         if action == "init":
             print("Action is init")
             record = client.get(record_key)
 
-            # Check if channel is already verified
             if record and record.get("status") == "verified":
                 print("Channel already verified")
-                return jsonify({"status": "error", "message": "Channel already exists and is verified"}), 400
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "message": "Channel already exists and is verified",
+                        }
+                    ),
+                    400,
+                )
 
-            encrypted_webhook = encrypt_data(webhook)
-
-            if record:
-                print("Record found, updating timestamp")
-                record.update({"updated_timestamp": datetime.datetime.utcnow()})
-                verify_token = record.get("verify_token")
-            else:
-                print("Creating new record")
-                verify_token = secrets.token_hex(16)
-                record = datastore.Entity(key=record_key)
-                record.update({
-                    "tokens": data.get("tokens"),
-                    "domain": domain,
-                    "webhook": encrypted_webhook,
-                    "status": "init",
-                    "verify_token": verify_token,
-                    "insert_timestamp": datetime.datetime.utcnow(),
-                    "updated_timestamp": datetime.datetime.utcnow(),
-                })
-
-            client.put(record)
-
-            # Send a message to Teams channel
-            decrypted_webhook = decrypt_data(encrypted_webhook)
-            message = {"text": f"Verification token: {verify_token}"}
-            response = requests.post(decrypted_webhook, json=message)
-            if response.status_code != 200:
-                print("Failed to send message to Teams channel")
-                return jsonify({"status": "error", "message": "Failed to send message to Teams channel"}), 500
-
-            print("Init action completed")
-            return jsonify({"status": "initiated"}), 200
-
-        elif action == "verify":
-            print("Action is verify")
-            verify_token = data.get("verify_token")
-            if not verify_token:
-                print("Verification token is missing")
-                return jsonify({"status": "error", "message": "Missing verification token"}), 400
-
-            record = client.get(record_key)
-            if not record:
-                print("Record not found for verification")
-                return jsonify({"status": "error", "message": "Record not found"}), 404
-
-            if record.get("verify_token") == verify_token:
-                print("Verification successful")
-                record.update({"status": "verified"})
-                client.put(record)
-                return jsonify({"status": "success", "message": "Verification successful"}), 200
-            else:
-                print("Verification failed")
-                record.update({"status": "failed"})
-                client.put(record)
-                return jsonify({"status": "error", "message": "Verification failed"}), 400
-
-        else:
-            print("Invalid action provided")
-            return jsonify({"status": "error", "message": "Invalid action provided"}), 400
-
-    except Exception as exception_details:
-        print(f"Exception occurred: {exception_details}")
-        log_except(request.url, exception_details)
-        abort(404)
-"""
-
-"""
-@XON.route("/v1/xon_alerts_teams", methods=["POST"])
-def xon_alerts_teams():
-    try:
-        print("Received request for xon_alerts_teams")
-
-        # Extracting data from the request
-        data = request.json
-        print(f"Request data: {data}")
-
-        token = data.get("token")
-        domain = data.get("domain")
-        webhook = data.get("webhook")
-        action = data.get("action")
-
-        # Validate mandatory fields
-        if not validate_variables([token, domain, webhook, action]):
-            print("Validation failed for input variables")
-            return jsonify({"status": "error", "message": "Invalid input variables"}), 400
-
-        # Session validation
-        print("Performing session validation")
-        client = datastore.Client()
-        query = client.query(kind="xon_domains_session")
-        query.add_filter("domain_magic", "=", token)
-        user_session = list(query.fetch())
-
-        if not user_session:
-            print("Session token is invalid")
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
-
-        email = user_session[0].key.name
-        record_key = client.key("xon_teams_channel", f"{email}_{domain}")
-
-        if action == "init":
-            print("Action is init")
-            record = client.get(record_key)
             encrypted_webhook = encrypt_data(webhook)
 
             if record:
@@ -3167,22 +3088,41 @@ def xon_alerts_teams():
 
             client.put(record)
 
-            # Send a message to Teams channel
             decrypted_webhook = decrypt_data(encrypted_webhook)
-            message = {"text": f"Verification token: {verify_token}"}
-            response = requests.post(decrypted_webhook, json=message)
+            message_content = {
+                "text": "Welcome to XposedOrNot Data Breach Alerts!",
+                "attachments": [
+                    {
+                        "color": "#36a64f",
+                        "title": "Verification Required",
+                        "text": "Your verification token is: `{}`".format(verify_token),
+                        "fields": [
+                            {
+                                "title": "What to do next?",
+                                "value": "Copy this token and paste it back into your Channel verification page to complete the verification process.",
+                                "short": False,
+                            }
+                        ],
+                        "footer": "XposedOrNot",
+                        "ts": datetime.datetime.utcnow().timestamp(),
+                    }
+                ],
+            }
+            response = requests.post(decrypted_webhook, json=message_content)
             if response.status_code != 200:
-                print("Failed to send message to Teams channel")
+                print("Failed to send message to Slack channel")
                 return (
                     jsonify(
-                        {"status": "error", "message": "Failed to send message to Teams channel"}
+                        {
+                            "status": "error",
+                            "message": "Failed to send message to Slack channel",
+                        }
                     ),
                     500,
                 )
 
             print("Init action completed")
             return jsonify({"status": "initiated"}), 200
-            #return jsonify({"status": "initiated", "verify_token": verify_token}), 200
 
         elif action == "verify":
             print("Action is verify")
@@ -3190,7 +3130,9 @@ def xon_alerts_teams():
             if not verify_token:
                 print("Verification token is missing")
                 return (
-                    jsonify({"status": "error", "message": "Missing verification token"}),
+                    jsonify(
+                        {"status": "error", "message": "Missing verification token"}
+                    ),
                     400,
                 )
 
@@ -3203,8 +3145,18 @@ def xon_alerts_teams():
                 print("Verification successful")
                 record.update({"status": "verified"})
                 client.put(record)
+
+                decrypted_webhook = decrypt_data(record.get("webhook"))
+                success_message_content = {
+                    "text": " 🎉 Verification Successful! Your Slack channel is now successfully connected to XposedOrNot. You will start receiving new data breach notifications here. 🎉"
+                }
+                response = requests.post(
+                    decrypted_webhook, json=success_message_content
+                )
                 return (
-                    jsonify({"status": "success", "message": "Verification successful"}),
+                    jsonify(
+                        {"status": "success", "message": "Verification successful"}
+                    ),
                     200,
                 )
             else:
@@ -3227,7 +3179,6 @@ def xon_alerts_teams():
         print(f"Exception occurred: {exception_details}")
         log_except(request.url, exception_details)
         abort(404)
-"""
 
 
 @XON.route("/v1/breaches", methods=["GET"])
