@@ -103,9 +103,9 @@ def ratelimit_handler(error):
 
     if "hour" in error.description:
         # pass
-        block_hour(ip_address=request.headers.get("X-Forwarded-For"))  # TODO
+        block_hour(ip_address=request.headers.get("X-Forwarded-For"))
     elif "day" in error.description:
-        block_day(ip_address=request.headers.get("X-Forwarded-For"))  # TODO
+        block_day(ip_address=request.headers.get("X-Forwarded-For"))
 
     response = make_response(
         jsonify(
@@ -1355,7 +1355,7 @@ def verify_email(domain, email):
         domain_record = datastore_client.get(domain_key)
         token = generate_confirmation_token(email)
 
-        if domain_record is None:  # TODO: revisit logic
+        if domain_record is None:
             create_new_record(domain, "", token, "email", datastore_client)
 
         threading.Thread(target=process_single_domain, args=(domain,)).start()
@@ -1372,7 +1372,6 @@ def verify_email(domain, email):
         send_domain_confirmation_email(
             email, token, client_ip_address, browser_type, client_platform
         )
-        # TODO: To be cleaned
         return jsonify({"domainVerification": "Success"})
     else:
         return jsonify({"domainVerification": "Failure"})
@@ -1993,7 +1992,6 @@ def alert_me_verification(verification_token):
             if len(exposure_info) == 0 and len(sensitive_exposure_info) == 0:
                 return verification_template
             else:
-                # Domain to be updated  TODO
                 base_url = "https://beta.xposedornot.com/"
                 email_param = f"email={user_email}"
                 token_param = f"&token={verification_token}"
