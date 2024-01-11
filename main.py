@@ -1770,6 +1770,67 @@ def search_email(email):
         abort(404)
 
 
+@XON.route("/v2/check-email/<email>", methods=["GET"])
+@LIMITER.limit("500 per second")
+def search_email_v2(email):
+    """Returns exposed breaches for a given email including breach date and description, requires an API key"""
+    try:
+        # API Key validation
+        api_key = request.headers.get("x-api-key")
+        if not api_key or api_key.strip() == "":
+            return (
+                jsonify({"status": "error", "message": "Invalid or missing API key"}),
+                401,
+            )
+
+        datastore_client = datastore.Client()
+        query = datastore_client.query(kind="xon_api_key")  # change - xon_eapi_key
+        query.add_filter("api_key", "=", api_key)
+        api_key_results = list(query.fetch())
+
+        if not api_key_results:
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 401
+
+        # Proceed with email validation and breach data retrieval
+        email = email.lower()
+        exposed_breaches = {"breaches": []}
+
+        if not email or not validate_email(email):
+            return make_response(jsonify({"error": "Invalid or not found email"}), 404)
+
+        data_store = datastore.Client()
+        xon_key = data_store.key("xon", email)
+        xon_record = data_store.get(xon_key)
+
+        alert_key = data_store.key("xon_alert", email)
+        alert_record = data_store.get(alert_key)
+
+        if alert_record and alert_record["shieldOn"]:
+            return make_response(jsonify({"error": "Access restricted"}), 404)
+        if xon_record:
+            breach_ids = xon_record["site"].split(";")
+            for breach_id in breach_ids:
+                breach_key = data_store.key("xon_breaches", breach_id)
+                breach_record = data_store.get(breach_key)
+                if breach_record:
+                    formatted_date = breach_record.get(
+                        "breached_date", "Date not available"
+                    ).isoformat()
+                    breach_info = {
+                        "breach_id": breach_id,
+                        "date_of_breach": formatted_date,
+                        "description_of_exposure": breach_record.get("xposure_desc"),
+                    }
+                    exposed_breaches["breaches"].append(breach_info)
+            return jsonify(exposed_breaches)
+        else:
+            return make_response(jsonify({"error": "No breaches found"}), 404)
+
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        return make_response(jsonify({"error": "Server error"}), 500)
+
+
 @XON.route("/v1/check-paste/<email>", methods=["GET"])
 @LIMITER.limit("50 per day;10 per hour;1 per second")
 def search_paste(email):
