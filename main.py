@@ -59,8 +59,8 @@ SECRET_APIKEY = os.environ["SECRET_APIKEY"]
 SECURITY_SALT = os.environ["SECURITY_SALT"]
 WTF_CSRF_SECRET_KEY = os.environ["WTF_CSRF_SECRET_KEY"]
 XMLAPI_KEY = os.environ["XMLAPI_KEY"]
-fernet_key = os.environ.get("ENCRYPTION_KEY")
-cipher_suite = Fernet(fernet_key)
+FERNET_KEY = os.environ.get("ENCRYPTION_KEY")
+CIPHER_SUITE = Fernet(FERNET_KEY)
 
 # Initialize the Flask app
 XON = Flask(__name__)
@@ -1807,6 +1807,7 @@ def search_email_v2(email):
 
         if alert_record and alert_record["shieldOn"]:
             return make_response(jsonify({"error": "Access restricted"}), 404)
+
         if xon_record:
             breach_ids = xon_record["site"].split(";")
             for breach_id in breach_ids:
@@ -2867,15 +2868,16 @@ def domain_verification():
 
 
 def encrypt_data(data):
-    return cipher_suite.encrypt(data.encode())
+    return CIPHER_SUITE.encrypt(data.encode())
 
 
 def decrypt_data(data):
-    return cipher_suite.decrypt(data).decode()
+    return CIPHER_SUITE.decrypt(data).decode()
 
 
 @CSRF.exempt
-@XON.route("/v1/xon_alerts_teams", methods=["POST"])
+# @XON.route("/v1/xon_alerts_teams", methods=["POST"])
+@XON.route("/v1/teams-channel-setup", methods=["POST"])
 def xon_alerts_teams():
     try:
         print("Received request for xon_alerts_teams")
@@ -3055,12 +3057,12 @@ def xon_alerts_teams():
 
 
 @CSRF.exempt
-@XON.route("/v1/xon_alerts_slack", methods=["POST"])
+# @XON.route("/v1/xon_alerts_slack", methods=["POST"])
+@XON.route("/v1/slack-channel-setup", methods=["POST"])
 def xon_alerts_slack():
     try:
         print("Received request for xon_alerts_slack")
 
-        # Extracting data from the request
         data = request.json
         print(f"Request data: {data}")
 
@@ -3069,7 +3071,6 @@ def xon_alerts_slack():
         webhook = data.get("webhook")
         action = data.get("action")
 
-        # Validate mandatory fields
         if not validate_variables([token, domain, webhook, action]):
             print("Validation failed for input variables")
             return (
@@ -3077,7 +3078,6 @@ def xon_alerts_slack():
                 400,
             )
 
-        # Session validation
         print("Performing session validation")
         client = datastore.Client()
         query = client.query(kind="xon_domains_session")
@@ -3090,7 +3090,6 @@ def xon_alerts_slack():
 
         email = user_session[0].key.name
 
-        # Domain verification check
         domain_query = client.query(kind="xon_domains")
         domain_query.add_filter("domain", "=", domain)
         domain_query.add_filter("email", "=", email)
@@ -3236,6 +3235,156 @@ def xon_alerts_slack():
 
     except Exception as exception_details:
         print(f"Exception occurred: {exception_details}")
+        log_except(request.url, exception_details)
+        abort(404)
+
+
+@XON.route("/v1/teams-channel-config", methods=["GET"])
+def get_teams_channel_config():
+    try:
+        email = request.args.get("email")
+        domain = request.args.get("domain")
+        token = request.args.get("token")
+
+        if not all([email, domain, token]):
+            return (
+                jsonify({"status": "error", "message": "Missing required parameters"}),
+                400,
+            )
+        # validation for email,domain,token needed
+        client = datastore.Client()
+        query = client.query(kind="xon_domains_session")
+        query.add_filter("domain_magic", "=", token)
+        user_session = list(query.fetch())
+
+        if not user_session:
+            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+
+        domain_query = client.query(kind="xon_domains")
+        domain_query.add_filter("domain", "=", domain)
+        temp_domain_records = list(domain_query.fetch())
+
+        # Filter the results based on the second field
+        domain_record = [
+            record for record in temp_domain_records if record.get("email") == email
+        ]
+
+        # Proceed with the rest of your logic
+        if not domain_record or not domain_record[0].get("verified"):
+            return (
+                jsonify(
+                    {"status": "error", "message": "Domain not verified for this email"}
+                ),
+                400,
+            )
+        query = client.query(kind="xon_teams_channel")
+        query.add_filter("domain", "=", domain)
+        temp_channel_configs = list(query.fetch())
+
+        # Extract email from the key and filter the results
+        channel_config = None
+        for config in temp_channel_configs:
+            # Split the key to get the email part
+            key_email = config.key.name.split("_")[0]
+            if key_email == email:
+                channel_config = config
+                break
+
+        # Proceed with the rest of your logic
+        if not user_session:
+            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+
+        if channel_config:
+            encrypted_webhook = channel_config.get("webhook")
+
+            decrypted_webhook = decrypt_data(encrypted_webhook)
+
+            config_data = {
+                "domain": channel_config.get("domain"),
+                "webhook": decrypted_webhook,
+            }
+            return jsonify({"status": "success", "data": config_data}), 200
+        else:
+            return (
+                jsonify({"status": "error", "message": "Configuration not found"}),
+                404,
+            )
+
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+
+
+@XON.route("/v1/slack-channel-config", methods=["GET"])
+def get_slack_channel_config():
+    try:
+        email = request.args.get("email")
+        domain = request.args.get("domain")
+        token = request.args.get("token")
+
+        if not all([email, domain, token]):
+            return (
+                jsonify({"status": "error", "message": "Missing required parameters"}),
+                400,
+            )
+
+        # validation for email,domain,token needed
+        client = datastore.Client()
+        query = client.query(kind="xon_domains_session")
+        query.add_filter("domain_magic", "=", token)
+        user_session = list(query.fetch())
+
+        if not user_session:
+            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+
+        domain_query = client.query(kind="xon_domains")
+        domain_query.add_filter("domain", "=", domain)
+        temp_domain_records = list(domain_query.fetch())
+
+        # Filter the results based on the second field
+        domain_record = [
+            record for record in temp_domain_records if record.get("email") == email
+        ]
+
+        if not domain_record or not domain_record[0].get("verified"):
+            return (
+                jsonify(
+                    {"status": "error", "message": "Domain not verified for this email"}
+                ),
+                400,
+            )
+
+        query = client.query(kind="xon_slack_channel")
+        query.add_filter("domain", "=", domain)
+        temp_channel_configs = list(query.fetch())
+
+        # Extract email from the key and filter the results
+        channel_config = None
+        for config in temp_channel_configs:
+            key_email = config.key.name.split("_")[0]
+            if key_email == email:
+                channel_config = config
+                break
+
+        if not user_session:
+            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+
+        if channel_config:
+            encrypted_webhook = channel_config.get("webhook")
+            decrypted_webhook = decrypt_data(encrypted_webhook)
+
+            config_data = {
+                "domain": channel_config.get("domain"),
+                "webhook": decrypted_webhook,
+            }
+            return jsonify({"status": "success", "data": config_data}), 200
+        else:
+            return (
+                jsonify({"status": "error", "message": "Configuration not found"}),
+                404,
+            )
+
+    except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
 
