@@ -138,21 +138,6 @@ def helper():
     return render_template("index.html")
 
 
-'''
-def validate_variables(variables_to_validate):
-    """
-    Validate input variables to ensure they contain only valid chars.
-    """
-    pattern = r"^[a-zA-Z0-9@._-]*$"
-
-    for value in variables_to_validate:
-        if not value or value.isspace() or not re.match(pattern, value):
-            return False
-
-    return True
-'''
-
-
 def validate_variables(variables_to_validate):
     """
     Validate input variables to ensure they contain only valid characters.
@@ -327,6 +312,14 @@ def get_preferred_ip_address(x_forwarded_for):
 
     # Return None if no valid IP address is found
     return None
+
+
+def encrypt_data(data):
+    return CIPHER_SUITE.encrypt(data.encode())
+
+
+def decrypt_data(data):
+    return CIPHER_SUITE.decrypt(data).decode()
 
 
 def get_breaches(breaches):
@@ -1906,7 +1899,6 @@ def domcheck_subscribe(domain):
         domain = domain.lower()
         if not validate_domain(domain):
             return make_response(jsonify({"Error": "Not found"}), 404)
-        # domain = domain.lower()
         token = generate_confirmation_token(domain)
         confirm_url = url_for("domcheck_verification", token=token, _external=True)
         return confirm_url
@@ -2785,7 +2777,6 @@ def verify_unsubscribe(unsubscribe_token):
 
 
 @XON.route("/v1/domain-breach-summary", methods=["GET"])
-# @XON.route("/v1/getx-domains", methods=["GET"])
 @LIMITER.limit("50 per day;10 per hour;1 per second")
 def get_xdomains():
     """Returns exposed data at domain level"""
@@ -2867,16 +2858,7 @@ def domain_verification():
     return jsonify({"domainVerification": "Failure"})
 
 
-def encrypt_data(data):
-    return CIPHER_SUITE.encrypt(data.encode())
-
-
-def decrypt_data(data):
-    return CIPHER_SUITE.decrypt(data).decode()
-
-
 @CSRF.exempt
-# @XON.route("/v1/xon_alerts_teams", methods=["POST"])
 @XON.route("/v1/teams-channel-setup", methods=["POST"])
 def xon_alerts_teams():
     try:
@@ -3057,7 +3039,6 @@ def xon_alerts_teams():
 
 
 @CSRF.exempt
-# @XON.route("/v1/xon_alerts_slack", methods=["POST"])
 @XON.route("/v1/slack-channel-setup", methods=["POST"])
 def xon_alerts_slack():
     try:
