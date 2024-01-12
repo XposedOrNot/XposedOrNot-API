@@ -13,7 +13,7 @@ import socket
 import threading
 import time
 from collections import defaultdict
-from datetime import timedelta
+from datetime import timedelta, timezone
 from operator import itemgetter
 from urllib.parse import unquote
 
@@ -1784,23 +1784,35 @@ def search_email_v2(email):
         if not api_key_results:
             return jsonify({"status": "error", "message": "Unauthorized access"}), 401
 
-        # Proceed with email validation and breach data retrieval
         email = email.lower()
-        exposed_breaches = {"breaches": []}
-        breach_count = 0
-
         if not email or not validate_email(email):
             return make_response(jsonify({"error": "Invalid or not found email"}), 404)
 
+        # Validate time interval
+        time_interval = request.args.get("interval", "all")
+        valid_intervals = {"1month", "3months", "6months", "1year", "all"}
+        if time_interval not in valid_intervals:
+            return jsonify({"error": "Invalid time interval"}), 400
+
+        # Calculate the start date based on the interval
+        current_time = datetime.datetime.now(timezone.utc)
+        if time_interval != "all":
+            if time_interval == "1month":
+                start_time = current_time - timedelta(days=30)
+            elif time_interval == "3months":
+                start_time = current_time - timedelta(days=90)
+            elif time_interval == "6months":
+                start_time = current_time - timedelta(days=180)
+            elif time_interval == "1year":
+                start_time = current_time - timedelta(days=365)
+
+        # Proceed with breach data retrieval and filtering
         data_store = datastore.Client()
         xon_key = data_store.key("xon", email)
         xon_record = data_store.get(xon_key)
 
-        alert_key = data_store.key("xon_alert", email)
-        alert_record = data_store.get(alert_key)
-
-        if alert_record and alert_record["shieldOn"]:
-            return make_response(jsonify({"error": "Access restricted"}), 404)
+        exposed_breaches = {"breaches": []}
+        breach_count = 0
 
         if xon_record:
             breach_ids = xon_record["site"].split(";")
@@ -1808,25 +1820,33 @@ def search_email_v2(email):
                 breach_key = data_store.key("xon_breaches", breach_id)
                 breach_record = data_store.get(breach_key)
                 if breach_record:
-                    formatted_date = breach_record.get(
-                        "breached_date", "Date not available"
-                    ).isoformat()
-                    breach_info = {
-                        "breach_id": breach_id,
-                        "date_of_breach": formatted_date,
-                    }
-                    exposed_breaches["breaches"].append(breach_info)
-                    breach_count += 1
-            exposed_breaches["breach_count"] = breach_count
-            return jsonify(exposed_breaches)
-        else:
+                    breach_date = breach_record.get("breached_date")
+                    if time_interval == "all" or (
+                        breach_date and start_time <= breach_date <= current_time
+                    ):
+                        formatted_date = (
+                            breach_date.isoformat()
+                            if breach_date
+                            else "Date not available"
+                        )
+                        breach_info = {
+                            "breach_id": breach_id,
+                            "date_of_breach": formatted_date,
+                        }
+                        exposed_breaches["breaches"].append(breach_info)
+                        breach_count += 1
+
+        if breach_count == 0:
             return make_response(
                 jsonify({"error": "No breaches found", "breach_count": 0}), 404
             )
 
+        exposed_breaches["breach_count"] = breach_count
+        return jsonify(exposed_breaches)
+
     except Exception as exception_details:
         log_except(request.url, exception_details)
-        return make_response(jsonify({"error": "Server error"}), 500)
+        abort(404)
 
 
 @XON.route("/v1/check-paste/<email>", methods=["GET"])
