@@ -1787,6 +1787,7 @@ def search_email_v2(email):
         # Proceed with email validation and breach data retrieval
         email = email.lower()
         exposed_breaches = {"breaches": []}
+        breach_count = 0
 
         if not email or not validate_email(email):
             return make_response(jsonify({"error": "Invalid or not found email"}), 404)
@@ -1813,12 +1814,15 @@ def search_email_v2(email):
                     breach_info = {
                         "breach_id": breach_id,
                         "date_of_breach": formatted_date,
-                        "description_of_exposure": breach_record.get("xposure_desc"),
                     }
                     exposed_breaches["breaches"].append(breach_info)
+                    breach_count += 1
+            exposed_breaches["breach_count"] = breach_count
             return jsonify(exposed_breaches)
         else:
-            return make_response(jsonify({"error": "No breaches found"}), 404)
+            return make_response(
+                jsonify({"error": "No breaches found", "breach_count": 0}), 404
+            )
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
