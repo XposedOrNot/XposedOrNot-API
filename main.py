@@ -3376,74 +3376,84 @@ def get_slack_channel_config():
 
 @XON.route("/v1/breaches", methods=["GET"])
 @LIMITER.limit("100 per day;50 per hour;1 per second")
-# TODO try/except
 def get_xposed_breaches():
     """
     Fetches and returns the details of data breaches for a specified domain,
     or for all domains if no domain is specified.
     """
-    client = datastore.Client()
-    domain = request.args.get("domain")
+    try:
+        client = datastore.Client()
+        domain = request.args.get("domain")
+        breachID = request.args.get("breachID")
+        query = client.query(kind="xon_breaches")
 
-    if domain and not validate_domain(domain) or not validate_url():
-        return jsonify({"status": "error", "message": "Invalid Domain"}), 400
+        if breachID:
+            if not validate_variables(breachID):
+                return jsonify({"status": "error", "message": "Invalid Breach ID"}), 400
+            query = client.query(kind="xon_breaches")
+            query.key_filter(client.key("xon_breaches", breachID), "=")
+        elif domain:
+            if not validate_domain(domain):
+                return jsonify({"status": "error", "message": "Invalid Domain"}), 400
+            query = client.query(kind="xon_breaches")
+            query.add_filter("domain", "=", domain)
 
-    query = client.query(kind="xon_breaches")
-    if domain:
-        query.add_filter("domain", "=", domain)
+        entities = query.fetch()
 
-    entities = query.fetch()
+        fields = [
+            "breached_date",
+            "domain",
+            "industry",
+            "logo",
+            "password_risk",
+            "searchable",
+            "sensitive",
+            "verified",
+            "xposed_data",
+            "xposed_records",
+            "xposure_desc",
+        ]
 
-    fields = [
-        "breached_date",
-        "domain",
-        "industry",
-        "logo",
-        "password_risk",
-        "searchable",
-        "sensitive",
-        "verified",
-        "xposed_data",
-        "xposed_records",
-        "xposure_desc",
-    ]
-
-    labels = {
-        "Name/ID": "Breach ID",
-        "breached_date": "Breached Date",
-        "domain": "Domain",
-        "industry": "Industry",
-        "logo": "Logo",
-        "password_risk": "Password Risk",
-        "searchable": "Searchable",
-        "sensitive": "Sensitive",
-        "verified": "Verified",
-        "xposed_data": "Exposed Data",
-        "xposed_records": "Exposed Records",
-        "xposure_desc": "Exposure Description",
-    }
-
-    data = []
-    for entity in entities:
-        entity_dict = {labels[field]: entity[field] for field in fields}
-        entity_dict[labels["breached_date"]] = (
-            entity_dict[labels["breached_date"]].replace(microsecond=0).isoformat()
-        )
-        entity_dict = {
-            labels["Name/ID"]: entity.key.name or entity.key.id,
-            **entity_dict,
+        labels = {
+            "Name/ID": "Breach ID",
+            "breached_date": "Breached Date",
+            "domain": "Domain",
+            "industry": "Industry",
+            "logo": "Logo",
+            "password_risk": "Password Risk",
+            "searchable": "Searchable",
+            "sensitive": "Sensitive",
+            "verified": "Verified",
+            "xposed_data": "Exposed Data",
+            "xposed_records": "Exposed Records",
+            "xposure_desc": "Exposure Description",
         }
-        data.append(entity_dict)
 
-    if not data and domain:
-        response = {
-            "status": "Not Found",
-            "message": f"No breaches found for domain {domain}",
-        }
-    else:
-        response = {"status": "success", "Exposed Breaches": data}
+        data = []
+        for entity in entities:
+            entity_dict = {labels[field]: entity[field] for field in fields}
+            entity_dict[labels["breached_date"]] = (
+                entity_dict[labels["breached_date"]].replace(microsecond=0).isoformat()
+            )
+            entity_dict = {
+                labels["Name/ID"]: entity.key.name or entity.key.id,
+                **entity_dict,
+            }
+            data.append(entity_dict)
 
-    return jsonify(response)
+        if not data and domain:
+            response = {
+                "status": "Not Found",
+                "message": f"No breaches found for domain {domain}",
+            }
+        else:
+            response = {"status": "success", "Exposed Breaches": data}
+
+        return jsonify(response)
+
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
 
 
 @XON.route("/v1/rss", methods=["GET"])
