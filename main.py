@@ -1749,7 +1749,8 @@ def search_email(email):
         alert_record = data_store.get(alert_key)
 
         if alert_record and alert_record.get("shieldOn", False):
-            return make_response(jsonify({"Error": "Access restricted"}), 404)
+        # if alert_record and alert_record["shieldOn"]:
+            return make_response(jsonify({"Error": "Not found"}), 404)
 
         if xon_record and "site" in xon_record:
             domains = xon_record["site"].split(";")
