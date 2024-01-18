@@ -1736,10 +1736,10 @@ def search_email(email):
     """Returns exposed breaches for a given email"""
     try:
         email = email.lower()
-        exposed_breaches = {"breaches": []}
+        exposed_breaches = {"breaches": [], "email": email}
 
-        if not email or not validate_email(email) or not validate_url():
-            return make_response(jsonify({"Error": "Not found"}), 404)
+        if not email or not validate_email(email):
+            return make_response(jsonify({"Error": "Invalid or not found email"}), 404)
 
         data_store = datastore.Client()
         xon_key = data_store.key("xon", email)
@@ -1748,15 +1748,24 @@ def search_email(email):
         alert_key = data_store.key("xon_alert", email)
         alert_record = data_store.get(alert_key)
 
-        if alert_record and alert_record["shieldOn"]:
-            return make_response(jsonify({"Error": "Not found"}), 404)
+        if alert_record and alert_record.get("shieldOn", False):
+            return make_response(jsonify({"Error": "Access restricted"}), 404)
 
-        if xon_record:
+        if xon_record and "site" in xon_record:
             domains = xon_record["site"].split(";")
-            exposed_breaches["breaches"].append(domains)
+            filtered_domains = [domain for domain in domains if domain.strip()]
+            if filtered_domains:
+                exposed_breaches["breaches"].append(filtered_domains)
+            else:
+                return make_response(
+                    jsonify({"Error": "No breaches found", "email": email}), 404
+                )
+
             return jsonify(exposed_breaches)
         else:
-            return make_response(jsonify({"Error": "Not found"}), 404)
+            return make_response(
+                jsonify({"Error": "No breaches found", "email": email}), 404
+            )
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
@@ -1796,6 +1805,7 @@ def search_email_v2(email):
 
         # Calculate the start date based on the interval
         current_time = datetime.datetime.now(timezone.utc)
+        start_time = None
         if time_interval != "all":
             if time_interval == "1month":
                 start_time = current_time - timedelta(days=30)
@@ -1811,30 +1821,31 @@ def search_email_v2(email):
         xon_key = data_store.key("xon", email)
         xon_record = data_store.get(xon_key)
 
-        exposed_breaches = {"breaches": []}
+        exposed_breaches = {"breaches": [], "email": email}
         breach_count = 0
 
-        if xon_record:
+        if xon_record and "site" in xon_record:
             breach_ids = xon_record["site"].split(";")
             for breach_id in breach_ids:
-                breach_key = data_store.key("xon_breaches", breach_id)
-                breach_record = data_store.get(breach_key)
-                if breach_record:
-                    breach_date = breach_record.get("breached_date")
-                    if time_interval == "all" or (
-                        breach_date and start_time <= breach_date <= current_time
-                    ):
-                        formatted_date = (
-                            breach_date.isoformat()
-                            if breach_date
-                            else "Date not available"
-                        )
-                        breach_info = {
-                            "breach_id": breach_id,
-                            "date_of_breach": formatted_date,
-                        }
-                        exposed_breaches["breaches"].append(breach_info)
-                        breach_count += 1
+                if breach_id.strip():
+                    breach_key = data_store.key("xon_breaches", breach_id)
+                    breach_record = data_store.get(breach_key)
+                    if breach_record:
+                        breach_date = breach_record.get("breached_date")
+                        if time_interval == "all" or (
+                            breach_date and start_time <= breach_date <= current_time
+                        ):
+                            formatted_date = (
+                                breach_date.isoformat()
+                                if breach_date
+                                else "Date not available"
+                            )
+                            breach_info = {
+                                "breach_id": breach_id,
+                                "date_of_breach": formatted_date,
+                            }
+                            exposed_breaches["breaches"].append(breach_info)
+                            breach_count += 1
 
         if breach_count == 0:
             return make_response(
