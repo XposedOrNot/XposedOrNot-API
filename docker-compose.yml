@@ -1,0 +1,45 @@
+version: '3'
+services:
+  datastore:
+    image: google/cloud-sdk
+    command: gcloud beta emulators datastore start --project=xposedornot --host-port datastore:8000 --no-store-on-disk
+    ports:
+      - 8000:8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://datastore:8000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  app:
+    build: .
+    volumes:
+      - .:/app
+    depends_on:
+      datastore:
+        condition: service_healthy
+    links:
+      - datastore
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      # environment variables for datastore emulator, not needed for production
+      - DATASTORE_DATASET=xposedornot
+      - DATASTORE_EMULATOR_HOST=datastore:8000
+      - DATASTORE_EMULATOR_HOST_PATH=datastore:8000/datastore
+      - DATASTORE_HOST=http://datastore:8000
+      - DATASTORE_PROJECT_ID=xposedornot
+      # environment variables for security, can be left unmodified for local developments
+      - SECRET_APIKEY=your_secret_api_key
+      - SECURITY_SALT=your_security_salt
+      - WTF_CSRF_SECRET_KEY=your_wtf_csrf_secret_key
+      - ENCRYPTION_KEY=7ba9LmVLqozrFTey5E1P9cRv4rtOKHu80JxOODXzYME= # generated in python with print(__import__('cryptography.fernet', fromlist=['Fernet']).Fernet.generate_key().decode('utf-8'))
+      # environment variables for cloudflare setup, can be left unmodified for local development
+      - AUTH_EMAIL=your_auth_email
+      - AUTHKEY=your_auth_key
+      - CF_MAGIC=your_cf_magic
+      - CF_UNBLOCK_MAGIC=your_cf_ublock_magic
+      # environment variables for external services
+      - XMLAPI_KEY=your_xmlapi_key # can be aquired from https://www.whoisxmlapi.com/
+      - MJ_API_KEY=your_mailjet_api_key # can be aquired from https://app.mailjet.com/
+      - MJ_API_SECRET=your_mailjet_api_secret
