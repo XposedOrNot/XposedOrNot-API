@@ -76,36 +76,65 @@ If you spot any problems or have suggestions for improvements, please raise an i
 
 And if you want to contribute, we welcome your pull requests. We'll gladly consider any changes or fixes you suggest.
 
-## Installation & pre-requisities
+## Quick Start for Local Development
 
-A quick introduction of the minimal setup you need to get this API working.
+### Using Docker-Compose
 
-```shell
-sudo apt-get install -y google-cloud-sdk google-cloud-sdk-app-engine-python python3-pip google-cloud-sdk-app-engine-python build-essential libffi-dev python-dev 
-```
+1. **Clone the Repository:**
 
-The requirements.txt file should list all Python libraries XposedOrNot depend on, and they will be installed using:
+    ```shell
+    git clone https://github.com/XposedOrNot/XposedOrNot-API
+    ```
+
+2. **Update the necessary environment variables in the docker-compose.yml file if needed, then run:**
 
 
-```shell
-pip3 install -r requirements.txt
-```
+    ```shell
+    docker-compose up
+    ```
 
-This installs all the needed requirements and libraries using pip3.
+    This command will build API and Datastore Docker images. Note that the project source directory is mapped in the Docker container, so any changes in the source code won't require rebuilding the Docker image.
 
-Before running XposedOrNot-API, you need to, either:
+### Local Installation
+
+1. **Clone the Repository:**
+
+    ```shell
+    git clone https://github.com/XposedOrNot/XposedOrNot-API
+    ```
+
+2. **Install Required Packages**
+
+    ```shell
+    sudo apt-get install -y google-cloud-sdk google-cloud-sdk-app-engine-python python3-pip google-cloud-sdk-app-engine-python build-essential libffi-dev python-dev 
+    ```
+
+3. **Install Python Libraries**
+
+
+    ```shell
+    pip3 install -r requirements.txt
+    ```
+
+4. **Setup Google Cloud Datastore**
+
+    Before running XposedOrNot-API, choose one of the following options:
 
 -   [Run local Google DataStore emulator](https://cloud.google.com/datastore/docs/tools/datastore-emulator)
     and debug using the local emulator rather than directly connect to Google DataStore. 
-    
 
-```shell
-# For posix platforms, e.g. linux, mac:
-gcloud beta emulators datastore start
-```
+    ```shell
+    # For posix platforms, e.g. linux, mac:
+    gcloud beta emulators datastore start
+    ```
 
 -   [Authenticate to Google DataStore](https://cloud.google.com/sdk/gcloud/reference/beta/auth/application-default) and directly debug using Google DataStore.
 
+5. **Run the applicaiont**
+
+    ```shell
+    python main.py
+    ```
 
 ## Contributing
 
