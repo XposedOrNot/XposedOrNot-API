@@ -130,10 +130,10 @@ And if you want to contribute, we welcome your pull requests. We'll gladly consi
 
 -   [Authenticate to Google DataStore](https://cloud.google.com/sdk/gcloud/reference/beta/auth/application-default) and directly debug using Google DataStore.
 
-5. **Run the applicaiont**
+5. **Run the application**
 
     ```shell
-    python main.py
+    python3 main.py
     ```
 
 ## Contributing
