@@ -73,6 +73,44 @@ XON.config.update(SECRET_KEY=WTF_CSRF_SECRET_KEY)
 CSRF = CSRFProtect()
 CSRF.init_app(XON)
 
+
+def set_csp_headers(response):
+    csp_value = "default-src 'self' 'unsafe-inline' 'unsafe-eval';"
+    response.headers["Content-Security-Policy"] = csp_value
+    return response
+
+
+@XON.after_request
+def apply_csp_headers(response):
+    return set_csp_headers(response)
+
+
+@XON.after_request
+def set_x_frame_options(response):
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
+@XON.after_request
+def set_referrer_policy(response):
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
+@XON.after_request
+def set_permissions_policy(response):
+    response.headers[
+        "Permissions-Policy"
+    ] = "accelerometer=(), camera=(), geolocation=(), microphone=(), midi=(), payment=(), usb=()"
+    return response
+
+
+@XON.after_request
+def add_cache_control(response):
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
+
+
 # Initialize and configure rate limiting
 LIMITER = Limiter(
     app=XON,
