@@ -99,9 +99,9 @@ def set_referrer_policy(response):
 
 @XON.after_request
 def set_permissions_policy(response):
-    response.headers[
-        "Permissions-Policy"
-    ] = "accelerometer=(), camera=(), geolocation=(), microphone=(), midi=(), payment=(), usb=()"
+    response.headers["Permissions-Policy"] = (
+        "accelerometer=(), camera=(), geolocation=(), microphone=(), midi=(), payment=(), usb=()"
+    )
     return response
 
 
@@ -421,47 +421,15 @@ def get_breaches_metrics(breaches):
 
         year_counts = {year: 0 for year in range(2007, 2025)}
         count_plaintext = count_easy = count_hard = count_unknown = 0
-        count_aero = (
-            count_tran
-        ) = (
-            count_info
-        ) = (
-            count_tele
-        ) = (
-            count_agri
-        ) = (
-            count_cons
-        ) = (
+        count_aero = count_tran = count_info = count_tele = count_agri = count_cons = (
             count_educ
-        ) = (
-            count_phar
-        ) = (
-            count_food
-        ) = (
-            count_heal
-        ) = (
-            count_hosp
-        ) = (
-            count_ente
-        ) = (
+        ) = count_phar = count_food = count_heal = count_hosp = count_ente = (
             count_news
-        ) = (
-            count_ener
-        ) = (
-            count_manu
-        ) = (
-            count_musi
-        ) = (
-            count_mini
-        ) = (
-            count_elec
-        ) = (
+        ) = count_ener = count_manu = count_musi = count_mini = count_elec = (
             count_misc
-        ) = (
-            count_reale
-        ) = (
-            count_fina
-        ) = count_reta = count_nonp = count_govt = count_spor = count_envi = 0
+        ) = count_reale = count_fina = count_reta = count_nonp = count_govt = (
+            count_spor
+        ) = count_envi = 0
         password_risk_counters = {
             "plaintext": count_plaintext,
             "easytocrack": count_easy,
@@ -687,7 +655,10 @@ def get_breaches_data(breaches: str) -> dict:
                 "category": "🍔 Personal Habits and Lifestyle",
                 "group": "C",
             },
-            "Time Zones": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+            "Time Zones": {
+                "category": "🍔 Personal Habits and Lifestyle",
+                "group": "C",
+            },
             "Vehicle Details": {
                 "category": "🍔 Personal Habits and Lifestyle",
                 "group": "C",
@@ -816,7 +787,10 @@ def get_breaches_data(breaches: str) -> dict:
                 "category": "🩺 Health Information",
                 "group": "H",
             },
-            "Physical Disabilities": {"category": "🩺 Health Information", "group": "H"},
+            "Physical Disabilities": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
             "Psychological Conditions": {
                 "category": "🩺 Health Information",
                 "group": "H",
@@ -1226,23 +1200,9 @@ def get_pastes_metrics(pastes):
         query = ds_client.query(kind="xon_paste_master")
         breaches = pastes.split(";")
         get_metrics = {"yearwise_details": []}
-        y2021 = (
-            y2020
-        ) = (
-            y2019
-        ) = (
-            y2018
-        ) = (
-            y2017
-        ) = (
-            y2016
-        ) = (
-            y2015
-        ) = (
-            y2015
-        ) = (
-            y2014
-        ) = y2013 = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
+        y2021 = y2020 = y2019 = y2018 = y2017 = y2016 = y2015 = y2015 = y2014 = (
+            y2013
+        ) = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
         for index_count, count in enumerate(breaches):
             key = ds_client.key("xon_paste_master", count)
             query = ds_client.get(key)
@@ -1654,13 +1614,17 @@ def search_data_breaches():
             return jsonify(
                 {
                     "ExposedBreaches": exposed_breaches,
-                    "BreachesSummary": breach_summary
-                    if breach_summary
-                    else {"domain": "", "site": "", "tmpstmp": ""},
+                    "BreachesSummary": (
+                        breach_summary
+                        if breach_summary
+                        else {"domain": "", "site": "", "tmpstmp": ""}
+                    ),
                     "BreachMetrics": breach_metrics,
-                    "PastesSummary": paste_summary
-                    if paste_summary
-                    else {"cnt": 0, "domain": "", "tmpstmp": ""},
+                    "PastesSummary": (
+                        paste_summary
+                        if paste_summary
+                        else {"cnt": 0, "domain": "", "tmpstmp": ""}
+                    ),
                     "ExposedPastes": exposed_pastes,
                     "PasteMetrics": paste_metrics,
                 }
