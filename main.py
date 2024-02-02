@@ -75,6 +75,7 @@ CSRF.init_app(XON)
 
 
 def set_csp_headers(response):
+    """Sets the Content-Security-Policy header for a given response object."""
     csp_value = "default-src 'self' 'unsafe-inline' 'unsafe-eval';"
     response.headers["Content-Security-Policy"] = csp_value
     return response
@@ -82,23 +83,27 @@ def set_csp_headers(response):
 
 @XON.after_request
 def apply_csp_headers(response):
+    """A Flask after_request handler that applies CSP headers to responses."""
     return set_csp_headers(response)
 
 
 @XON.after_request
 def set_x_frame_options(response):
+    """Sets the X-Frame-Options header to 'DENY' for all outgoing responses."""
     response.headers["X-Frame-Options"] = "DENY"
     return response
 
 
 @XON.after_request
 def set_referrer_policy(response):
+    """Applies a strict-origin-when-cross-origin Referrer Policy to all responses."""
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
 
 @XON.after_request
 def set_permissions_policy(response):
+    """Sets a Permissions-Policy header on the response to disable powerful features."""
     response.headers["Permissions-Policy"] = (
         "accelerometer=(), camera=(), geolocation=(), microphone=(), midi=(), payment=(), usb=()"
     )
@@ -107,6 +112,9 @@ def set_permissions_policy(response):
 
 @XON.after_request
 def add_cache_control(response):
+    """
+    Adds Cache-Control headers to prevent caching of the response.
+    """
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
 
