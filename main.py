@@ -126,6 +126,12 @@ def not_found(error):
     return make_response(jsonify({"Error": "Not found"}), 404)
 
 
+# @XON.errorhandler(304)
+# def nothing_changed(error):
+#    """Returns response for 304"""
+#    return make_response(jsonify({"Error": "Nothing has changed"}), 304)
+
+
 @XON.errorhandler(429)
 def ratelimit_handler(error):
     """Returns response for 429"""
@@ -3431,6 +3437,19 @@ def get_xposed_breaches():
                 return jsonify({"status": "error", "message": "Invalid Domain"}), 400
             query = client.query(kind="xon_breaches")
             query.add_filter("domain", "=", domain)
+
+        query.order = ["-timestamp"]
+        latest_entity = list(query.fetch(limit=1))
+
+        if latest_entity:
+            latest_timestamp = latest_entity[0]["timestamp"]
+            if_modified_since_str = request.headers.get("If-Modified-Since")
+            if if_modified_since_str:
+                if_modified_since = datetime.datetime.strptime(
+                    if_modified_since_str, "%a, %d %b %Y %H:%M:%S GMT"
+                )
+                if latest_timestamp.replace(tzinfo=None) <= if_modified_since:
+                    return make_response("", 304)
 
         entities = query.fetch()
 
