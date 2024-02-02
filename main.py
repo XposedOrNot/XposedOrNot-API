@@ -937,7 +937,7 @@ def get_breaches_analytics(breaches, sensitive_breaches):
                 logo = query.get("logo", "default_logo.jpg")
                 details = (
                     "<img src='" + logo + "' style='height:40px;width:65px;' />"
-                    "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
+                    "<a target='_blank' href='https://xposedornot.com/xposed/#"
                     + bid
                     + "'> &nbsp;"
                     + "Details</a>"
@@ -1002,7 +1002,7 @@ def get_breaches_analytics(breaches, sensitive_breaches):
                 logo = query.get("logo", "default_logo.jpg")
                 details = (
                     "<img src='" + logo + "' style='height:40px;width:65px;' />"
-                    "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
+                    "<a target='_blank' href='https://xposedornot.com/xposed/#"
                     + bid
                     + "'> &nbsp;"
                     + "Details</a>"
@@ -2098,7 +2098,7 @@ def alert_me_verification(verification_token):
             if len(exposure_info) == 0 and len(sensitive_exposure_info) == 0:
                 return verification_template
             else:
-                base_url = "https://beta.xposedornot.com/"
+                base_url = "https://xposedornot.com/"
                 email_param = f"email={user_email}"
                 token_param = f"&token={verification_token}"
                 breaches_link = (
@@ -2472,8 +2472,7 @@ def domain_verify(verification_token):
         user_email = confirm_token(verification_token)
 
         if user_email:
-            # TODO: URL to be updated
-            base_url = "https://beta.xposedornot.com/"
+            base_url = "https://xposedornot.com/"
             email_param = f"email={user_email}"
             token_param = f"&token={verification_token}"
             dashboard_link = (
@@ -2585,7 +2584,7 @@ def send_domain_breaches():
                 breach_logo = all_breaches_logo[breach]
                 details = (
                     "<img src='" + breach_logo + "' style='height:40px;width:65px;' />"
-                    "<a target='_blank' href='https://beta.xposedornot.com/xposed/#"
+                    "<a target='_blank' href='https://xposedornot.com/xposed/#"
                     + breach
                     + "'> &nbsp;"
                     + "Details</a>"
