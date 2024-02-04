@@ -76,7 +76,13 @@ CSRF.init_app(XON)
 
 def set_csp_headers(response):
     """Sets the Content-Security-Policy header for a given response object."""
-    csp_value = "default-src 'self' 'unsafe-inline' 'unsafe-eval';"
+    csp_value = (
+        "default-src 'self';"
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://static.cloudflareinsights.com;"
+        "style-src 'self' 'unsafe-inline' https://maxcdn.bootstrapcdn.com https://cdnjs.cloudflare.com https://fonts.googleapis.com;"
+        "img-src 'self' https://xposedornot.com;"
+        "font-src 'self' https://fonts.gstatic.com;"
+    )
     response.headers["Content-Security-Policy"] = csp_value
     return response
 
@@ -1801,7 +1807,6 @@ def search_email_v2(email):
                 jsonify({"status": "error", "message": "Invalid or missing API key"}),
                 401,
             )
-
         datastore_client = datastore.Client()
         query = datastore_client.query(kind="xon_api_key")  # change - xon_eapi_key
         query.add_filter("api_key", "=", api_key)
