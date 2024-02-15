@@ -1807,6 +1807,110 @@ def search_email_v2(email):
                 jsonify({"status": "error", "message": "Invalid or missing API key"}),
                 401,
             )
+
+        if "X-Forwarded-For" in request.headers:
+            client_ip_address = request.headers["X-Forwarded-For"].split(",")[0].strip()
+        elif "X-Real-IP" in request.headers:
+            client_ip_address = request.headers["X-Real-IP"].strip()
+        else:
+            client_ip_address = request.remote_addr
+
+        client_ip = get_preferred_ip_address(client_ip_address)
+
+        datastore_client = datastore.Client()
+        query = datastore_client.query(kind="xon_api_key")  # change - xon_eapi_key
+        query.add_filter("api_key", "=", api_key)
+        api_key_results = list(query.fetch())
+
+        if not api_key_results:
+            return jsonify({"status": "error", "message": "Unauthorized access"}), 401
+
+        # IP Access Control
+        allowed_ips = api_key_results[0].get("allowed_list", "")
+        allowed_ip_list = [ip.strip() for ip in allowed_ips.split(",")]
+        if client_ip not in allowed_ip_list:
+            return jsonify({"status": "error", "message": "IP not allowed"}), 403
+
+        email = email.lower()
+        if not email or not validate_email(email):
+            return make_response(jsonify({"error": "Invalid or not found email"}), 404)
+
+        # Validate time interval
+        time_interval = request.args.get("interval", "all")
+        valid_intervals = {"1month", "3months", "6months", "1year", "all"}
+        if time_interval not in valid_intervals:
+            return jsonify({"error": "Invalid time interval"}), 400
+
+        # Calculate the start date based on the interval
+        current_time = datetime.datetime.now(timezone.utc)
+        start_time = None
+        if time_interval != "all":
+            if time_interval == "1month":
+                start_time = current_time - timedelta(days=30)
+            elif time_interval == "3months":
+                start_time = current_time - timedelta(days=90)
+            elif time_interval == "6months":
+                start_time = current_time - timedelta(days=180)
+            elif time_interval == "1year":
+                start_time = current_time - timedelta(days=365)
+
+        # Proceed with breach data retrieval and filtering
+        data_store = datastore.Client()
+        xon_key = data_store.key("xon", email)
+        xon_record = data_store.get(xon_key)
+
+        exposed_breaches = {"breaches": [], "email": email}
+        breach_count = 0
+
+        if xon_record and "site" in xon_record:
+            breach_ids = xon_record["site"].split(";")
+            for breach_id in breach_ids:
+                if breach_id.strip():
+                    breach_key = data_store.key("xon_breaches", breach_id)
+                    breach_record = data_store.get(breach_key)
+                    if breach_record:
+                        breach_date = breach_record.get("breached_date")
+                        if time_interval == "all" or (
+                            breach_date and start_time <= breach_date <= current_time
+                        ):
+                            formatted_date = (
+                                breach_date.isoformat()
+                                if breach_date
+                                else "Date not available"
+                            )
+                            breach_info = {
+                                "breach_id": breach_id,
+                                "date_of_breach": formatted_date,
+                            }
+                            exposed_breaches["breaches"].append(breach_info)
+                            breach_count += 1
+
+        if breach_count == 0:
+            return make_response(
+                jsonify({"error": "No breaches found", "breach_count": 0}), 404
+            )
+
+        exposed_breaches["breach_count"] = breach_count
+        return jsonify(exposed_breaches)
+
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+
+
+'''
+@XON.route("/v2/check-email/<email>", methods=["GET"])
+@LIMITER.limit("500 per second")
+def search_email_v2(email):
+    """Returns exposed breaches for a given email including breach date and description, requires an API key"""
+    try:
+        # API Key validation
+        api_key = request.headers.get("x-api-key")
+        if not api_key or api_key.strip() == "":
+            return (
+                jsonify({"status": "error", "message": "Invalid or missing API key"}),
+                401,
+            )
         datastore_client = datastore.Client()
         query = datastore_client.query(kind="xon_api_key")  # change - xon_eapi_key
         query.add_filter("api_key", "=", api_key)
@@ -1880,6 +1984,7 @@ def search_email_v2(email):
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
+'''
 
 
 @XON.route("/v1/check-paste/<email>", methods=["GET"])
