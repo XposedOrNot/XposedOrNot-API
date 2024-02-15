@@ -2505,8 +2505,12 @@ def domain_verify(verification_token):
 def send_domain_breaches():
     """Retrieves and sends the data breaches validated by token and email"""
     try:
-        email = request.args.get("email").lower()
+        email = request.args.get("email")
         verification_token = request.args.get("token")
+
+        # Check for presence of email and token
+        if email is None or verification_token is None:
+            return make_response(jsonify({"Error": "Missing email or token"}), 400)
 
         # Validate email and token
         if (
