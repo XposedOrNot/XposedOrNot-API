@@ -79,9 +79,9 @@ def set_csp_headers(response):
     csp_value = (
         "default-src 'self';"
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com https://static.cloudflareinsights.com;"
-        "style-src 'self' 'unsafe-inline' https://maxcdn.bootstrapcdn.com https://cdnjs.cloudflare.com https://fonts.googleapis.com;"
+        "style-src 'self' 'unsafe-inline' https://maxcdn.bootstrapcdn.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://xposedornot.com;"
         "img-src 'self' https://xposedornot.com;"
-        "font-src 'self' https://fonts.gstatic.com;"
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;"
     )
     response.headers["Content-Security-Policy"] = csp_value
     return response
@@ -1990,7 +1990,7 @@ def subscribe_to_alert_me(user_email):
             or not validate_variables(user_email)
             or not validate_url()
         ):
-            return make_response(jsonify({"Error": "Not found"}), 404)
+            return make_response(jsonify({"Error": "Invalid request"}), 400)
 
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
@@ -2058,11 +2058,14 @@ def subscribe_to_alert_me(user_email):
 
             return make_response(jsonify({"Success": "Subscription Successful"}), 200)
         else:
-            return abort(404)
+            return make_response(jsonify({"Error": "Not found"}), 404)
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
+
+
+#        return make_response(jsonify({"Error": "An error occurred"}), 500)
 
 
 @XON.route("/v1/verifyme/<verification_token>", methods=["GET"])
