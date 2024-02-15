@@ -3452,7 +3452,7 @@ def get_xposed_breaches():
             query = client.query(kind="xon_breaches")
             query.add_filter("domain", "=", domain)
 
-        query.order = ["-timestamp"]
+        # query.order = ["-timestamp"]
         latest_entity = list(query.fetch(limit=1))
 
         if latest_entity:
@@ -3466,6 +3466,17 @@ def get_xposed_breaches():
                     return make_response("", 304)
 
         entities = query.fetch()
+
+        if not entities:
+            return (
+                jsonify(
+                    {
+                        "status": "Not Found",
+                        "message": "No breaches found for the provided criteria",
+                    }
+                ),
+                404,
+            )
 
         fields = [
             "breached_date",
