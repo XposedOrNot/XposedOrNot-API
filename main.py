@@ -3372,7 +3372,7 @@ def get_xposed_breaches():
             query = client.query(kind="xon_breaches")
             query.add_filter("domain", "=", domain)
 
-        # query.order = ["-timestamp"]
+        query.order = ["-timestamp"]
         latest_entity = list(query.fetch(limit=1))
 
         if latest_entity:
