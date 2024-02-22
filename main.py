@@ -373,10 +373,16 @@ def get_preferred_ip_address(x_forwarded_for):
 
 
 def encrypt_data(data):
+    """
+    Encrypts the given data using a predefined cipher suite.
+    """
     return CIPHER_SUITE.encrypt(data.encode())
 
 
 def decrypt_data(data):
+    """
+    Decrypts the given data using a predefined cipher suite.
+    """
     return CIPHER_SUITE.decrypt(data).decode()
 
 
@@ -542,7 +548,6 @@ def get_breaches_metrics(breaches):
         )
 
         get_metrics["industry"].append(sorted_industries)
-        # TODO: Risk score calculation to be re-verified
         password_score = password_risk_counters["plaintext"] / (
             password_risk_counters["easytocrack"]
             + password_risk_counters["hardtocrack"]
@@ -2054,7 +2059,7 @@ def send_verification():
             or not validate_email_with_tld(user_email)
             or not validate_variables(verification_token)
             or not validate_url()
-        ):  # Redundant - #TODO
+        ):
             return make_response(jsonify({"status": "Failed"}), 200)
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
@@ -2414,7 +2419,7 @@ def domain_verify(verification_token):
 
 
 @XON.route("/v1/send_domain_breaches", methods=["GET"])
-@LIMITER.limit("500 per day;100 per hour;1 per second")  # TODO
+@LIMITER.limit("500 per day;100 per hour;1 per second")
 def send_domain_breaches():
     """Retrieves and sends the data breaches validated by token and email"""
     try:
