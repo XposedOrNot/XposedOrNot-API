@@ -1,5 +1,10 @@
 name: CIFuzz
-on: [pull_request]
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
 permissions: {}
 jobs:
   Fuzzing:
@@ -28,6 +33,5 @@ jobs:
       if: always() && steps.build.outcome == 'success'
       uses: github/codeql-action/upload-sarif@v2
       with:
-        # Path to SARIF file relative to the root of the repository
         sarif_file: cifuzz-sarif/results.sarif
         checkout_path: cifuzz-sarif
