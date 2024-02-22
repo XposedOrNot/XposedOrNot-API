@@ -3364,12 +3364,10 @@ def get_xposed_breaches():
         if breachID:
             if not validate_variables(breachID):
                 return jsonify({"status": "error", "message": "Invalid Breach ID"}), 400
-            query = client.query(kind="xon_breaches")
             query.key_filter(client.key("xon_breaches", breachID), "=")
         elif domain:
             if not validate_domain(domain):
                 return jsonify({"status": "error", "message": "Invalid Domain"}), 400
-            query = client.query(kind="xon_breaches")
             query.add_filter("domain", "=", domain)
 
         query.order = ["-timestamp"]
@@ -3379,7 +3377,7 @@ def get_xposed_breaches():
             latest_timestamp = latest_entity[0]["timestamp"]
             if_modified_since_str = request.headers.get("If-Modified-Since")
             if if_modified_since_str:
-                if_modified_since = datetime.datetime.strptime(
+                if_modified_since = datetime.strptime(
                     if_modified_since_str, "%a, %d %b %Y %H:%M:%S GMT"
                 )
                 if latest_timestamp.replace(tzinfo=None) <= if_modified_since:
@@ -3429,7 +3427,9 @@ def get_xposed_breaches():
 
         data = []
         for entity in entities:
-            entity_dict = {labels[field]: entity[field] for field in fields}
+            entity_dict = {
+                labels[field]: entity[field] for field in fields if field in entity
+            }
             entity_dict[labels["breached_date"]] = (
                 entity_dict[labels["breached_date"]].replace(microsecond=0).isoformat()
             )
@@ -3437,6 +3437,8 @@ def get_xposed_breaches():
                 labels["Name/ID"]: entity.key.name or entity.key.id,
                 **entity_dict,
             }
+            entity_dict["ReferenceURL"] = entity.get("references", "")
+
             data.append(entity_dict)
 
         if not data and domain:
@@ -3448,7 +3450,6 @@ def get_xposed_breaches():
             response = {"status": "success", "Exposed Breaches": data}
 
         return jsonify(response)
-
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
