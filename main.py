@@ -371,10 +371,16 @@ def get_preferred_ip_address(x_forwarded_for):
 
 
 def encrypt_data(data):
+    """
+    Encrypts the given data using a predefined cipher suite.
+    """
     return CIPHER_SUITE.encrypt(data.encode())
 
 
 def decrypt_data(data):
+    """
+    Decrypts the given data using a predefined cipher suite.
+    """
     return CIPHER_SUITE.decrypt(data).decode()
 
 
@@ -540,7 +546,6 @@ def get_breaches_metrics(breaches):
         )
 
         get_metrics["industry"].append(sorted_industries)
-        # TODO: Risk score calculation to be re-verified
         password_score = password_risk_counters["plaintext"] / (
             password_risk_counters["easytocrack"]
             + password_risk_counters["hardtocrack"]
@@ -1481,7 +1486,7 @@ def process_single_domain(domain):
 
         try:
             result = [tx for tx in query.fetch()]
-        except Exception as e:
+        except Exception as exception:
             return []
 
         return result
@@ -2052,7 +2057,7 @@ def send_verification():
             or not validate_email_with_tld(user_email)
             or not validate_variables(verification_token)
             or not validate_url()
-        ):  # Redundant - #TODO
+        ):
             return make_response(jsonify({"status": "Failed"}), 200)
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
@@ -2412,7 +2417,7 @@ def domain_verify(verification_token):
 
 
 @XON.route("/v1/send_domain_breaches", methods=["GET"])
-@LIMITER.limit("500 per day;100 per hour;1 per second")  # TODO
+@LIMITER.limit("500 per day;100 per hour;1 per second")
 def send_domain_breaches():
     """Retrieves and sends the data breaches validated by token and email"""
     try:
@@ -2838,11 +2843,8 @@ def domain_verification():
 @XON.route("/v1/teams-channel-setup", methods=["POST"])
 def xon_alerts_teams():
     try:
-        print("Received request for xon_alerts_teams")
-
         # Extracting data from the request
         data = request.json
-        print(f"Request data: {data}")
 
         token = data.get("token")
         domain = data.get("domain")
@@ -2851,21 +2853,18 @@ def xon_alerts_teams():
 
         # Validate mandatory fields
         if not validate_variables([token, domain, webhook, action]):
-            print("Validation failed for input variables")
             return (
                 jsonify({"status": "error", "message": "Invalid input variables"}),
                 400,
             )
 
         # Session validation
-        print("Performing session validation")
         client = datastore.Client()
         query = client.query(kind="xon_domains_session")
         query.add_filter("domain_magic", "=", token)
         user_session = list(query.fetch())
 
         if not user_session:
-            print("Session token is invalid")
             return jsonify({"status": "error", "message": "Invalid session token"}), 400
 
         email = user_session[0].key.name
@@ -2877,7 +2876,6 @@ def xon_alerts_teams():
         domain_record = list(domain_query.fetch())
 
         if not domain_record or not domain_record[0].get("verified"):
-            print("Domain not verified for the given email")
             return (
                 jsonify(
                     {"status": "error", "message": "Domain not verified for this email"}
@@ -2887,12 +2885,10 @@ def xon_alerts_teams():
         record_key = client.key("xon_teams_channel", f"{email}_{domain}")
 
         if action == "init":
-            print("Action is init")
             record = client.get(record_key)
 
             # Check if channel is already verified
             if record and record.get("status") == "verified":
-                print("Channel already verified")
                 return (
                     jsonify(
                         {
@@ -2906,11 +2902,9 @@ def xon_alerts_teams():
             encrypted_webhook = encrypt_data(webhook)
 
             if record:
-                print("Record found, updating timestamp")
                 record.update({"updated_timestamp": datetime.datetime.utcnow()})
                 verify_token = record.get("verify_token")
             else:
-                print("Creating new record")
                 verify_token = secrets.token_hex(16)
                 record = datastore.Entity(key=record_key)
                 record.update(
@@ -2940,7 +2934,6 @@ def xon_alerts_teams():
             message = {"text": message_content}
             response = requests.post(decrypted_webhook, json=message)
             if response.status_code != 200:
-                print("Failed to send message to Teams channel")
                 return (
                     jsonify(
                         {
@@ -2951,14 +2944,11 @@ def xon_alerts_teams():
                     500,
                 )
 
-            print("Init action completed")
             return jsonify({"status": "initiated"}), 200
 
         elif action == "verify":
-            print("Action is verify")
             verify_token = data.get("verify_token")
             if not verify_token:
-                print("Verification token is missing")
                 return (
                     jsonify(
                         {"status": "error", "message": "Missing verification token"}
@@ -2968,11 +2958,9 @@ def xon_alerts_teams():
 
             record = client.get(record_key)
             if not record:
-                print("Record not found for verification")
                 return jsonify({"status": "error", "message": "Record not found"}), 404
 
             if record.get("verify_token") == verify_token:
-                print("Verification successful")
                 record.update({"status": "verified"})
                 client.put(record)
                 # Create a success message
@@ -2993,7 +2981,6 @@ def xon_alerts_teams():
                     200,
                 )
             else:
-                print("Verification failed")
                 record.update({"status": "failed"})
                 client.put(record)
                 return (
@@ -3002,14 +2989,12 @@ def xon_alerts_teams():
                 )
 
         else:
-            print("Invalid action provided")
             return (
                 jsonify({"status": "error", "message": "Invalid action provided"}),
                 400,
             )
 
     except Exception as exception_details:
-        print(f"Exception occurred: {exception_details}")
         log_except(request.url, exception_details)
         abort(404)
 
@@ -3018,31 +3003,24 @@ def xon_alerts_teams():
 @XON.route("/v1/slack-channel-setup", methods=["POST"])
 def xon_alerts_slack():
     try:
-        print("Received request for xon_alerts_slack")
-
         data = request.json
-        print(f"Request data: {data}")
-
         token = data.get("token")
         domain = data.get("domain")
         webhook = data.get("webhook")
         action = data.get("action")
 
         if not validate_variables([token, domain, webhook, action]):
-            print("Validation failed for input variables")
             return (
                 jsonify({"status": "error", "message": "Invalid input variables"}),
                 400,
             )
 
-        print("Performing session validation")
         client = datastore.Client()
         query = client.query(kind="xon_domains_session")
         query.add_filter("domain_magic", "=", token)
         user_session = list(query.fetch())
 
         if not user_session:
-            print("Session token is invalid")
             return jsonify({"status": "error", "message": "Invalid session token"}), 400
 
         email = user_session[0].key.name
@@ -3053,7 +3031,6 @@ def xon_alerts_slack():
         domain_record = list(domain_query.fetch())
 
         if not domain_record or not domain_record[0].get("verified"):
-            print("Domain not verified for the given email")
             return (
                 jsonify(
                     {"status": "error", "message": "Domain not verified for this email"}
@@ -3064,11 +3041,9 @@ def xon_alerts_slack():
         record_key = client.key("xon_slack_channel", f"{email}_{domain}")
 
         if action == "init":
-            print("Action is init")
             record = client.get(record_key)
 
             if record and record.get("status") == "verified":
-                print("Channel already verified")
                 return (
                     jsonify(
                         {
@@ -3082,11 +3057,9 @@ def xon_alerts_slack():
             encrypted_webhook = encrypt_data(webhook)
 
             if record:
-                print("Record found, updating timestamp")
                 record.update({"updated_timestamp": datetime.datetime.utcnow()})
                 verify_token = record.get("verify_token")
             else:
-                print("Creating new record")
                 verify_token = secrets.token_hex(16)
                 record = datastore.Entity(key=record_key)
                 record.update(
@@ -3125,7 +3098,6 @@ def xon_alerts_slack():
             }
             response = requests.post(decrypted_webhook, json=message_content)
             if response.status_code != 200:
-                print("Failed to send message to Slack channel")
                 return (
                     jsonify(
                         {
@@ -3136,14 +3108,11 @@ def xon_alerts_slack():
                     500,
                 )
 
-            print("Init action completed")
             return jsonify({"status": "initiated"}), 200
 
         elif action == "verify":
-            print("Action is verify")
             verify_token = data.get("verify_token")
             if not verify_token:
-                print("Verification token is missing")
                 return (
                     jsonify(
                         {"status": "error", "message": "Missing verification token"}
@@ -3153,11 +3122,9 @@ def xon_alerts_slack():
 
             record = client.get(record_key)
             if not record:
-                print("Record not found for verification")
                 return jsonify({"status": "error", "message": "Record not found"}), 404
 
             if record.get("verify_token") == verify_token:
-                print("Verification successful")
                 record.update({"status": "verified"})
                 client.put(record)
 
@@ -3175,7 +3142,6 @@ def xon_alerts_slack():
                     200,
                 )
             else:
-                print("Verification failed")
                 record.update({"status": "failed"})
                 client.put(record)
                 return (
@@ -3184,14 +3150,12 @@ def xon_alerts_slack():
                 )
 
         else:
-            print("Invalid action provided")
             return (
                 jsonify({"status": "error", "message": "Invalid action provided"}),
                 400,
             )
 
     except Exception as exception_details:
-        print(f"Exception occurred: {exception_details}")
         log_except(request.url, exception_details)
         abort(404)
 
