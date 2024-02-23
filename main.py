@@ -1581,9 +1581,9 @@ def get_metrics():
 @XON.route("/v1/breach-analytics", methods=["GET"])
 @LIMITER.limit("500 per day;100 per hour;2 per second")
 def search_data_breaches():
+    """Returns summary and details of data breaches for a given email"""
     verification_token = request.args.get("token", default=None)
     email = request.args.get("email", default=None)
-    """Returns summary and details of data breaches for a given email"""
     email = email.lower()
     if not email or not validate_email(email) or not validate_url():
         return make_response(jsonify({"Error": "Not found"}), 404)
@@ -1667,6 +1667,10 @@ def search_data_breaches():
 
 
 class ShieldOnException(Exception):
+    """
+    Exception raised when an attempt is made to access data that is protected by a shield.
+    """
+
     pass
 
 
@@ -2842,6 +2846,7 @@ def domain_verification():
 @CSRF.exempt
 @XON.route("/v1/teams-channel-setup", methods=["POST"])
 def xon_alerts_teams():
+    """Used for Teams channel initial setup"""
     try:
         # Extracting data from the request
         data = request.json
@@ -3002,6 +3007,7 @@ def xon_alerts_teams():
 @CSRF.exempt
 @XON.route("/v1/slack-channel-setup", methods=["POST"])
 def xon_alerts_slack():
+    """Used for initial Slack channel setup"""
     try:
         data = request.json
         token = data.get("token")
@@ -3162,6 +3168,7 @@ def xon_alerts_slack():
 
 @XON.route("/v1/teams-channel-config", methods=["GET"])
 def get_teams_channel_config():
+    """Used for Teams channel configuration update"""
     try:
         email = request.args.get("email")
         domain = request.args.get("domain")
@@ -3238,6 +3245,7 @@ def get_teams_channel_config():
 
 @XON.route("/v1/slack-channel-config", methods=["GET"])
 def get_slack_channel_config():
+    """Used for Slack channel configuration update"""
     try:
         email = request.args.get("email")
         domain = request.args.get("domain")
