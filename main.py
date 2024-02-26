@@ -3347,7 +3347,7 @@ def get_xposed_breaches():
             latest_timestamp = latest_entity[0]["timestamp"]
             if_modified_since_str = request.headers.get("If-Modified-Since")
             if if_modified_since_str:
-                if_modified_since = datetime.strptime(
+                if_modified_since = datetime.datetime.strptime(
                     if_modified_since_str, "%a, %d %b %Y %H:%M:%S GMT"
                 )
                 if latest_timestamp.replace(tzinfo=None) <= if_modified_since:
