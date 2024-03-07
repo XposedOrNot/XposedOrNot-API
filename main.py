@@ -2450,7 +2450,6 @@ def send_domain_breaches():
         client = datastore.Client()
         alert_key = client.key("xon_domains_session", email)
         alert_task = client.get(alert_key)
-        # If no matching session or token doesn't match or more than 24 hours passed
         if not alert_task or alert_task.get("domain_magic") != verification_token:
             return make_response(jsonify({"Error": "Invalid session"}), 400)
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
@@ -2458,7 +2457,6 @@ def send_domain_breaches():
         ) > timedelta(hours=24):
             return make_response(jsonify({"Error": "Session expired"}), 400)
 
-        # fetch domains where the given email was used for verification
         query = client.query(kind="xon_domains")
         query.add_filter("email", "=", email)
         verified_domains = [entity["domain"] for entity in query.fetch()]
@@ -2471,7 +2469,6 @@ def send_domain_breaches():
             str(year): defaultdict(int) for year in range(current_year, 2006, -1)
         }
 
-        # count records in xon_domains_summary for each domain
         breach_summary = defaultdict(int)
         breach_details = []
         detailed_breach_info = {}
@@ -2483,28 +2480,50 @@ def send_domain_breaches():
             for entity in query.fetch():
                 if entity["breach"] == "No_Breaches":
                     continue
-                # fetch the breach to get the breach date and details
                 breach_key = client.key("xon_breaches", entity["breach"])
                 breach = client.get(breach_key)
-                all_breaches_logo[entity["breach"]] = breach["logo"]
-                breach_logo = breach["logo"]
-                breach_year = breach["breached_date"].strftime("%Y")
-                yearly_summary[breach_year] += entity["email_count"]
-                yearly_breach_summary[breach_year][entity["breach"]] += entity[
-                    "email_count"
-                ]
-                # count the occurrences of each breach
-                breach_summary[entity["breach"]] += entity["email_count"]
-                domain_summary[domain] += entity["email_count"]
-                detailed_breach_info[entity["breach"]] = {
-                    "breached_date": breach["breached_date"],
-                    "logo": breach["logo"],
-                    "password_risk": breach["password_risk"],
-                    "searchable": breach["searchable"],
-                    "xposed_data": breach["xposed_data"],
-                    "xposed_records": breach["xposed_records"],
-                    "xposure_desc": breach["xposure_desc"],
+
+                default_breach_info = {
+                    "breached_date": None,
+                    "logo": "",
+                    "password_risk": "",
+                    "searchable": "",
+                    "xposed_data": "",
+                    "xposed_records": "",
+                    "xposure_desc": "",
                 }
+
+                if breach:
+                    for key in default_breach_info.keys():
+                        if key not in breach or breach[key] is None:
+                            breach[key] = default_breach_info[
+                                key
+                            ]  # Set to default value if missing or None
+
+                    all_breaches_logo[entity["breach"]] = breach["logo"]
+                    breach_logo = breach["logo"]
+                    breach_year = (
+                        breach["breached_date"].strftime("%Y")
+                        if breach["breached_date"]
+                        else "Unknown Year"
+                    )
+
+                    yearly_summary[breach_year] += entity["email_count"]
+                    yearly_breach_summary[breach_year][entity["breach"]] += entity[
+                        "email_count"
+                    ]
+                    breach_summary[entity["breach"]] += entity["email_count"]
+                    domain_summary[domain] += entity["email_count"]
+                    detailed_breach_info[entity["breach"]] = {
+                        "breached_date": breach["breached_date"],
+                        "logo": breach["logo"],
+                        "password_risk": breach["password_risk"],
+                        "searchable": breach["searchable"],
+                        "xposed_data": breach["xposed_data"],
+                        "xposed_records": breach["xposed_records"],
+                        "xposure_desc": breach["xposure_desc"],
+                    }
+
             # fetch the breach details for the given domain
             query = client.query(kind="xon_domains_details")
             query.add_filter("domain", "=", domain)
