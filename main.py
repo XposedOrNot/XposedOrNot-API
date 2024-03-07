@@ -3387,25 +3387,32 @@ def get_xposed_breaches():
         ]
 
         labels = {
-            "Name/ID": "Breach ID",
-            "breached_date": "Breached Date",
-            "domain": "Domain",
-            "industry": "Industry",
-            "logo": "Logo",
-            "password_risk": "Password Risk",
-            "searchable": "Searchable",
-            "sensitive": "Sensitive",
-            "verified": "Verified",
-            "xposed_data": "Exposed Data",
-            "xposed_records": "Exposed Records",
-            "xposure_desc": "Exposure Description",
+            "Name/ID": "breachID",  # Changed from "Breach ID"
+            "breached_date": "breachedDate",  # Changed from "Breached Date"
+            "domain": "domain",
+            "industry": "industry",
+            "logo": "logo",
+            "password_risk": "passwordRisk",  # Changed from "Password Risk"
+            "searchable": "searchable",
+            "sensitive": "sensitive",
+            "verified": "verified",
+            "xposed_data": "exposedData",  # Changed from "Exposed Data"
+            "xposed_records": "exposedRecords",  # Changed from "Exposed Records"
+            "xposure_desc": "exposureDescription",  # Changed from "Exposure Description"
         }
-
         data = []
         for entity in entities:
             entity_dict = {
                 labels[field]: entity[field] for field in fields if field in entity
             }
+
+            for bool_field in ["searchable", "sensitive", "verified"]:
+                if bool_field in entity_dict:
+                    entity_dict[bool_field] = string_to_boolean(entity_dict[bool_field])
+
+            if "exposedData" in entity_dict:
+                entity_dict["exposedData"] = entity_dict["exposedData"].split(";")
+
             entity_dict[labels["breached_date"]] = (
                 entity_dict[labels["breached_date"]].replace(microsecond=0).isoformat()
             )
@@ -3413,22 +3420,42 @@ def get_xposed_breaches():
                 labels["Name/ID"]: entity.key.name or entity.key.id,
                 **entity_dict,
             }
-            entity_dict["ReferenceURL"] = entity.get("references", "")
+            entity_dict["referenceURL"] = entity.get(
+                "references", ""
+            )  # Changed from "ReferenceURL"
 
             data.append(entity_dict)
 
         if not data and domain:
             response = {
-                "status": "Not Found",
+                "status": "notFound",  # Changed from "Not Found"
                 "message": f"No breaches found for domain {domain}",
             }
         else:
-            response = {"status": "success", "Exposed Breaches": data}
+            response = {
+                "status": "success",
+                "exposedBreaches": data,
+            }  # Changed from "Exposed Breaches"
 
         return jsonify(response)
+
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
+
+
+def string_to_boolean(value):
+    """
+    Converts a string to a boolean.
+    'Yes' becomes True, 'No' becomes False, and trims any whitespace/newlines.
+    """
+    trimmed_value = value.strip()
+    if trimmed_value.lower() == "yes":
+        return True
+    elif trimmed_value.lower() == "no":
+        return False
+    else:
+        return None
 
 
 @XON.route("/v1/rss", methods=["GET"])
