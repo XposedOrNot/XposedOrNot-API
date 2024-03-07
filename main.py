@@ -3387,18 +3387,18 @@ def get_xposed_breaches():
         ]
 
         labels = {
-            "Name/ID": "breachID",  # Changed from "Breach ID"
-            "breached_date": "breachedDate",  # Changed from "Breached Date"
+            "Name/ID": "breachID",
+            "breached_date": "breachedDate",
             "domain": "domain",
             "industry": "industry",
             "logo": "logo",
-            "password_risk": "passwordRisk",  # Changed from "Password Risk"
+            "password_risk": "passwordRisk",
             "searchable": "searchable",
             "sensitive": "sensitive",
             "verified": "verified",
-            "xposed_data": "exposedData",  # Changed from "Exposed Data"
-            "xposed_records": "exposedRecords",  # Changed from "Exposed Records"
-            "xposure_desc": "exposureDescription",  # Changed from "Exposure Description"
+            "xposed_data": "exposedData",
+            "xposed_records": "exposedRecords",
+            "xposure_desc": "exposureDescription",
         }
         data = []
         for entity in entities:
@@ -3420,22 +3420,20 @@ def get_xposed_breaches():
                 labels["Name/ID"]: entity.key.name or entity.key.id,
                 **entity_dict,
             }
-            entity_dict["referenceURL"] = entity.get(
-                "references", ""
-            )  # Changed from "ReferenceURL"
+            entity_dict["referenceURL"] = entity.get("references", "")
 
             data.append(entity_dict)
 
         if not data and domain:
             response = {
-                "status": "notFound",  # Changed from "Not Found"
+                "status": "notFound",
                 "message": f"No breaches found for domain {domain}",
             }
         else:
             response = {
                 "status": "success",
                 "exposedBreaches": data,
-            }  # Changed from "Exposed Breaches"
+            }
 
         return jsonify(response)
 
