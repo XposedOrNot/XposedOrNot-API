@@ -47,7 +47,7 @@ The API was built and is maintained by Devanand Premkumar.
 ## How to Use XposedOrNot API (documentation)
 
 
-If you want to get more details, you can check out our full [documentation](https://beta.XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
+If you want to get more details, you can check out our full [documentation](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
 
 ## Why use XposedOrNot API?
 
@@ -59,7 +59,7 @@ This API is your go-to for all information related to data breaches that XposedO
 - Do a combined search to check both data breach and pastes exposure for an email address
 - Check for exposed passwords without having to reveal who you are
 
-If you'd rather skip the API and check data breach info directly, you can do that on our website at : https://beta.XposedOrNot.com.
+If you'd rather skip the API and check data breach info directly, you can do that on our website at : https://XposedOrNot.com.
 
 
 ## How secure is XposedOrNot API?
