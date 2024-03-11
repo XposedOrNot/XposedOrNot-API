@@ -140,12 +140,6 @@ def not_found(error):
     return make_response(jsonify({"Error": "Not found"}), 404)
 
 
-# @XON.errorhandler(304)
-# def nothing_changed(error):
-#    """Returns response for 304"""
-#    return make_response(jsonify({"Error": "Nothing has changed"}), 304)
-
-
 @XON.errorhandler(429)
 def ratelimit_handler(error):
     """Returns response for 429"""
@@ -3191,6 +3185,106 @@ def xon_alerts_slack():
         abort(404)
 
 
+@CSRF.exempt
+@XON.route("/v1/webhook-setup", methods=["POST"])
+def webhook_setup():
+    """Used for webhook initial setup for data breach notifications."""
+    try:
+        data = request.json
+        token = data.get("token")
+        domain = data.get("domain")
+        webhook_url = data.get("webhook")
+        secret = data.get("secret")
+        action = data.get("action")
+
+        # Validate mandatory fields
+        if not all([token, domain, webhook_url, secret, action]):
+            return (
+                jsonify({"status": "error", "message": "Missing required fields"}),
+                400,
+            )
+
+        client = datastore.Client()
+
+        # Session validation
+        session_query = client.query(kind="xon_domains_session")
+        session_query.add_filter("domain_magic", "=", token)
+        user_session = list(session_query.fetch())
+
+        if not user_session:
+            return (
+                jsonify({"status": "error", "message": "Session not found or invalid"}),
+                400,
+            )
+
+        user_email = user_session[0].key.name
+
+        # Domain verification check
+        domain_query = client.query(kind="xon_domains")
+        domain_query.add_filter("domain", "=", domain)
+        domain_query.add_filter("email", "=", user_email)
+        domain_record = list(domain_query.fetch())
+
+        if not domain_record or not domain_record[0].get("verified"):
+            return jsonify({"status": "error", "message": "Domain not verified"}), 400
+
+        webhook_key = client.key("xon_webhook", f"{user_email}_{domain}")
+
+        if action == "init":
+            encrypted_webhook_url = encrypt_data(webhook_url)
+            encrypted_secret = encrypt_data(secret)
+            verify_token = secrets.token_hex(16)
+            entity = datastore.Entity(key=webhook_key)
+            entity.update(
+                {
+                    "webhook_url": encrypted_webhook_url,
+                    "secret": encrypted_secret,
+                    "status": "init",
+                    "verify_token": verify_token,
+                    "timestamp": datetime.datetime.utcnow(),
+                }
+            )
+            client.put(entity)
+
+            return jsonify({"status": "initiated", "verify_token": verify_token}), 200
+        elif action == "verify":
+            verify_token = data.get("verify_token")
+            if not verify_token:
+                return (
+                    jsonify(
+                        {"status": "error", "message": "Missing verification token"}
+                    ),
+                    400,
+                )
+
+            entity = client.get(webhook_key)
+            if not entity or entity.get("verify_token") != verify_token:
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "message": "Invalid or expired verification token",
+                        }
+                    ),
+                    400,
+                )
+
+            entity.update({"status": "verified"})
+            client.put(entity)
+
+            return (
+                jsonify(
+                    {"status": "success", "message": "Webhook verified successfully"}
+                ),
+                200,
+            )
+        else:
+            return jsonify({"status": "error", "message": "Unsupported action"}), 400
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+
+
 @XON.route("/v1/teams-channel-config", methods=["GET"])
 def get_teams_channel_config():
     """Used for Teams channel configuration update"""
@@ -3337,6 +3431,81 @@ def get_slack_channel_config():
                 jsonify({"status": "error", "message": "Configuration not found"}),
                 404,
             )
+
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+
+
+@XON.route("/v1/webhook-config", methods=["GET"])
+def get_webhook_config():
+    """Used for retrieving webhook configuration"""
+    try:
+        email = request.args.get("email")
+        domain = request.args.get("domain")
+        token = request.args.get("token")
+
+        if not all([email, domain, token]):
+            return (
+                jsonify({"status": "error", "message": "Missing required parameters"}),
+                400,
+            )
+
+        client = datastore.Client()
+
+        # Validate session
+        query = client.query(kind="xon_domains_session")
+        query.add_filter("domain_magic", "=", token)
+        user_session = list(query.fetch())
+
+        if not user_session:
+            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+
+        # Domain verification check
+        domain_query = client.query(kind="xon_domains")
+        domain_query.add_filter("domain", "=", domain)
+        domain_record = list(domain_query.fetch())
+
+        domain_record = [
+            record for record in domain_record if record.get("email") == email
+        ]
+
+        if not domain_record or not domain_record[0].get("verified"):
+            return (
+                jsonify(
+                    {"status": "error", "message": "Domain not verified for this email"}
+                ),
+                400,
+            )
+
+        # Retrieve webhook configuration
+        query = client.query(kind="xon_webhook")
+        query.add_filter("domain", "=", domain)
+        temp_config = list(query.fetch())
+
+        webhook_config = None
+        for config in temp_config:
+            key_email = config.key.name.split("_")[0]
+            if key_email == email:
+                webhook_config = config
+                break
+
+        if not webhook_config:
+            return (
+                jsonify(
+                    {"status": "error", "message": "Webhook configuration not found"}
+                ),
+                404,
+            )
+
+        decrypted_webhook_url = decrypt_data(webhook_config.get("webhook_url"))
+
+        config_data = {
+            "domain": webhook_config.get("domain"),
+            "webhook_url": decrypted_webhook_url,
+        }
+
+        return jsonify({"status": "success", "data": config_data}), 200
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
