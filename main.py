@@ -3533,8 +3533,9 @@ def get_xposed_breaches():
             if not validate_domain(domain):
                 return jsonify({"status": "error", "message": "Invalid Domain"}), 400
             query.add_filter("domain", "=", domain)
+        else:
+            query.order = ["-timestamp"]
 
-        query.order = ["-timestamp"]
         latest_entity = list(query.fetch(limit=1))
 
         if latest_entity:
