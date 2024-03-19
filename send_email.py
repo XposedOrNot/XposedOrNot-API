@@ -268,3 +268,37 @@ def send_subscribe_leaks_initial(email, confirm_url):
         ]
     }
     return mailjet.send.create(data=data)
+
+
+def send_databreach_alertme(
+    email, confirm_url, breach, date, description
+):
+    """Sends XposedOrNot Data Breach Alert"""
+    data = {
+        "Messages": [
+            {
+                "From": {
+                    "Email": FROM_EMAIL,
+                    "Name": FROM_NAME,
+                },
+                "To": [
+                    {
+                        "Email": email,
+                    }
+                ],
+                "TemplateID": 11789921,  
+                "TemplateLanguage": True,
+                "Subject": "XposedOrNot: Data Breach Alert",
+                "Variables": {
+                    "breach": breach,         
+                    "date": date,             
+                    "description": description
+                },
+            }
+        ]
+    }
+    result = mailjet.send.create(data=data)
+    return result
+
+send_databreach_alertme("deva.security@gmail.com", "https://xposedornot.com", "Flipkart", "Mar-2024", "Flipkart data breach data ...")
+

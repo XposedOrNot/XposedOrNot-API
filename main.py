@@ -1578,11 +1578,12 @@ def search_data_breaches():
     """Returns summary and details of data breaches for a given email"""
     verification_token = request.args.get("token", default=None)
     email = request.args.get("email", default=None)
-    email = email.lower()
+
     if not email or not validate_email(email) or not validate_url():
         return make_response(jsonify({"Error": "Not found"}), 404)
 
     try:
+        email = email.lower()
         datastore_client = datastore.Client()
         alert_datastore_client = datastore.Client()
         paste_datastore_client = datastore.Client()
