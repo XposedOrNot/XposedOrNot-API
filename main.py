@@ -3646,6 +3646,31 @@ def string_to_boolean(value):
         return None
 
 
+@XON.route("/v1/xon-pulse", methods=["GET"])
+@LIMITER.limit("1000 per day;100 per hour;2 per second")
+def get_data():
+    """Generate news feed for presenting all data breaches news"""
+    try:
+        client = datastore.Client()
+        query = client.query(kind="xon-pulse")
+        results = list(query.fetch())
+
+        data = []
+        for entity in results:
+            item = {
+                "title": entity.get("title"),
+                "date": entity.get("date").strftime("%Y-%b-%d"),
+                "summary": entity.get("description"),
+                "url": entity.get("url"),
+            }
+            data.append(item)
+
+        return jsonify(data)
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+
+
 @XON.route("/v1/rss", methods=["GET"])
 @LIMITER.limit("100 per day;50 per hour;1 per second")
 def rss_feed():
