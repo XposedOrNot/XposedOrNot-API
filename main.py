@@ -47,6 +47,7 @@ from send_email import (
     send_alert_confirmation,
     send_dashboard_email_confirmation,
     send_domain_confirmation,
+    send_domain_verified_success,
     send_exception_email,
     send_shield_email,
     send_unsub_email,
@@ -1402,6 +1403,18 @@ def verify_dns(domain, email, code, prefix):
             datastore_client.put(domain_record)
 
         threading.Thread(target=process_single_domain, args=(domain,)).start()
+
+        client_ip_address = request.headers.get("X-Forwarded-For")
+        location = fetch_location_by_ip(client_ip_address)
+        user_agent_string = request.headers.get("User-Agent")
+        user_agent = parse(user_agent_string)
+        browser_type = (
+            user_agent.browser.family + " " + user_agent.browser.version_string
+        )
+        client_platform = user_agent.os.family + " " + user_agent.os.version_string
+        send_domain_verified_success(
+            email, client_ip_address, browser_type, client_platform
+        )
         return jsonify({"domainVerification": "Success"})
     else:
         return jsonify({"domainVerification": "Failure"})

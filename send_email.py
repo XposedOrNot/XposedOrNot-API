@@ -297,3 +297,28 @@ def send_databreach_alertme(email, confirm_url, breach, date, description):
     }
     result = mailjet.send.create(data=data)
     return result
+
+
+def send_domain_verified_success(email, ip_address, browser, platform):
+    """Sends email after a domain is successfully verified"""
+
+    data = {
+        "Messages": [
+            {
+                "From": {
+                    "Email": "notifications@xposedornot.com",
+                    "Name": "XposedOrNot Notifications",
+                },
+                "To": [
+                    {
+                        "Email": email,
+                    }
+                ],
+                "TemplateID": 5893448,
+                "TemplateLanguage": True,
+                "Subject": "Domain Verified Successfully",
+                "Variables": {"ip": "", "browser": "", "platform": ""},
+            }
+        ]
+    }
+    result = mailjet.send.create(data=data)
