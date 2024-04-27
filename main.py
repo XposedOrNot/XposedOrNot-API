@@ -111,9 +111,9 @@ def set_referrer_policy(response):
 @XON.after_request
 def set_permissions_policy(response):
     """Sets a Permissions-Policy header on the response to disable powerful features."""
-    response.headers[
-        "Permissions-Policy"
-    ] = "accelerometer=(), camera=(), geolocation=(), microphone=(), midi=(), payment=(), usb=()"
+    response.headers["Permissions-Policy"] = (
+        "accelerometer=(), camera=(), geolocation=(), microphone=(), midi=(), payment=(), usb=()"
+    )
     return response
 
 
@@ -440,47 +440,15 @@ def get_breaches_metrics(breaches):
 
         year_counts = {year: 0 for year in range(2007, 2025)}
         count_plaintext = count_easy = count_hard = count_unknown = 0
-        count_aero = (
-            count_tran
-        ) = (
-            count_info
-        ) = (
-            count_tele
-        ) = (
-            count_agri
-        ) = (
-            count_cons
-        ) = (
+        count_aero = count_tran = count_info = count_tele = count_agri = count_cons = (
             count_educ
-        ) = (
-            count_phar
-        ) = (
-            count_food
-        ) = (
-            count_heal
-        ) = (
-            count_hosp
-        ) = (
-            count_ente
-        ) = (
+        ) = count_phar = count_food = count_heal = count_hosp = count_ente = (
             count_news
-        ) = (
-            count_ener
-        ) = (
-            count_manu
-        ) = (
-            count_musi
-        ) = (
-            count_mini
-        ) = (
-            count_elec
-        ) = (
+        ) = count_ener = count_manu = count_musi = count_mini = count_elec = (
             count_misc
-        ) = (
-            count_reale
-        ) = (
-            count_fina
-        ) = count_reta = count_nonp = count_govt = count_spor = count_envi = 0
+        ) = count_reale = count_fina = count_reta = count_nonp = count_govt = (
+            count_spor
+        ) = count_envi = 0
         password_risk_counters = {
             "plaintext": count_plaintext,
             "easytocrack": count_easy,
@@ -1250,23 +1218,9 @@ def get_pastes_metrics(pastes):
         query = ds_client.query(kind="xon_paste_master")
         breaches = pastes.split(";")
         get_metrics = {"yearwise_details": []}
-        y2021 = (
-            y2020
-        ) = (
-            y2019
-        ) = (
-            y2018
-        ) = (
-            y2017
-        ) = (
-            y2016
-        ) = (
-            y2015
-        ) = (
-            y2015
-        ) = (
-            y2014
-        ) = y2013 = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
+        y2021 = y2020 = y2019 = y2018 = y2017 = y2016 = y2015 = y2015 = y2014 = (
+            y2013
+        ) = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
         for index_count, count in enumerate(breaches):
             key = ds_client.key("xon_paste_master", count)
             query = ds_client.get(key)
@@ -2271,7 +2225,7 @@ def get_api_key(token):
 def protected():
     """Retrieves the data breaches and related metrics for an API-key"""
     try:
-        #TODO: Validation
+        # TODO: Validation
         api_key = request.headers.get("x-api-key")
         if not api_key or api_key.strip() == "" or not validate_url():
             return (
@@ -2409,13 +2363,34 @@ def verify_api_key(domain):
         domain_results = list(domain_query.fetch())
 
         if not domain_results:
-            return jsonify({"status": "error", "message": "API key not associated with this domain"}), 403
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "API key not associated with this domain",
+                    }
+                ),
+                403,
+            )
 
-        return jsonify({"status": "success", "message": "API key is valid and associated with the domain"}), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "message": "API key is valid and associated with the domain",
+                }
+            ),
+            200,
+        )
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
-        return jsonify({"status": "error", "message": "An error occurred during processing"}), 500
+        return (
+            jsonify(
+                {"status": "error", "message": "An error occurred during processing"}
+            ),
+            500,
+        )
 
 
 @CSRF.exempt
@@ -2446,25 +2421,31 @@ def get_exposed_breaches(domain):
         breach_results = list(breach_query.fetch())
 
         if not breach_results:
-            return jsonify({"status": "error", "message": "No breaches found for domain"}), 404
+            return (
+                jsonify({"status": "error", "message": "No breaches found for domain"}),
+                404,
+            )
 
         breach_summary = {"record_count": 0, "records": []}
         for result in breach_results:
             breach_email = result.key.name
-            sites = result["site"].split(';')
+            sites = result["site"].split(";")
             for site in sites:
-                breach_summary["records"].append({
-                    "email": breach_email,
-                    "breach_name": site
-                })
+                breach_summary["records"].append(
+                    {"email": breach_email, "breach_name": site}
+                )
                 breach_summary["record_count"] += 1
 
-
-        return jsonify({
-            "status": "success",
-            "total_records": breach_summary["record_count"],
-            "breaches": breach_summary["records"]
-        }), 200
+        return (
+            jsonify(
+                {
+                    "status": "success",
+                    "total_records": breach_summary["record_count"],
+                    "breaches": breach_summary["records"],
+                }
+            ),
+            200,
+        )
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
