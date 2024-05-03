@@ -1332,8 +1332,11 @@ def check_emails(domain):
         who_is = json.loads(response.text)
     except json.decoder.JSONDecodeError:
         print("Could not decode the response")
+        return jsonify({"Error": "Response not in JSON format"})
 
-    registrant_email = who_is["WhoisRecord"]["contactEmail"]
+    registrant_email = who_is["WhoisRecord"].get(
+        "contactEmail", "No email found. Try DNS/HTML Verifications"
+    )
 
     if isinstance(registrant_email, str):
         registrant_email = registrant_email.split(",")
@@ -1356,7 +1359,9 @@ def verify_email(domain, email):
         return jsonify({"domainVerification": "Failure"})
     who_is = json.loads(response.text)
 
-    registrant_email = who_is["WhoisRecord"]["contactEmail"]
+    registrant_email = who_is["WhoisRecord"].get(
+        "contactEmail", "No email found. Try DNS/HTML Verifications"
+    )
 
     if email == registrant_email:
         datastore_client = datastore.Client()
