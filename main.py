@@ -13,9 +13,9 @@ import socket
 import threading
 import time
 from collections import defaultdict
-from datetime import timedelta, timezone
+from datetime import timedelta
 from operator import itemgetter
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
 # Related Third Party Imports
 import domcheck
@@ -152,7 +152,7 @@ def ratelimit_handler(error):
         ]
         retry_after = period_seconds // int(count)
     else:
-        retry_after = "unknown"  # TODO: Revisit logic
+        retry_after = "unknown"
 
     if "hour" in error.description:
         # pass
@@ -288,7 +288,6 @@ def log_except(api_route, error_details):
 
 def generate_confirmation_token(email):
     """Returns confirmation token generated for validation"""
-    # TODO try/except
     serializer = URLSafeTimedSerializer(SECRET_APIKEY)
     return serializer.dumps(email, salt=SECURITY_SALT)
 
@@ -608,7 +607,6 @@ def get_breaches_data(breaches: str) -> dict:
         breach_list = breaches.split(";")
 
         data_categories = {
-            # TODO: Revise the labels to suit after xon-data
             "Names": {"category": "👤 Personal Identification", "group": "A"},
             "Usernames": {"category": "👤 Personal Identification", "group": "A"},
             "Genders": {"category": "👤 Personal Identification", "group": "A"},
@@ -2230,7 +2228,6 @@ def get_api_key(token):
 def protected():
     """Retrieves the data breaches and related metrics for an API-key"""
     try:
-        # TODO: Validation
         api_key = request.headers.get("x-api-key")
         if not api_key or api_key.strip() == "" or not validate_url():
             return (
@@ -2418,7 +2415,7 @@ def get_exposed_breaches(domain):
         if not key_results:
             return jsonify({"status": "error", "message": "Invalid API key"}), 401
 
-        email = key_results[0].key.name
+        # email = key_results[0].key.name
 
         # Fetch breaches associated with the specified domain
         breach_query = datastore_client.query(kind="xon")
