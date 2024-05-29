@@ -1370,7 +1370,7 @@ def verify_email(domain, email):
         token = generate_confirmation_token(email)
 
         if domain_record is None:
-            create_new_record(domain, "", token, "email", datastore_client)
+            create_new_record(domain, email, token, "email", datastore_client)
 
         threading.Thread(target=process_single_domain, args=(domain,)).start()
 
