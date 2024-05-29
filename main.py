@@ -2938,35 +2938,71 @@ def get_xdomains():
         domain = request.args.get("d").lower()
         if domain is None or not validate_domain(domain) or not validate_url():
             return make_response(jsonify({"Error": "Not found"}), 404)
+
         ds_xon = datastore.Client()
         xon_rec = ds_xon.query(kind="xon")
         xon_rec.add_filter("domain", "=", domain.strip())
         query_xon = xon_rec.fetch()
-        total = emails_count = 0
-        breaches_dict = {"breaches_details": []}
+
+        unique_emails = set()
+        unique_sites = set()
+
         for entity_xon in query_xon:
-            if emails_count <= 50:
-                emails_count += 1
+            if len(unique_emails) <= 1000:
+                unique_emails.add(entity_xon.key.name)
+            if "site" in entity_xon:
+                sites = entity_xon["site"].split(";")
+                unique_sites.update(sites)
+
+        breach_count = len(unique_sites)
+        emails_count = len(unique_emails)
+
         ds_paste = datastore.Client()
         paste_rec = ds_paste.query(kind="xon_paste")
         paste_rec.add_filter("domain", "=", domain.strip())
         query_paste = paste_rec.fetch()
+
         pastes_count = 0
         for entity_paste in query_paste:
             if pastes_count >= 50:
-                exit
+                break
             else:
                 pastes_count += 1
+
+        breach_last_seen = None
+        if unique_sites:
+            breach_dates = []
+            ds_breaches = datastore.Client()
+            for site in unique_sites:
+                breach_rec = ds_breaches.query(kind="xon_breaches")
+                breach_rec.add_filter(
+                    "__key__", "=", ds_breaches.key("xon_breaches", site)
+                )
+                breach_rec.order = ["-breached_date"]
+                query_breaches = list(breach_rec.fetch(limit=1))
+                if query_breaches:
+                    breach_dates.append(query_breaches[0]["breached_date"])
+
+            if breach_dates:
+                breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
+
         total = emails_count + pastes_count
-        breaches_dict["breaches_details"].append(
-            {
-                "breachid": domain,
-                "breach_pastes": pastes_count,
-                "breach_emails": emails_count,
-                "breach_total": total,
-            }
-        )
+
+        breaches_dict = {
+            "breaches_details": [
+                {
+                    "domain": domain,
+                    "breach_pastes": pastes_count,
+                    "breach_emails": emails_count,
+                    "breach_total": total,
+                    "breach_count": breach_count,
+                    "breach_last_seen": breach_last_seen,
+                }
+            ]
+        }
+
         return jsonify({"sendDomains": breaches_dict, "SearchStatus": "Success"})
+
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
