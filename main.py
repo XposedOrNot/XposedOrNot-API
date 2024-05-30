@@ -147,9 +147,12 @@ def ratelimit_handler(error):
     rate_limit_info = re.search(r"(\d+)\sper\s(\d+\s\w+)", str(error.description))
     if rate_limit_info:
         count, period = rate_limit_info.groups()
-        period_seconds = {"second": 1, "minute": 60, "hour": 3600, "day": 86400}[
-            period.split()[1]
-        ]
+        period_seconds = {
+            "second": 1,
+            "minute": 60,
+            "hour": 3600,
+            "day": 86400,
+        }[period.split()[1]]
         retry_after = period_seconds // int(count)
     else:
         retry_after = "unknown"
@@ -317,7 +320,12 @@ def fetch_location_by_ip(ip_address: str) -> str:
         response.raise_for_status()
         location_data = response.json()
         return f' Near {location_data["city"]}, {location_data["country"]}'
-    except (requests.Timeout, requests.HTTPError, requests.RequestException, KeyError):
+    except (
+        requests.Timeout,
+        requests.HTTPError,
+        requests.RequestException,
+        KeyError,
+    ):
         return "Error"
 
 
@@ -608,29 +616,71 @@ def get_breaches_data(breaches: str) -> dict:
 
         data_categories = {
             "Names": {"category": "👤 Personal Identification", "group": "A"},
-            "Usernames": {"category": "👤 Personal Identification", "group": "A"},
-            "Genders": {"category": "👤 Personal Identification", "group": "A"},
-            "Nationalities": {"category": "👤 Personal Identification", "group": "A"},
-            "Ethnicities": {"category": "👤 Personal Identification", "group": "A"},
-            "Places of Birth": {"category": "👤 Personal Identification", "group": "A"},
+            "Usernames": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
+            "Genders": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
+            "Nationalities": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
+            "Ethnicities": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
+            "Places of Birth": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
             "Photos": {"category": "👤 Personal Identification", "group": "A"},
-            "Profile Photos": {"category": "👤 Personal Identification", "group": "A"},
-            "Salutations": {"category": "👤 Personal Identification", "group": "A"},
-            "Nicknames": {"category": "👤 Personal Identification", "group": "A"},
+            "Profile Photos": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
+            "Salutations": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
+            "Nicknames": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
             "Vehicle Identification Numbers": {
                 "category": "👤 Personal Identification",
                 "group": "A",
             },
-            "Licence Plates": {"category": "👤 Personal Identification", "group": "A"},
+            "Licence Plates": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
             "Social media profiles": {
                 "category": "👤 Personal Identification",
                 "group": "A",
             },
-            "Avatars": {"category": "👤 Personal Identification", "group": "A"},
-            "Credit Card Info": {"category": "💳 Financial Details", "group": "B"},
-            "Income levels": {"category": "💳 Financial Details", "group": "B"},
-            "Credit card details": {"category": "💳 Financial Details", "group": "B"},
-            "Bank Account Numbers": {"category": "💳 Financial Details", "group": "B"},
+            "Avatars": {
+                "category": "👤 Personal Identification",
+                "group": "A",
+            },
+            "Credit Card Info": {
+                "category": "💳 Financial Details",
+                "group": "B",
+            },
+            "Income levels": {
+                "category": "💳 Financial Details",
+                "group": "B",
+            },
+            "Credit card details": {
+                "category": "💳 Financial Details",
+                "group": "B",
+            },
+            "Bank Account Numbers": {
+                "category": "💳 Financial Details",
+                "group": "B",
+            },
             "Apps Installed on Devices": {
                 "category": "🍔 Personal Habits and Lifestyle",
                 "group": "C",
@@ -680,9 +730,18 @@ def get_breaches_data(breaches: str) -> dict:
                 "group": "C",
             },
             "Passwords": {"category": "🔒 Security Practices", "group": "D"},
-            "Historical Passwords": {"category": "🔒 Security Practices", "group": "D"},
-            "Password Hints": {"category": "🔒 Security Practices", "group": "D"},
-            "Password Strengths": {"category": "🔒 Security Practices", "group": "D"},
+            "Historical Passwords": {
+                "category": "🔒 Security Practices",
+                "group": "D",
+            },
+            "Password Hints": {
+                "category": "🔒 Security Practices",
+                "group": "D",
+            },
+            "Password Strengths": {
+                "category": "🔒 Security Practices",
+                "group": "D",
+            },
             "Security Questions and Answers": {
                 "category": "🔒 Security Practices",
                 "group": "D",
@@ -692,19 +751,34 @@ def get_breaches_data(breaches: str) -> dict:
                 "group": "D",
             },
             "Auth Tokens": {"category": "🔒 Security Practices", "group": "D"},
-            "Encrypted Keys": {"category": "🔒 Security Practices", "group": "D"},
-            "Mnemonic Phrases": {"category": "🔒 Security Practices", "group": "D"},
+            "Encrypted Keys": {
+                "category": "🔒 Security Practices",
+                "group": "D",
+            },
+            "Mnemonic Phrases": {
+                "category": "🔒 Security Practices",
+                "group": "D",
+            },
             "Job Applications": {
                 "category": "🎓 Employment and Education",
                 "group": "E",
             },
-            "Job titles": {"category": "🎓 Employment and Education", "group": "E"},
-            "Employers": {"category": "🎓 Employment and Education", "group": "E"},
+            "Job titles": {
+                "category": "🎓 Employment and Education",
+                "group": "E",
+            },
+            "Employers": {
+                "category": "🎓 Employment and Education",
+                "group": "E",
+            },
             "Employment Statuses": {
                 "category": "🎓 Employment and Education",
                 "group": "E",
             },
-            "Occupations": {"category": "🎓 Employment and Education", "group": "E"},
+            "Occupations": {
+                "category": "🎓 Employment and Education",
+                "group": "E",
+            },
             "Education Levels": {
                 "category": "🎓 Employment and Education",
                 "group": "E",
@@ -793,12 +867,24 @@ def get_breaches_data(breaches: str) -> dict:
                 "category": "🖥️ Device and Network Information",
                 "group": "G",
             },
-            "Personal Health Data": {"category": "🩺 Health Information", "group": "H"},
-            "HIV Statuses": {"category": "🩺 Health Information", "group": "H"},
+            "Personal Health Data": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
+            "HIV Statuses": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
             "Blood Types": {"category": "🩺 Health Information", "group": "H"},
-            "Medical Conditions": {"category": "🩺 Health Information", "group": "H"},
+            "Medical Conditions": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
             "Medications": {"category": "🩺 Health Information", "group": "H"},
-            "Body Measurements": {"category": "🩺 Health Information", "group": "H"},
+            "Body Measurements": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
             "Physical Activity Levels": {
                 "category": "🩺 Health Information",
                 "group": "H",
@@ -811,16 +897,40 @@ def get_breaches_data(breaches: str) -> dict:
                 "category": "🩺 Health Information",
                 "group": "H",
             },
-            "Sexual Orientations": {"category": "🩺 Health Information", "group": "H"},
-            "Dietary Preferences": {"category": "🩺 Health Information", "group": "H"},
-            "Gambling Habits": {"category": "🩺 Health Information", "group": "H"},
-            "Smoking Habits": {"category": "🩺 Health Information", "group": "H"},
-            "Sexual Fetishes": {"category": "🩺 Health Information", "group": "H"},
-            "Sleep Patterns": {"category": "🩺 Health Information", "group": "H"},
+            "Sexual Orientations": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
+            "Dietary Preferences": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
+            "Gambling Habits": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
+            "Smoking Habits": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
+            "Sexual Fetishes": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
+            "Sleep Patterns": {
+                "category": "🩺 Health Information",
+                "group": "H",
+            },
             "Ages": {"category": "Demographics", "group": "I"},
             "Dates of birth": {"category": "👥 Demographics", "group": "I"},
-            "Physical addresses": {"category": "👥 Demographics", "group": "I"},
-            "Geographic locations": {"category": "👥 Demographics", "group": "I"},
+            "Physical addresses": {
+                "category": "👥 Demographics",
+                "group": "I",
+            },
+            "Geographic locations": {
+                "category": "👥 Demographics",
+                "group": "I",
+            },
             "GPS Coordinates": {"category": "👥 Demographics", "group": "I"},
             "Languages": {"category": "👥 Demographics", "group": "I"},
             "Marital statuses": {"category": "👥 Demographics", "group": "I"},
@@ -831,7 +941,10 @@ def get_breaches_data(breaches: str) -> dict:
                 "category": "Science and Technology",
                 "group": "J",
             },
-            "Chemical Analyses": {"category": "Science and Technology", "group": "J"},
+            "Chemical Analyses": {
+                "category": "Science and Technology",
+                "group": "J",
+            },
             "Scientific Measurements": {
                 "category": "Science and Technology",
                 "group": "J",
@@ -841,18 +954,42 @@ def get_breaches_data(breaches: str) -> dict:
                 "group": "J",
             },
             "Books Read": {"category": "Arts and Entertainment", "group": "K"},
-            "Games Played": {"category": "Arts and Entertainment", "group": "K"},
-            "Movies Watched": {"category": "Arts and Entertainment", "group": "K"},
-            "Music Listened To": {"category": "Arts and Entertainment", "group": "K"},
-            "Photos Uploaded": {"category": "Arts and Entertainment", "group": "K"},
-            "Videos Watched": {"category": "Arts and Entertainment", "group": "K"},
-            "Aircraft Details": {"category": "Transport and Travel", "group": "L"},
-            "Flight Details": {"category": "Transport and Travel", "group": "L"},
+            "Games Played": {
+                "category": "Arts and Entertainment",
+                "group": "K",
+            },
+            "Movies Watched": {
+                "category": "Arts and Entertainment",
+                "group": "K",
+            },
+            "Music Listened To": {
+                "category": "Arts and Entertainment",
+                "group": "K",
+            },
+            "Photos Uploaded": {
+                "category": "Arts and Entertainment",
+                "group": "K",
+            },
+            "Videos Watched": {
+                "category": "Arts and Entertainment",
+                "group": "K",
+            },
+            "Aircraft Details": {
+                "category": "Transport and Travel",
+                "group": "L",
+            },
+            "Flight Details": {
+                "category": "Transport and Travel",
+                "group": "L",
+            },
             "Public Transport Details": {
                 "category": "Transport and Travel",
                 "group": "L",
             },
-            "Shipping Details": {"category": "Transport and Travel", "group": "L"},
+            "Shipping Details": {
+                "category": "Transport and Travel",
+                "group": "L",
+            },
         }
 
         # Initialize counters for each data type
@@ -1600,6 +1737,60 @@ def get_metrics():
         abort(404)
 
 
+@XON.route("/v1/metrics/detailed", methods=["GET"])
+@LIMITER.limit("500 per day;100 per hour")
+def get_detailed_metrics():
+    """Returns detailed summary of data breaches including yearly count and top breaches"""
+    try:
+        datastore_client = datastore.Client()
+        metrics_key = datastore_client.key("xon_metrics", "metrics")
+        metrics_data = datastore_client.get(metrics_key)
+
+        if metrics_data is None:
+            abort(404)
+
+        breaches_count = metrics_data["breaches_count"]
+        breaches_total_records = metrics_data["breaches_records"]
+        pastes_count = "{:,}".format(metrics_data["pastes_count"])
+        pastes_total_records = metrics_data["pastes_records"]
+
+        query = datastore_client.query(kind="xon_breaches")
+        breaches = list(query.fetch())
+
+        yearly_count = defaultdict(int)
+        for breach in breaches:
+            breach_date = breach["breached_date"]
+            year = breach_date.year
+            yearly_count[year] += 1
+
+        query.order = ["-xposed_records"]
+        top_breaches_data = list(query.fetch(limit=10))
+
+        top_breaches = []
+        for breach in top_breaches_data:
+            breach_info = {
+                "breachid": breach.key.id_or_name,
+                "logo": breach.get("logo"),
+                "description": breach.get("xposure_desc"),
+                "count": breach.get("xposed_records"),
+            }
+            top_breaches.append(breach_info)
+
+        return jsonify(
+            {
+                "Breaches_Count": breaches_count,
+                "Breaches_Records": breaches_total_records,
+                "Pastes_Count": pastes_count,
+                "Pastes_Records": pastes_total_records,
+                "Yearly_Breaches_Count": dict(yearly_count),
+                "Top_Breaches": top_breaches,
+            }
+        )
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+
+
 @XON.route("/v1/breach-analytics", methods=["GET"])
 @LIMITER.limit("500 per day;100 per hour;2 per second")
 def search_data_breaches():
@@ -1678,7 +1869,11 @@ def search_data_breaches():
         else:
             return jsonify(
                 {
-                    "BreachesSummary": {"domain": "", "site": "", "tmpstmp": ""},
+                    "BreachesSummary": {
+                        "domain": "",
+                        "site": "",
+                        "tmpstmp": "",
+                    },
                     "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
                 }
             )
@@ -1811,7 +2006,8 @@ def search_email(email):
                 exposed_breaches["breaches"].append(filtered_domains)
             else:
                 return make_response(
-                    jsonify({"Error": "No breaches found", "email": email}), 404
+                    jsonify({"Error": "No breaches found", "email": email}),
+                    404,
                 )
 
             return jsonify(exposed_breaches)
@@ -2152,14 +2348,20 @@ def create_api_key(token):
     """Generates or renews an API key for a user identified by a provided token"""
     try:
         if not token or not validate_variables(token) or not validate_url():
-            return jsonify({"status": "error", "message": "Invalid token or URL"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid token or URL"}),
+                400,
+            )
 
         client = datastore.Client()
         query = client.query(kind="xon_domains_session")
         query.add_filter("domain_magic", "=", token)
         user = list(query.fetch())
         if not user:
-            return jsonify({"status": "error", "message": "Invalid token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid token"}),
+                400,
+            )
 
         email = user[0].key.name
         api_key = secrets.token_hex(16)
@@ -2199,14 +2401,20 @@ def get_api_key(token):
     """Retrieves the existing API key for a user identified by a provided token."""
     try:
         if not token or not validate_variables(token) or not validate_url():
-            return jsonify({"status": "error", "message": "Invalid token or URL"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid token or URL"}),
+                400,
+            )
 
         client = datastore.Client()
         query = client.query(kind="xon_domains_session")
         query.add_filter("domain_magic", "=", token)
         user = list(query.fetch())
         if not user:
-            return jsonify({"status": "error", "message": "Invalid token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid token"}),
+                400,
+            )
 
         email = user[0].key.name
         api_key_key = client.key("xon_api_key", email)
@@ -2215,11 +2423,17 @@ def get_api_key(token):
             api_key = api_key_entity.get("api_key")
             return jsonify({"status": "success", "api_key": api_key}), 200
         else:
-            return jsonify({"status": "error", "message": "API key not found"}), 404
+            return (
+                jsonify({"status": "error", "message": "API key not found"}),
+                404,
+            )
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
-        return jsonify({"status": "error", "message": "API key not found"}), 404
+        return (
+            jsonify({"status": "error", "message": "API key not found"}),
+            404,
+        )
 
 
 @CSRF.exempt
@@ -2231,7 +2445,12 @@ def protected():
         api_key = request.headers.get("x-api-key")
         if not api_key or api_key.strip() == "" or not validate_url():
             return (
-                jsonify({"status": "error", "message": "Invalid or missing API key"}),
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Invalid or missing API key",
+                    }
+                ),
                 401,
             )
 
@@ -2249,7 +2468,12 @@ def protected():
 
         if not results:
             return (
-                jsonify({"status": "error", "message": "Invalid or missing API key"}),
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Invalid or missing API key",
+                    }
+                ),
                 401,
             )
 
@@ -2330,7 +2554,10 @@ def protected():
         log_except(request.url, exception_details)
         return (
             jsonify(
-                {"status": "error", "message": "An error occurred during processing"}
+                {
+                    "status": "error",
+                    "message": "An error occurred during processing",
+                }
             ),
             500,
         )
@@ -2344,7 +2571,10 @@ def verify_api_key(domain):
     try:
         api_key = request.headers.get("x-api-key")
         if not api_key or api_key.strip() == "":
-            return jsonify({"status": "error", "message": "Missing API key"}), 400
+            return (
+                jsonify({"status": "error", "message": "Missing API key"}),
+                400,
+            )
 
         datastore_client = datastore.Client()
 
@@ -2354,7 +2584,10 @@ def verify_api_key(domain):
         key_results = list(key_query.fetch())
 
         if not key_results:
-            return jsonify({"status": "error", "message": "Invalid API key"}), 401
+            return (
+                jsonify({"status": "error", "message": "Invalid API key"}),
+                401,
+            )
 
         email = key_results[0].key.name
 
@@ -2389,7 +2622,10 @@ def verify_api_key(domain):
         log_except(request.url, exception_details)
         return (
             jsonify(
-                {"status": "error", "message": "An error occurred during processing"}
+                {
+                    "status": "error",
+                    "message": "An error occurred during processing",
+                }
             ),
             500,
         )
@@ -2403,7 +2639,10 @@ def get_exposed_breaches(domain):
     try:
         api_key = request.headers.get("x-api-key")
         if not api_key:
-            return jsonify({"status": "error", "message": "API key is required"}), 401
+            return (
+                jsonify({"status": "error", "message": "API key is required"}),
+                401,
+            )
 
         datastore_client = datastore.Client()
 
@@ -2413,7 +2652,10 @@ def get_exposed_breaches(domain):
         key_results = list(key_query.fetch())
 
         if not key_results:
-            return jsonify({"status": "error", "message": "Invalid API key"}), 401
+            return (
+                jsonify({"status": "error", "message": "Invalid API key"}),
+                401,
+            )
 
         # email = key_results[0].key.name
 
@@ -2424,7 +2666,12 @@ def get_exposed_breaches(domain):
 
         if not breach_results:
             return (
-                jsonify({"status": "error", "message": "No breaches found for domain"}),
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "No breaches found for domain",
+                    }
+                ),
                 404,
             )
 
@@ -2451,7 +2698,10 @@ def get_exposed_breaches(domain):
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
-        return jsonify({"status": "error", "message": "An error occurred"}), 500
+        return (
+            jsonify({"status": "error", "message": "An error occurred"}),
+            500,
+        )
 
 
 @XON.route("/v1/domain-alert/<user_email>", methods=["GET"])
@@ -2480,7 +2730,9 @@ def domain_alert(user_email):
 
             verification_token = generate_confirmation_token(user_email)
             confirmation_url = url_for(
-                "domain_verify", verification_token=verification_token, _external=True
+                "domain_verify",
+                verification_token=verification_token,
+                _external=True,
             )
 
             alert_task_data = datastore.Entity(
@@ -2677,7 +2929,10 @@ def send_domain_breaches():
                     }
                 )
 
-        yearly_breach_hierarchy = {"description": "Data Breaches", "children": []}
+        yearly_breach_hierarchy = {
+            "description": "Data Breaches",
+            "children": [],
+        }
         for year, breaches in yearly_breach_summary.items():
             year_node = {"description": year, "children": []}
             for breach, count in breaches.items():
@@ -3072,7 +3327,10 @@ def xon_alerts_teams():
         user_session = list(query.fetch())
 
         if not user_session:
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid session token"}),
+                400,
+            )
 
         email = user_session[0].key.name
 
@@ -3085,7 +3343,10 @@ def xon_alerts_teams():
         if not domain_record or not domain_record[0].get("verified"):
             return (
                 jsonify(
-                    {"status": "error", "message": "Domain not verified for this email"}
+                    {
+                        "status": "error",
+                        "message": "Domain not verified for this email",
+                    }
                 ),
                 400,
             )
@@ -3158,14 +3419,20 @@ def xon_alerts_teams():
             if not verify_token:
                 return (
                     jsonify(
-                        {"status": "error", "message": "Missing verification token"}
+                        {
+                            "status": "error",
+                            "message": "Missing verification token",
+                        }
                     ),
                     400,
                 )
 
             record = client.get(record_key)
             if not record:
-                return jsonify({"status": "error", "message": "Record not found"}), 404
+                return (
+                    jsonify({"status": "error", "message": "Record not found"}),
+                    404,
+                )
 
             if record.get("verify_token") == verify_token:
                 record.update({"status": "verified"})
@@ -3183,7 +3450,10 @@ def xon_alerts_teams():
                 response = requests.post(decrypted_webhook, json=success_message)
                 return (
                     jsonify(
-                        {"status": "success", "message": "Verification successful"}
+                        {
+                            "status": "success",
+                            "message": "Verification successful",
+                        }
                     ),
                     200,
                 )
@@ -3229,7 +3499,10 @@ def xon_alerts_slack():
         user_session = list(query.fetch())
 
         if not user_session:
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid session token"}),
+                400,
+            )
 
         email = user_session[0].key.name
 
@@ -3241,7 +3514,10 @@ def xon_alerts_slack():
         if not domain_record or not domain_record[0].get("verified"):
             return (
                 jsonify(
-                    {"status": "error", "message": "Domain not verified for this email"}
+                    {
+                        "status": "error",
+                        "message": "Domain not verified for this email",
+                    }
                 ),
                 400,
             )
@@ -3323,14 +3599,20 @@ def xon_alerts_slack():
             if not verify_token:
                 return (
                     jsonify(
-                        {"status": "error", "message": "Missing verification token"}
+                        {
+                            "status": "error",
+                            "message": "Missing verification token",
+                        }
                     ),
                     400,
                 )
 
             record = client.get(record_key)
             if not record:
-                return jsonify({"status": "error", "message": "Record not found"}), 404
+                return (
+                    jsonify({"status": "error", "message": "Record not found"}),
+                    404,
+                )
 
             if record.get("verify_token") == verify_token:
                 record.update({"status": "verified"})
@@ -3345,7 +3627,10 @@ def xon_alerts_slack():
                 )
                 return (
                     jsonify(
-                        {"status": "success", "message": "Verification successful"}
+                        {
+                            "status": "success",
+                            "message": "Verification successful",
+                        }
                     ),
                     200,
                 )
@@ -3396,7 +3681,12 @@ def webhook_setup():
 
         if not user_session:
             return (
-                jsonify({"status": "error", "message": "Session not found or invalid"}),
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Session not found or invalid",
+                    }
+                ),
                 400,
             )
 
@@ -3409,7 +3699,10 @@ def webhook_setup():
         domain_record = list(domain_query.fetch())
 
         if not domain_record or not domain_record[0].get("verified"):
-            return jsonify({"status": "error", "message": "Domain not verified"}), 400
+            return (
+                jsonify({"status": "error", "message": "Domain not verified"}),
+                400,
+            )
 
         webhook_key = client.key("xon_webhook", f"{user_email}_{domain}")
 
@@ -3429,13 +3722,19 @@ def webhook_setup():
             )
             client.put(entity)
 
-            return jsonify({"status": "initiated", "verify_token": verify_token}), 200
+            return (
+                jsonify({"status": "initiated", "verify_token": verify_token}),
+                200,
+            )
         elif action == "verify":
             verify_token = data.get("verify_token")
             if not verify_token:
                 return (
                     jsonify(
-                        {"status": "error", "message": "Missing verification token"}
+                        {
+                            "status": "error",
+                            "message": "Missing verification token",
+                        }
                     ),
                     400,
                 )
@@ -3457,12 +3756,18 @@ def webhook_setup():
 
             return (
                 jsonify(
-                    {"status": "success", "message": "Webhook verified successfully"}
+                    {
+                        "status": "success",
+                        "message": "Webhook verified successfully",
+                    }
                 ),
                 200,
             )
         else:
-            return jsonify({"status": "error", "message": "Unsupported action"}), 400
+            return (
+                jsonify({"status": "error", "message": "Unsupported action"}),
+                400,
+            )
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
@@ -3478,7 +3783,12 @@ def get_teams_channel_config():
 
         if not all([email, domain, token]):
             return (
-                jsonify({"status": "error", "message": "Missing required parameters"}),
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Missing required parameters",
+                    }
+                ),
                 400,
             )
         # validation for email,domain,token needed
@@ -3488,7 +3798,10 @@ def get_teams_channel_config():
         user_session = list(query.fetch())
 
         if not user_session:
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid session token"}),
+                400,
+            )
 
         domain_query = client.query(kind="xon_domains")
         domain_query.add_filter("domain", "=", domain)
@@ -3503,7 +3816,10 @@ def get_teams_channel_config():
         if not domain_record or not domain_record[0].get("verified"):
             return (
                 jsonify(
-                    {"status": "error", "message": "Domain not verified for this email"}
+                    {
+                        "status": "error",
+                        "message": "Domain not verified for this email",
+                    }
                 ),
                 400,
             )
@@ -3522,7 +3838,10 @@ def get_teams_channel_config():
 
         # Proceed with the rest of your logic
         if not user_session:
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid session token"}),
+                400,
+            )
 
         if channel_config:
             encrypted_webhook = channel_config.get("webhook")
@@ -3555,7 +3874,12 @@ def get_slack_channel_config():
 
         if not all([email, domain, token]):
             return (
-                jsonify({"status": "error", "message": "Missing required parameters"}),
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Missing required parameters",
+                    }
+                ),
                 400,
             )
 
@@ -3566,7 +3890,10 @@ def get_slack_channel_config():
         user_session = list(query.fetch())
 
         if not user_session:
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid session token"}),
+                400,
+            )
 
         domain_query = client.query(kind="xon_domains")
         domain_query.add_filter("domain", "=", domain)
@@ -3580,7 +3907,10 @@ def get_slack_channel_config():
         if not domain_record or not domain_record[0].get("verified"):
             return (
                 jsonify(
-                    {"status": "error", "message": "Domain not verified for this email"}
+                    {
+                        "status": "error",
+                        "message": "Domain not verified for this email",
+                    }
                 ),
                 400,
             )
@@ -3598,7 +3928,10 @@ def get_slack_channel_config():
                 break
 
         if not user_session:
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid session token"}),
+                400,
+            )
 
         if channel_config:
             encrypted_webhook = channel_config.get("webhook")
@@ -3630,7 +3963,12 @@ def get_webhook_config():
 
         if not all([email, domain, token]):
             return (
-                jsonify({"status": "error", "message": "Missing required parameters"}),
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "Missing required parameters",
+                    }
+                ),
                 400,
             )
 
@@ -3642,7 +3980,10 @@ def get_webhook_config():
         user_session = list(query.fetch())
 
         if not user_session:
-            return jsonify({"status": "error", "message": "Invalid session token"}), 400
+            return (
+                jsonify({"status": "error", "message": "Invalid session token"}),
+                400,
+            )
 
         # Domain verification check
         domain_query = client.query(kind="xon_domains")
@@ -3656,7 +3997,10 @@ def get_webhook_config():
         if not domain_record or not domain_record[0].get("verified"):
             return (
                 jsonify(
-                    {"status": "error", "message": "Domain not verified for this email"}
+                    {
+                        "status": "error",
+                        "message": "Domain not verified for this email",
+                    }
                 ),
                 400,
             )
@@ -3676,7 +4020,10 @@ def get_webhook_config():
         if not webhook_config:
             return (
                 jsonify(
-                    {"status": "error", "message": "Webhook configuration not found"}
+                    {
+                        "status": "error",
+                        "message": "Webhook configuration not found",
+                    }
                 ),
                 404,
             )
@@ -3710,11 +4057,17 @@ def get_xposed_breaches():
 
         if breachID:
             if not validate_variables(breachID):
-                return jsonify({"status": "error", "message": "Invalid Breach ID"}), 400
+                return (
+                    jsonify({"status": "error", "message": "Invalid Breach ID"}),
+                    400,
+                )
             query.key_filter(client.key("xon_breaches", breachID), "=")
         elif domain:
             if not validate_domain(domain):
-                return jsonify({"status": "error", "message": "Invalid Domain"}), 400
+                return (
+                    jsonify({"status": "error", "message": "Invalid Domain"}),
+                    400,
+                )
             query.add_filter("domain", "=", domain)
         else:
             query.order = ["-timestamp"]
