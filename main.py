@@ -222,7 +222,6 @@ def validate_email_with_tld(email):
 
 def validate_domain(domain):
     """Returns True if the domain is valid, False otherwise"""
-    LIMITER.limit("10 per hour")
     if not is_valid_domain_name(domain):
         return False
 
@@ -240,15 +239,18 @@ def is_valid_domain_name(domain):
     """
     if not domain:
         return False
+
+    # Comprehensive regex for domain validation
+    domain_regex = re.compile(
+        r"^(?!:\/\/)([a-zA-Z0-9-_]{1,63}\.)*[a-zA-Z0-9][a-zA-Z0-9-_]{0,63}\.[a-zA-Z]{2,6}$"
+    )
+
+    if not domain_regex.match(domain):
+        return False
+
     if len(domain) > 253:
         return False
-    allowed_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-."
-    if not all(char in allowed_chars for char in domain):
-        return False
-    if domain[0] == "-" or domain[-1] == "-":
-        return False
-    if "--" in domain:
-        return False
+
     return True
 
 
@@ -3182,19 +3184,23 @@ def verify_unsubscribe(unsubscribe_token):
     return verification_template
 
 
+'''
 @XON.route("/v1/domain-breach-summary", methods=["GET"])
 @LIMITER.limit("50 per day;10 per hour;1 per second")
 def get_xdomains():
     """Returns exposed data at domain level"""
     try:
-        domain = request.args.get("d").lower()
+        domain = request.args.get("d")
+
         if domain is None or not validate_domain(domain) or not validate_url():
             return make_response(jsonify({"Error": "Not found"}), 404)
 
+        domain = domain.lower().strip()
+
         ds_xon = datastore.Client()
         xon_rec = ds_xon.query(kind="xon")
-        xon_rec.add_filter("domain", "=", domain.strip())
-        query_xon = xon_rec.fetch()
+        xon_rec.add_filter("domain", "=", domain)
+        query_xon = xon_rec.fetch(limit=1000)
 
         unique_emails = set()
         unique_sites = set()
@@ -3206,20 +3212,18 @@ def get_xdomains():
                 sites = entity_xon["site"].split(";")
                 unique_sites.update(sites)
 
+        # Filter out empty values from unique_sites
+        unique_sites.discard("")
+
         breach_count = len(unique_sites)
         emails_count = len(unique_emails)
 
         ds_paste = datastore.Client()
         paste_rec = ds_paste.query(kind="xon_paste")
-        paste_rec.add_filter("domain", "=", domain.strip())
-        query_paste = paste_rec.fetch()
+        paste_rec.add_filter("domain", "=", domain)
+        query_paste = paste_rec.fetch(limit=50)
 
-        pastes_count = 0
-        for entity_paste in query_paste:
-            if pastes_count >= 50:
-                break
-            else:
-                pastes_count += 1
+        pastes_count = sum(1 for _ in query_paste)
 
         breach_last_seen = None
         if unique_sites:
@@ -3247,6 +3251,167 @@ def get_xdomains():
                     "breach_pastes": pastes_count,
                     "breach_emails": emails_count,
                     "breach_total": total,
+                    "breach_count": breach_count,
+                    "breach_last_seen": breach_last_seen,
+                }
+            ]
+        }
+
+        return jsonify({"sendDomains": breaches_dict, "SearchStatus": "Success"})
+
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+'''
+'''
+@XON.route("/v1/domain-breach-summary", methods=["GET"])
+@LIMITER.limit("50 per day;10 per hour;1 per second")
+def get_xdomains():
+    """Returns exposed data at domain level"""
+    try:
+        domain = request.args.get("d")
+
+        if domain is None or not validate_domain(domain) or not validate_url():
+            return make_response(jsonify({"Error": "Not found"}), 404)
+
+        domain = domain.lower().strip()
+
+        ds_xon = datastore.Client()
+        xon_rec = ds_xon.query(kind="xon")
+        xon_rec.add_filter("domain", "=", domain)
+        query_xon = xon_rec.fetch(limit=1000)
+
+        unique_emails = set()
+        unique_sites = set()
+
+        for entity_xon in query_xon:
+            if len(unique_emails) <= 1000:
+                unique_emails.add(entity_xon.key.name)
+            if "site" in entity_xon:
+                sites = entity_xon["site"].split(";")
+                unique_sites.update(sites)
+
+        # Filter out empty values from unique_sites
+        unique_sites.discard("")
+
+        breach_count = len(unique_sites)
+        emails_count = len(unique_emails)
+
+        ds_paste = datastore.Client()
+        paste_rec = ds_paste.query(kind="xon_paste")
+        paste_rec.add_filter("domain", "=", domain)
+        query_paste = paste_rec.fetch(limit=50)
+
+        pastes_count = sum(1 for _ in query_paste)
+
+        breach_last_seen = None
+        if unique_sites:
+            breach_dates = []
+            ds_breaches = datastore.Client()
+            for site in unique_sites:
+                breach_rec = ds_breaches.query(kind="xon_breaches")
+                breach_rec.add_filter(
+                    "__key__", "=", ds_breaches.key("xon_breaches", site)
+                )
+                breach_rec.order = ["-breached_date"]
+                query_breaches = list(breach_rec.fetch(limit=1))
+                if query_breaches:
+                    breach_dates.append(query_breaches[0]["breached_date"])
+
+            if breach_dates:
+                breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
+
+        total = emails_count + pastes_count
+
+        breaches_dict = {
+            "breaches_details": [
+                {
+                    "domain": domain,
+                    "breach_pastes": pastes_count,
+                    "breach_emails": emails_count,
+                    "breach_total": total,
+                    "breach_count": breach_count,
+                    "breach_last_seen": breach_last_seen,
+                }
+            ]
+        }
+
+        return jsonify({"sendDomains": breaches_dict, "SearchStatus": "Success"})
+
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+'''
+
+
+@XON.route("/v1/domain-breach-summary", methods=["GET"])
+@LIMITER.limit("50 per day;10 per hour;1 per second")
+def get_xdomains():
+    """Returns exposed data at domain level"""
+    try:
+        domain = request.args.get("d")
+
+        if domain is None or not validate_domain(domain) or not validate_url():
+            return make_response(jsonify({"Error": "Not found"}), 404)
+
+        domain = domain.lower().strip()
+
+        ds_xon = datastore.Client()
+        xon_rec = ds_xon.query(kind="xon")
+        xon_rec.add_filter("domain", "=", domain)
+        query_xon = xon_rec.fetch(limit=1000)
+
+        unique_emails = set()
+        unique_sites = set()
+        total_records = 0
+
+        for entity_xon in query_xon:
+            email = entity_xon.key.name
+            if len(unique_emails) <= 1000:
+                unique_emails.add(email)
+            if "site" in entity_xon:
+                sites = entity_xon["site"].split(";")
+                unique_sites.update(sites)
+                total_records += len(sites)
+
+        unique_sites.discard("")
+
+        breach_count = len(unique_sites)
+        emails_count = len(unique_emails)
+
+        ds_paste = datastore.Client()
+        paste_rec = ds_paste.query(kind="xon_paste")
+        paste_rec.add_filter("domain", "=", domain)
+        query_paste = paste_rec.fetch(limit=50)
+
+        pastes_count = sum(1 for _ in query_paste)
+
+        breach_last_seen = None
+        if unique_sites:
+            breach_dates = []
+            ds_breaches = datastore.Client()
+            for site in unique_sites:
+                breach_rec = ds_breaches.query(kind="xon_breaches")
+                breach_rec.add_filter(
+                    "__key__", "=", ds_breaches.key("xon_breaches", site)
+                )
+                breach_rec.order = ["-breached_date"]
+                query_breaches = list(breach_rec.fetch(limit=1))
+                if query_breaches:
+                    breach_dates.append(query_breaches[0]["breached_date"])
+
+            if breach_dates:
+                breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
+
+        total = emails_count + pastes_count
+
+        breaches_dict = {
+            "breaches_details": [
+                {
+                    "domain": domain,
+                    "breach_pastes": pastes_count,
+                    "breach_emails": emails_count,
+                    "breach_total": total_records,
                     "breach_count": breach_count,
                     "breach_last_seen": breach_last_seen,
                 }
