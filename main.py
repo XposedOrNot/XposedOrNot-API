@@ -1293,13 +1293,6 @@ def get_summary_and_metrics(breach_record, paste_record):
         breach_summary = {"site": site_name}
         exposed_breaches = get_breaches(site_name)
         breach_metrics = get_breaches_metrics(site_name)
-
-    if paste_record:
-        tweet_id_str = str(paste_record["tweet_id"].decode("utf-8"))
-        paste_summary = {"cnt": paste_record["cnt"], "tweet_id": tweet_id_str}
-        exposed_pastes = get_pastes(tweet_id_str)
-        paste_metrics = get_pastes_metrics(tweet_id_str)
-
     return (
         breach_summary,
         paste_summary,
