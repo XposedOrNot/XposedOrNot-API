@@ -1821,7 +1821,20 @@ def search_data_breaches():
 
         if alert_record and alert_record.get("shieldOn"):
             raise ShieldOnException("Shield is on")
-        if include_sensitive:
+
+        if breach_record and not breach_record.get("site"):
+            return jsonify(
+                {
+                    "BreachesSummary": {
+                        "domain": "",
+                        "site": "",
+                        "tmpstmp": "",
+                    },
+                    "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
+                }
+            )
+
+        if breach_record and include_sensitive:
             combined_breach_data = get_combined_breach_data(
                 breach_record, include_sensitive
             )
