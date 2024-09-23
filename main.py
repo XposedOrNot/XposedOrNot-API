@@ -1685,7 +1685,7 @@ def process_single_domain(domain):
 
 
 @XON.route("/v1/unblock_cf/<token>", methods=["GET"])
-@LIMITER.limit("24 per day;2 per hour;1 per second")
+@LIMITER.limit("24 per day;2 per hour;2 per second")
 def unblock_cloudflare(token):
     """Returns status of unblock done at Cloudflare"""
     try:
@@ -2030,7 +2030,7 @@ def search_email(email):
 
 
 @XON.route("/v1/check-paste/<email>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def search_paste(email):
     """Returns exposed pastes for a given email"""  # To be deprecated soon
     try:
@@ -2062,7 +2062,7 @@ def search_paste(email):
 
 
 @XON.route("/v1/domain_email_validation/<token>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def domain_validation(token):
     """Returns status of domain email validation"""
     error_template = render_template("domain_email_error.html")
@@ -2096,7 +2096,7 @@ def domain_validation(token):
 
 
 @XON.route("/v1/domcheck_alert/<domain>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def domcheck_subscribe(domain):
     """Returns status of enabling domcheck-html"""
     try:
@@ -2112,7 +2112,7 @@ def domcheck_subscribe(domain):
 
 
 @XON.route("/v1/domcheck_verify/<token>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def domcheck_verification(token):
     """Returns domain of domcheck verification"""
     try:
@@ -2126,7 +2126,7 @@ def domcheck_verification(token):
 
 
 @XON.route("/v1/alertme/<user_email>", methods=["GET"])
-@LIMITER.limit("50 per day;5 per hour;1 per second")
+@LIMITER.limit("50 per day;5 per hour;2 per second")
 def subscribe_to_alert_me(user_email):
     """Subscribe to alert-me notifications and send confirmation email."""
     try:
@@ -2216,7 +2216,7 @@ def subscribe_to_alert_me(user_email):
 
 
 @XON.route("/v1/verifyme/<verification_token>", methods=["GET"])
-@LIMITER.limit("50 per day;5 per hour;1 per second")
+@LIMITER.limit("50 per day;5 per hour;2 per second")
 def alert_me_verification(verification_token):
     """Verify alert-me subscription and send initial leaks if any."""
     error_template = render_template("email_error.html")
@@ -2269,7 +2269,7 @@ def alert_me_verification(verification_token):
 
 
 @XON.route("/v1/send_verification", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def send_verification():
     """Verify and send confirmation for report access."""
     try:
@@ -2351,7 +2351,7 @@ def send_verification():
 
 
 @XON.route("/v1/create-api-key/<token>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def create_api_key(token):
     """Generates or renews an API key for a user identified by a provided token"""
     try:
@@ -2446,7 +2446,7 @@ def get_api_key(token):
 
 @CSRF.exempt
 @XON.route("/v1/domain-breaches/", methods=["POST"])
-@LIMITER.limit("500 per day;100 per hour;1 per second")
+@LIMITER.limit("500 per day;100 per hour;2 per second")
 def protected():
     """Retrieves the data breaches and related metrics for an API-key"""
     try:
@@ -2713,7 +2713,7 @@ def get_exposed_breaches(domain):
 
 
 @XON.route("/v1/domain-alert/<user_email>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def domain_alert(user_email):
     """Initiate domain breaches dashboard access and send confirmation email."""
     try:
@@ -2794,7 +2794,7 @@ def domain_alert(user_email):
 
 
 @XON.route("/v1/domain-verify/<verification_token>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def domain_verify(verification_token):
     """Verify domain alerts using MAGIC and send breaches if any."""
     # TODO: all templates here to be revisited
@@ -2828,7 +2828,7 @@ def domain_verify(verification_token):
 
 
 @XON.route("/v1/send_domain_breaches", methods=["GET"])
-@LIMITER.limit("500 per day;100 per hour;1 per second")
+@LIMITER.limit("500 per day;100 per hour;2 per second")
 def send_domain_breaches():
     """Retrieves and sends the data breaches validated by token and email"""
     try:
@@ -2981,7 +2981,7 @@ def send_domain_breaches():
 
 
 @XON.route("/v1/shield-on/<email>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def activate_shield(email):
     """Enable privacy shield for public searches and return status."""
     try:
@@ -3071,7 +3071,7 @@ def activate_shield(email):
 
 
 @XON.route("/v1/verify-shield/<token_shield>", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def verify_shield(token_shield):
     """Verify privacy shield for public searches and return status."""
     try:
@@ -3110,7 +3110,7 @@ def verify_shield(token_shield):
 
 
 @XON.route("/v1/unsubscribe-on/<email>", methods=["GET"])
-@LIMITER.limit("20 per day;5 per hour;1 per second")
+@LIMITER.limit("20 per day;5 per hour;2 per second")
 def unsubscribe(email):
     """Unsubscribe from alerts and return status."""
     try:
@@ -3158,7 +3158,7 @@ def unsubscribe(email):
 
 
 @XON.route("/v1/verify_unsub/<unsub_token>", methods=["GET"])
-@LIMITER.limit("20 per day;5 per hour;1 per second")
+@LIMITER.limit("20 per day;5 per hour;2 per second")
 def verify_unsubscribe(unsubscribe_token):
     """Returns response based on verification for unsubscribe token."""
     error_template = render_template("email_unsub_error.html")
@@ -3191,7 +3191,7 @@ def verify_unsubscribe(unsubscribe_token):
 
 
 @XON.route("/v1/domain-breach-summary", methods=["GET"])
-@LIMITER.limit("50 per day;10 per hour;1 per second")
+@LIMITER.limit("50 per day;10 per hour;2 per second")
 def get_xdomains():
     """Returns exposed data at domain level"""
     try:
@@ -3272,7 +3272,7 @@ def get_xdomains():
 
 
 @XON.route("/v1/domain_verification", methods=["GET"])
-@LIMITER.limit("50 per day;20 per hour;1 per second")
+@LIMITER.limit("50 per day;20 per hour;2 per second")
 def domain_verification():
     """Used for validating domain ownership/authority"""
     try:
@@ -4054,7 +4054,7 @@ def get_webhook_config():
 
 
 @XON.route("/v1/breaches", methods=["GET"])
-@LIMITER.limit("100 per day;50 per hour;1 per second")
+@LIMITER.limit("100 per day;50 per hour;2 per second")
 def get_xposed_breaches():
     """
     Fetches and returns the details of data breaches for a specified domain,
@@ -4218,7 +4218,7 @@ def get_data():
 
 
 @XON.route("/v1/rss", methods=["GET"])
-@LIMITER.limit("100 per day;50 per hour;1 per second")
+@LIMITER.limit("100 per day;50 per hour;2 per second")
 def rss_feed():
     """Generate RSS feed for presenting all data breaches in XoN"""
     try:
