@@ -2230,6 +2230,7 @@ def alert_me_verification(verification_token):
         ):
             return make_response(jsonify({"Error": "Not found"}), 404)
 
+            
         user_email = confirm_token(verification_token)
         if not user_email:
             return make_response(jsonify({"Error": "Not found"}), 404)
