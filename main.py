@@ -2230,7 +2230,6 @@ def alert_me_verification(verification_token):
         ):
             return make_response(jsonify({"Error": "Not found"}), 404)
 
-            
         user_email = confirm_token(verification_token)
         if not user_email:
             return make_response(jsonify({"Error": "Not found"}), 404)
@@ -2516,9 +2515,9 @@ def protected():
                 if entity["breach"] == "No_Breaches":
                     continue
                 # fetch the breach to get the breach date and details
-                #print(entity["breach"])
+                # print(entity["breach"])
                 breach_key = datastore_client.key("xon_breaches", entity["breach"])
-                #print(breach_key)
+                # print(breach_key)
                 breach = datastore_client.get(breach_key)
                 breach_year = breach["breached_date"].strftime("%Y")
                 yearly_summary[breach_year] += entity["email_count"]
@@ -2829,6 +2828,7 @@ def domain_verify(verification_token):
         log_except(request.url, exception_details)
         return error_template
 
+
 @XON.route("/v1/send_domain_breaches", methods=["GET"])
 @LIMITER.limit("500 per day;100 per hour;2 per second")
 def send_domain_breaches():
@@ -2902,7 +2902,9 @@ def send_domain_breaches():
                 if breach:
                     for key in default_breach_info.keys():
                         if key not in breach or breach[key] is None:
-                            breach[key] = default_breach_info[key]  # Set to default value if missing or None
+                            breach[key] = default_breach_info[
+                                key
+                            ]  # Set to default value if missing or None
 
                     all_breaches_logo[entity["breach"]] = breach["logo"]
                     breach_year = (
