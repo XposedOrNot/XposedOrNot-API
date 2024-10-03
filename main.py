@@ -2515,7 +2515,9 @@ def protected():
                 if entity["breach"] == "No_Breaches":
                     continue
                 # fetch the breach to get the breach date and details
+                #print(entity["breach"])
                 breach_key = datastore_client.key("xon_breaches", entity["breach"])
+                #print(breach_key)
                 breach = datastore_client.get(breach_key)
                 breach_year = breach["breached_date"].strftime("%Y")
                 yearly_summary[breach_year] += entity["email_count"]
@@ -2826,9 +2828,8 @@ def domain_verify(verification_token):
         log_except(request.url, exception_details)
         return error_template
 
-
 @XON.route("/v1/send_domain_breaches", methods=["GET"])
-@LIMITER.limit("500 per day;100 per hour;1 per second")
+@LIMITER.limit("500 per day;100 per hour;2 per second")
 def send_domain_breaches():
     """Retrieves and sends the data breaches validated by token and email"""
     try:
@@ -2874,6 +2875,9 @@ def send_domain_breaches():
         breach_details = []
         detailed_breach_info = {}
         all_breaches_logo = {}
+        seniority_summary = {"manager": 0, "c_suite": 0, "director": 0, "vp": 0}
+
+        # Existing logic for fetching breaches
         for domain in verified_domains:
             domain_summary[domain] = 0
             query = client.query(kind="xon_domains_summary")
@@ -2897,12 +2901,9 @@ def send_domain_breaches():
                 if breach:
                     for key in default_breach_info.keys():
                         if key not in breach or breach[key] is None:
-                            breach[key] = default_breach_info[
-                                key
-                            ]  # Set to default value if missing or None
+                            breach[key] = default_breach_info[key]  # Set to default value if missing or None
 
                     all_breaches_logo[entity["breach"]] = breach["logo"]
-                    breach_logo = breach["logo"]
                     breach_year = (
                         breach["breached_date"].strftime("%Y")
                         if breach["breached_date"]
@@ -2925,7 +2926,7 @@ def send_domain_breaches():
                         "xposure_desc": breach["xposure_desc"],
                     }
 
-            # fetch the breach details for the given domain
+            # Fetch the breach details for the given domain
             query = client.query(kind="xon_domains_details")
             query.add_filter("domain", "=", domain)
             for entity in query.fetch():
@@ -2936,6 +2937,14 @@ def send_domain_breaches():
                         "breach": entity["breach"],
                     }
                 )
+
+        # Fetch seniority information and summarize
+        query = client.query(kind="xon_domains_seniority")
+        query.add_filter("domain", "IN", verified_domains)
+        for entity in query.fetch():
+            seniority = entity.get("seniority", "").lower()
+            if seniority in seniority_summary:
+                seniority_summary[seniority] += 1
 
         yearly_breach_hierarchy = {
             "description": "Data Breaches",
@@ -2970,6 +2979,7 @@ def send_domain_breaches():
             "Top10_Breaches": dict(top10_breaches),
             "Detailed_Breach_Info": detailed_breach_info,
             "Verified_Domains": verified_domains,
+            "Seniority_Summary": seniority_summary,
         }
         metrics["Yearly_Breach_Hierarchy"] = yearly_breach_hierarchy
 
