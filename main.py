@@ -2828,6 +2828,189 @@ def domain_verify(verification_token):
         log_except(request.url, exception_details)
         return error_template
 
+@XON.route("/v2/send_domain_breaches", methods=["GET"])
+@LIMITER.limit("500 per day;100 per hour;2 per second")
+def send_domain_breaches_v2():
+    """Retrieves and sends the data breaches validated by token and email with detailed debugging"""
+    try:
+        #print("Request received for /v2/send_domain_breaches")
+
+        # Fetch query parameters
+        email = request.args.get("email")
+        verification_token = request.args.get("token")
+        time_filter = request.args.get("time_filter", "all") 
+
+        print(f"Parameters received - email: {email}, token: {verification_token}, time_filter: {time_filter}")
+
+        # Validate email and token presence
+        if email is None or verification_token is None:
+            print("Missing email or token")
+            return make_response(jsonify({"Error": "Missing email or token"}), 400)
+
+        # Validate email and token
+        if (
+            not validate_email_with_tld(email)
+            or not validate_variables(verification_token)
+            or not validate_url()
+        ):
+            #print("Invalid email or token")
+            return make_response(jsonify({"Error": "Invalid email or token"}), 400)
+
+        # Datastore client setup
+        client = datastore.Client()
+
+        # Verify session
+        alert_key = client.key("xon_domains_session", email)
+        alert_task = client.get(alert_key)
+        if not alert_task:
+            #print(f"Session not found for email: {email}")
+            return make_response(jsonify({"Error": "Invalid session"}), 400)
+
+        if alert_task.get("domain_magic") != verification_token:
+            #print("Session token mismatch")
+            return make_response(jsonify({"Error": "Invalid session"}), 400)
+
+        session_age = datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(tzinfo=None)
+        if session_age > datetime.timedelta(hours=24):
+            #print("Session expired")
+            return make_response(jsonify({"Error": "Session expired"}), 400)
+
+        print("Session validated successfully")
+
+        # Determine time range
+        current_time = datetime.datetime.utcnow()
+        if time_filter == "6_months":
+            start_date = current_time - datetime.timedelta(days=6 * 30)  
+        elif time_filter == "12_months":
+            start_date = current_time - datetime.timedelta(days=12 * 30)  
+        else:
+            start_date = None  
+
+        #print(f"Time range filtering applied - start_date: {start_date}")
+
+        # Fetch verified domains
+        query = client.query(kind="xon_domains")
+        query.add_filter("email", "=", email)
+        verified_domains = [entity["domain"] for entity in query.fetch()]
+
+        if not verified_domains:
+            print(f"No verified domains found for email: {email}")
+
+        #print(f"Verified domains: {verified_domains}")
+
+        # Initialize data structures
+        start_year = 2007  
+        current_year = datetime.datetime.utcnow().year
+        yearly_metrics = {str(year): 0 for year in range(start_year, current_year + 1)}
+        yearly_breach_hierarchy = {"description": "Data Breaches", "children": []}
+        domain_summary = defaultdict(int)
+        seniority_summary = {"c_suite": 0, "director": 0, "manager": 0, "vp": 0}
+        breach_summary = defaultdict(int)
+        detailed_breach_info = {}
+        breach_details = []
+
+        # Process breaches for each domain
+        for domain in verified_domains:
+            query = client.query(kind="xon_domains_details")
+            query.add_filter("domain", "=", domain)
+            for entity in query.fetch():
+                breach = entity["breach"]
+
+                # Fetch breached_date from xon_breaches
+                breach_key = client.key("xon_breaches", breach)
+                breach_entity = client.get(breach_key)
+
+                if not breach_entity:
+                    #print(f"Breach entity not found for {breach}")
+                    continue
+
+                breached_date = breach_entity.get("breached_date")
+                if breached_date:
+                    breached_date = breached_date.replace(tzinfo=None)
+                    if start_date and breached_date < start_date:
+                        #print(f"Skipping breach {breach} outside the time range")
+                        continue
+
+                # Add to breach_details
+                breach_details.append({
+                    "email": entity["email"],
+                    "domain": entity["domain"],
+                    "breach": breach,
+                })
+
+                # Populate yearly metrics
+                breach_year = breached_date.strftime("%Y") if breached_date else None
+                if breach_year and breach_year in yearly_metrics:
+                    yearly_metrics[breach_year] += 1
+
+                # Populate domain summary
+                domain_summary[domain] += 1
+
+                # Populate breach summary
+                breach_summary[breach] += 1
+
+                # Populate detailed breach info
+                detailed_breach_info[breach] = {
+                    "breached_date": breached_date,
+                    "logo": breach_entity.get("logo", ""),
+                    "password_risk": breach_entity.get("password_risk", ""),
+                    "searchable": breach_entity.get("searchable", ""),
+                    "xposed_data": breach_entity.get("xposed_data", ""),
+                    "xposed_records": breach_entity.get("xposed_records", ""),
+                    "xposure_desc": breach_entity.get("xposure_desc", ""),
+                }
+
+        # Build the yearly breach hierarchy
+        yearly_breaches = defaultdict(list)
+        for breach in breach_details:
+            breach_name = breach["breach"]
+            breach_info = detailed_breach_info.get(breach_name)
+            if not breach_info:
+                continue
+
+            breached_date = breach_info.get("breached_date")
+            if not breached_date:
+                continue
+
+            breach_year = breached_date.strftime("%Y")
+            yearly_breaches[breach_year].append({
+                "description": (
+                    f"<img src='{breach_info.get('logo', '')}' style='height:40px;width:65px;' />"
+                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{breach_name}'> &nbsp;Details</a>"
+                ),
+                "tooltip": f"Click here for {breach_name} details👇",
+                "children": [],
+            })
+
+        for year, breaches in sorted(yearly_breaches.items(), key=lambda x: int(x[0]), reverse=True):
+            yearly_breach_hierarchy["children"].append({
+                "description": year,
+                "children": breaches,
+            })
+
+        # Prepare top 10 breaches
+        top10_breaches = sorted(breach_summary.items(), key=lambda x: x[1], reverse=True)[:10]
+
+        # Metrics with filtered data
+        metrics = {
+            "Yearly_Metrics": yearly_metrics,
+            "Yearly_Breach_Hierarchy": yearly_breach_hierarchy,
+            "Domain_Summary": dict(domain_summary),
+            "Seniority_Summary": seniority_summary,
+            "Breach_Summary": dict(breach_summary),
+            "Breaches_Details": breach_details,
+            "Top10_Breaches": dict(top10_breaches),
+            "Detailed_Breach_Info": detailed_breach_info,
+            "Verified_Domains": verified_domains,
+        }
+
+        #print("Metrics generated successfully")
+        return jsonify(metrics)
+
+    except Exception as exception_details:
+        #print(f"An error occurred: {exception_details}")
+        abort(404)
+
 
 @XON.route("/v1/send_domain_breaches", methods=["GET"])
 @LIMITER.limit("500 per day;100 per hour;2 per second")
