@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 # Related Third Party Imports
 import domcheck
 import requests
+from openai import OpenAI
 from cryptography.fernet import Fernet
 from feedgen.feed import FeedGenerator
 from flask import (
@@ -62,6 +63,7 @@ WTF_CSRF_SECRET_KEY = os.environ["WTF_CSRF_SECRET_KEY"]
 XMLAPI_KEY = os.environ["XMLAPI_KEY"]
 FERNET_KEY = os.environ.get("ENCRYPTION_KEY")
 CIPHER_SUITE = Fernet(FERNET_KEY)
+# openai.api_key = os.environ.get("OPENAI_API_KEY")
 
 # Initialize the Flask app
 XON = Flask(__name__)
@@ -73,6 +75,8 @@ XON.config.update(SECRET_KEY=WTF_CSRF_SECRET_KEY)
 # Initialize and configure CSRF protection
 CSRF = CSRFProtect()
 CSRF.init_app(XON)
+
+ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 
 def set_csp_headers(response):
@@ -1684,6 +1688,30 @@ def process_single_domain(domain):
     # TODO: Need to send an email afer processing completed
 
 
+def get_ai_summary(breach_data):
+    try:
+        response = ai_client.chat.completions.create(
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a cybersecurity expert providing clear, actionable insights about data breaches. "
+                        "Summarize the breach details in a conversational tone,analytical and provide recommendations based on risks. Avoid calling or referencing other security products or tools and keep recommendations generic."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Here is the breach data: {json.dumps(breach_data, indent=2)}. Analyze and provide an insightful summary in a conversational tone with analytical data, risks along with recommendations.Limit the recommendation to the user level only.Start with a single para summarizing the breaches with title summary of key data breaches. if the breaches are too large in count, talk about the ones with significant risk or size.  Next section should be the risk assessment. highlight the issues. Call out all plain text password breaches.  finally provide a recommendation with bullets with title Recommendations for you. All topics can have titles in bold text. also highlight text which needs focus or attention. Make the language simple and make it humanized. all titles should start with these emojis. Add magnifying glass for summary, red siren for risk assessment and blue shield for recommendations. add para breaks or line breaks as appropriate and make it look presentable. after recommendations add a line break and then give that final one liner or two as closure. finally you can also add one additional line with a blog link to how to avoid account take over and what to do if your data is breached - https://blog.xposedornot.com/what-should-you-do-after-data-breach/. add line breaks <br> afer every section and one between section and subsequent text. Use markdown for easy readability and highlight essential points.",
+                },
+            ],
+            model="gpt-4o",
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error fetching AI summary: {str(e)}"
+
+
 @XON.route("/v1/unblock_cf/<token>", methods=["GET"])
 @LIMITER.limit("24 per day;2 per hour;2 per second")
 def unblock_cloudflare(token):
@@ -1786,6 +1814,114 @@ def get_detailed_metrics():
         abort(404)
 
 
+@XON.route("/v2/breach-analytics", methods=["GET"])
+@LIMITER.limit("500 per day;100 per hour;2 per second")
+def search_data_breaches_v2():
+    """Returns AI summary and details of data breaches for a given email"""
+    verification_token = request.args.get("token", default=None)
+    email = request.args.get("email", default=None)
+
+    if not email or not validate_email(email) or not validate_url():
+        return make_response(jsonify({"Error": "Not found"}), 404)
+
+    try:
+        email = email.lower()
+        datastore_client = datastore.Client()
+        alert_datastore_client = datastore.Client()
+        paste_datastore_client = datastore.Client()
+
+        alert_key = alert_datastore_client.key("xon_alert", email)
+        alert_record = alert_datastore_client.get(alert_key)
+
+        include_sensitive = False
+
+        if verification_token:
+            if alert_record and alert_record["token"] == verification_token:
+                include_sensitive = True
+            else:
+                return make_response(jsonify({"Error": "Invalid token"}), 403)
+
+        breach_key = datastore_client.key("xon", email)
+        breach_record = datastore_client.get(breach_key)
+
+        paste_key = paste_datastore_client.key("xon_paste", email)
+        paste_record = paste_datastore_client.get(paste_key)
+
+        if alert_record and alert_record.get("shieldOn"):
+            raise ShieldOnException("Shield is on")
+
+        if breach_record and not breach_record.get("site"):
+            return jsonify(
+                {
+                    "BreachesSummary": {
+                        "domain": "",
+                        "site": "",
+                        "tmpstmp": "",
+                    },
+                    "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
+                }
+            )
+
+        if breach_record and include_sensitive:
+            combined_breach_data = get_combined_breach_data(
+                breach_record, include_sensitive
+            )
+            existing_sites = (
+                set(breach_record["site"].split(";"))
+                if "site" in breach_record and breach_record["site"]
+                else set()
+            )
+            unique_sites = existing_sites.union(combined_breach_data)
+            breach_record["site"] = ";".join(unique_sites)
+
+        (
+            breach_summary,
+            paste_summary,
+            exposed_breaches,
+            exposed_pastes,
+            breach_metrics,
+            paste_metrics,
+        ) = get_summary_and_metrics(breach_record, paste_record)
+
+        if breach_summary or paste_summary:
+            breach_data = {
+                "ExposedBreaches": exposed_breaches,
+                "BreachesSummary": (
+                    breach_summary
+                    if breach_summary
+                    else {"domain": "", "site": "", "tmpstmp": ""}
+                ),
+                "BreachMetrics": breach_metrics,
+                "PastesSummary": (
+                    paste_summary
+                    if paste_summary
+                    else {"cnt": 0, "domain": "", "tmpstmp": ""}
+                ),
+                "ExposedPastes": exposed_pastes,
+                "PasteMetrics": paste_metrics,
+            }
+
+            ai_summary = get_ai_summary(breach_data)
+            return jsonify({"AI_Summary": ai_summary})
+        else:
+
+            return jsonify(
+                {
+                    "BreachesSummary": {
+                        "domain": "",
+                        "site": "",
+                        "tmpstmp": "",
+                    },
+                    "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
+                }
+            )
+    except ShieldOnException as shield_error:
+        abort(404)
+    except Exception as exception_details:
+        log_except(request.url, exception_details)
+        abort(404)
+
+
 @XON.route("/v1/breach-analytics", methods=["GET"])
 @LIMITER.limit("500 per day;100 per hour;2 per second")
 def search_data_breaches():
@@ -1856,6 +1992,7 @@ def search_data_breaches():
         ) = get_summary_and_metrics(breach_record, paste_record)
 
         if breach_summary or paste_summary:
+
             return jsonify(
                 {
                     "ExposedBreaches": exposed_breaches,
@@ -1875,6 +2012,7 @@ def search_data_breaches():
                 }
             )
         else:
+
             return jsonify(
                 {
                     "BreachesSummary": {

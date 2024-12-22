@@ -12,7 +12,8 @@ gcloud
 geoip2
 google-cloud-datastore 
 gunicorn
-mailjet_rest 
+mailjet_rest
+openai 
 PySocks 
 python-dateutil 
 python-whois 
