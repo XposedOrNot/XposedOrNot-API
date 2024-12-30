@@ -1729,7 +1729,7 @@ def unblock_cloudflare(token):
         abort(404)
 
 
-@XON.route("/v1/metrics/", methods=["GET"])
+@XON.route("/v1/metrics", methods=["GET"])
 @LIMITER.limit("500 per day;100 per hour")
 def get_metrics():
     """Returns high level summary of data breaches loaded in XoN"""
