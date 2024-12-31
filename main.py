@@ -1360,9 +1360,7 @@ def get_pastes_metrics(pastes):
         get_metrics = {"yearwise_details": []}
         y2021 = y2020 = y2019 = y2018 = y2017 = y2016 = y2015 = y2015 = y2014 = (
             y2013
-        ) = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = y2024 = (
-            y2025
-        ) = 0
+        ) = y2012 = y2011 = y2010 = y2009 = y2008 = y2007 = y2022 = y2023 = 0
         for index_count, count in enumerate(breaches):
             key = ds_client.key("xon_paste_master", count)
             query = ds_client.get(key)
@@ -2332,8 +2330,8 @@ def subscribe_to_alert_me(user_email):
             if preferred_ip:
                 location = fetch_location_by_ip(preferred_ip)
             else:
-                # To be revisited
-                pass
+                location = "Unknown"
+                # pass
             user_agent_string = request.headers.get("User-Agent")
             user_agent = parse(user_agent_string)
             browser_type = (
@@ -2459,6 +2457,8 @@ def send_verification():
                 ds_xon = datastore.Client()
                 xon_key = ds_xon.key("xon", user_email)
                 xon_record = ds_xon.get(xon_key)
+                sensitive_site_breaches = ""
+                breach_metrics = {}
                 if xon_record is not None:
                     site = str(xon_record["site"]) if "site" in xon_record else ""
                     sensitive_site = (
@@ -2916,8 +2916,8 @@ def domain_alert(user_email):
             if preferred_ip:
                 location = fetch_location_by_ip(preferred_ip)
             else:
-                # To be revisited
-                pass
+                location = "Unknown"
+                # pass
             user_agent_string = request.headers.get("User-Agent")
             user_agent = parse(user_agent_string)
             browser_type = (
@@ -3359,7 +3359,8 @@ def activate_shield(email):
             if preferred_ip:
                 location = fetch_location_by_ip(preferred_ip)
             else:
-                pass
+                location = "Unknown"
+                # pass
             user_agent_string = request.headers.get("User-Agent")
             user_agent = parse(user_agent_string)
             browser_type = (
