@@ -1824,10 +1824,16 @@ def get_detailed_metrics():
 @LIMITER.limit("500 per day;100 per hour;2 per second")
 def search_data_breaches_v2():
     """Returns AI summary and details of data breaches for a given email"""
+    MAX_EMAIL_LENGTH = 254
     verification_token = request.args.get("token", default=None)
     email = request.args.get("email", default=None)
 
-    if not email or not validate_email(email) or not validate_url():
+    if (
+        not email
+        or not validate_email(email)
+        or not validate_url()
+        or len(email) > MAX_EMAIL_LENGTH
+    ):
         return make_response(jsonify({"Error": "Not found"}), 404)
 
     try:
@@ -2134,10 +2140,11 @@ def get_breach_analytics(user_email):
 def search_email(email):
     """Returns exposed breaches for a given email"""
     try:
+        MAX_EMAIL_LENGTH = 254
         email = email.lower()
         exposed_breaches = {"breaches": [], "email": email}
 
-        if not email or not validate_email(email):
+        if not email or len(email) > MAX_EMAIL_LENGTH or not validate_email(email):
             return make_response(jsonify({"Error": "Invalid or not found email"}), 404)
 
         data_store = datastore.Client()
