@@ -49,66 +49,86 @@ def update_cf_trans(ip_address):
 
 def block_hour(ip_address):
     """
-    Block an IP address for one hour using the Cloudflare API.
-
-    This function sends a POST request to the Cloudflare API to block the given IP address.
-    It uses predefined authentication details (AUTH_EMAIL and AUTH_KEY) and sets the mode to
-    'challenge',    targeting the specified IP address. The function logs the action by
-    calling `update_cf_trans` with the response content if the request is successful.
+    Block an IP address for one hour using the Cloudflare API, unless the ISP is "Cloudflare."
 
     Parameters:
     ip_address (str): The IP address to be blocked.
 
     Returns:
-    None: The function doesn't return anything but performs an API request to block an IP
-    address and logs the transaction.
+    None: The function performs an API request to block an IP address if necessary.
     """
+    isp_info = get_isp_from_ip(ip_address)
+    if isp_info and "Cloudflare" in isp_info:
+
+        return
+
     url = "https://api.cloudflare.com/client/v4/user/firewall/access_rules/rules"
     headers = {
         "X-Auth-Email": AUTH_EMAIL,
         "X-Auth-Key": AUTH_KEY,
         "Content-Type": "application/json",
     }
-    payload = (
-        '{"mode":"challenge","configuration":{"target":"ip","value":"'
-        + ip_address
-        + '"},"notes":"Hour block enforced"}'
-    )
-    response = requests.post(url, headers=headers, data=payload, timeout=20)
-    if response.status_code in [200, 201]:
-        update_cf_trans(response.content)
+    payload = {
+        "mode": "challenge",
+        "configuration": {"target": "ip", "value": ip_address},
+        "notes": "Hour block enforced",
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+
+        if response.status_code in [200, 201]:
+            update_cf_trans(response.content)
+        else:
+            print(
+                f"Failed to block IP {ip_address}. Status code: {response.status_code}"
+            )
+    except Exception as e:
+        print(f"Error while blocking IP {ip_address}: {e}")
 
 
 def block_day(ip_address):
     """
-    Block an IP address for one day using the Cloudflare API.
+    Block an IP address for one day using the Cloudflare API, unless the ISP is "Cloudflare."
 
     This function sends a POST request to the Cloudflare API to block the given IP address.
     It uses predefined authentication details (AUTH_EMAIL and AUTH_KEY) and sets the mode
-    to 'challenge', targeting the specified IP address. The function logs the action by
+    to 'block', targeting the specified IP address. The function logs the action by
     calling `update_cf_trans` with the response content if the request is successful.
 
     Parameters:
     ip_address (str): The IP address to be blocked.
 
     Returns:
-    None: The function doesn't return anything but performs an API request to block an
-    IP address and logs the transaction.
+    None: The function performs an API request to block an IP address if necessary.
     """
+
+    isp_info = get_isp_from_ip(ip_address)
+    if isp_info and "Cloudflare" in isp_info:
+        print(f"IP {ip_address} belongs to Cloudflare. Skipping block.")
+        return
+
     url = "https://api.cloudflare.com/client/v4/user/firewall/access_rules/rules"
     headers = {
         "X-Auth-Email": AUTH_EMAIL,
         "X-Auth-Key": AUTH_KEY,
         "Content-Type": "application/json",
     }
-    payload = (
-        '{"mode":"block","configuration":{"target":"ip","value":"'
-        + ip_address
-        + '"},"notes":"Day block enforced"}'
-    )
-    response = requests.post(url, headers=headers, data=payload, timeout=20)
-    if response.status_code in [200, 201]:
-        update_cf_trans(response.content)
+    payload = {
+        "mode": "block",
+        "configuration": {"target": "ip", "value": ip_address},
+        "notes": "Day block enforced",
+    }
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=20)
+
+        if response.status_code in [200, 201]:
+            update_cf_trans(response.content)
+        else:
+            print(
+                f"Failed to block IP {ip_address}. Status code: {response.status_code}"
+            )
+    except Exception as e:
+        print(f"Error while blocking IP {ip_address}: {e}")
 
 
 def unblock():
@@ -154,3 +174,28 @@ def unblock():
             entity.update({"release_timestamp": datetime.datetime.utcnow().isoformat()})
             datastore_client.put(entity)
     return True
+
+
+def get_isp_from_ip(ip_address):
+    """
+    Fetch the ISP for a given IP address using the ipinfo.io API or a similar service.
+
+    Parameters:
+    ip_address (str): The IP address to check.
+
+    Returns:
+    str: The name of the ISP for the given IP address.
+    """
+    try:
+        url = f"https://ipinfo.io/{ip_address}/org"
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200:
+            return response.text.strip()
+        else:
+            print(
+                f"Failed to fetch ISP for IP {ip_address}. Status code: {response.status_code}"
+            )
+            return None
+    except Exception as e:
+        print(f"Error fetching ISP for IP {ip_address}: {e}")
+        return None
