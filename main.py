@@ -4,6 +4,7 @@
 
 # Standard Library Imports
 import datetime
+import hashlib
 import ipaddress
 import json
 import os
@@ -13,7 +14,6 @@ import socket
 import threading
 import time
 
-# import hashlib
 from collections import defaultdict
 from datetime import timedelta
 from operator import itemgetter
@@ -22,28 +22,29 @@ from urllib.parse import urlparse
 # Related Third Party Imports
 import domcheck
 import requests
-from openai import OpenAI
 from cryptography.fernet import Fernet
 from feedgen.feed import FeedGenerator
 from flask import (
     Flask,
     abort,
+    g,
     jsonify,
     make_response,
     render_template,
     request,
-    url_for,
     send_from_directory,
+    url_for,
 )
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect
-from google.cloud import datastore
+from google.cloud import datastore, pubsub_v1
 from itsdangerous import SignatureExpired, URLSafeTimedSerializer
+from openai import OpenAI
+from threading import Lock
 from user_agents import parse
 from validate_email import validate_email
-from threading import Lock
 
 # Local Application/Library Specific Imports
 from cloudflare import block_day, block_hour, unblock
@@ -57,28 +58,41 @@ from send_email import (
     send_unsub_email,
 )
 
+
 # Fetch environment variables
 CF_MAGIC = os.environ["CF_MAGIC"]
 CF_UNBLOCK_MAGIC = os.environ["CF_UNBLOCK_MAGIC"]
+FERNET_KEY = os.environ.get("ENCRYPTION_KEY")
+PROJECT_ID = os.environ.get("PROJECT_ID")
 SECRET_APIKEY = os.environ["SECRET_APIKEY"]
 SECURITY_SALT = os.environ["SECURITY_SALT"]
+TOPIC_ID = os.environ.get("TOPIC_ID")
 WTF_CSRF_SECRET_KEY = os.environ["WTF_CSRF_SECRET_KEY"]
 XMLAPI_KEY = os.environ["XMLAPI_KEY"]
-FERNET_KEY = os.environ.get("ENCRYPTION_KEY")
+
+# Initialize Cryptography Cipher Suite
 CIPHER_SUITE = Fernet(FERNET_KEY)
 
-# Initialize the Flask app
+# Initialize Google Cloud Pub/Sub
+publisher = pubsub_v1.PublisherClient()
+topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
+
+# Initialize OpenAI API Client
+ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+# Initialize Flask App
 XON = Flask(__name__)
 CORS(XON)
 
-# Configure the secret key
+# Configure Flask Secret Key
 XON.config.update(SECRET_KEY=WTF_CSRF_SECRET_KEY)
 
-# Initialize and configure CSRF protection
+# Initialize CSRF Protection
 CSRF = CSRFProtect()
 CSRF.init_app(XON)
 
 ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
 
 def set_csp_headers(response):
@@ -132,28 +146,41 @@ def add_cache_control(response):
     return response
 
 
-"""
 @XON.before_request
-def globe_ip():
-    client_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0]
+def globe_request():
     try:
-        response = requests.post('https://globe.xposedornot.com/inflow', json={'ip': client_ip})
-        if response.status_code == 200:
-            print(f"IP {client_ip} successfully posted.")
+        """Before processing any request, capture IP and publish location data to globe."""
+
+        # Extract client IP
+        if "X-Forwarded-For" in request.headers:
+            client_ip_address = request.headers["X-Forwarded-For"].split(",")[0].strip()
+        elif "X-Real-IP" in request.headers:
+            client_ip_address = request.headers["X-Real-IP"].strip()
         else:
-            print(f"Failed to post IP {client_ip}. Status code: {response.status_code}")
+            client_ip_address = request.remote_addr
+
+        preferred_ip = client_ip_address
+        print(f"Normalized IP: {preferred_ip}")
+
+        if not preferred_ip:
+            return
+
+        geo_data = get_geolocation(preferred_ip)
+        if not geo_data:
+            return
+
+        pubsub_data = {
+            "ip": preferred_ip,
+            "city": geo_data["city"],
+            "lat": geo_data["lat"],
+            "lon": geo_data["lon"],
+        }
+
+        publish_to_pubsub(pubsub_data)
+
     except Exception as e:
-        print(f"Error posting IP {client_ip}: {e}")
+        print(f"Error in globe_request: {e}")
 
-
-
-def is_valid_ipv4(ip):
-    try:
-        ipaddress.IPv4Address(ip)
-        return True
-    except ipaddress.AddressValueError:
-        return False
-"""
 
 # Initialize and configure rate limiting
 LIMITER = Limiter(
@@ -410,6 +437,68 @@ def get_preferred_ip_address(x_forwarded_for):
 
     # Return None if no valid IP address is found
     return None
+
+
+def is_valid_ipv4(ip):
+    """Validate if the provided IP is a valid IPv4 address."""
+    try:
+        socket.inet_pton(socket.AF_INET, ip)
+        return True
+    except socket.error:
+        return False
+
+
+def get_geolocation(ip):
+    """Fetch city, latitude, and longitude for the given IP."""
+    GEOLOCATION_API_URL = f"http://ip-api.com/json/{ip}"
+    try:
+        response = requests.get(GEOLOCATION_API_URL)
+        data = response.json()
+        if data["status"] == "success":
+            return {
+                "city": data.get("city", "Unknown"),
+                "lat": data.get("lat", 0.0),
+                "lon": data.get("lon", 0.0),
+            }
+        else:
+            return None
+    except Exception as e:
+        return None
+
+
+def generate_request_hash(data):
+    """Generate a unique hash based on IP and geo details."""
+    data_string = f"{data['ip']}-{data['city']}-{data['lat']}-{data['lon']}"
+    return hashlib.md5(data_string.encode()).hexdigest()
+
+
+recent_requests = {}
+
+
+def publish_to_pubsub(data):
+    """Publish to Google Cloud Pub/Sub with hash-based deduplication."""
+    try:
+        request_hash = generate_request_hash(data)
+        current_time = time.time()
+
+        for key in list(recent_requests.keys()):
+            if current_time - recent_requests[key] > 60:  # 10 minutes
+                del recent_requests[key]
+
+        # Check if this request hash was already published
+        if request_hash in recent_requests:
+            print(f"Skipping duplicate publish for request: {request_hash}")
+            return
+
+        # Publish message
+        message = json.dumps(data).encode("utf-8")
+        future = publisher.publish(topic_path, message)
+
+        # Store request hash with timestamp
+        recent_requests[request_hash] = current_time
+
+    except Exception as e:
+        print(f"Error publishing to Pub/Sub: {e}")
 
 
 def encrypt_data(data):
