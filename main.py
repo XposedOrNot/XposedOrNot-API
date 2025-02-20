@@ -222,10 +222,11 @@ def ratelimit_handler(error):
         first_ip = None
 
     if "hour" in error.description and first_ip:
-        block_hour(ip_address=first_ip)
+        # block_hour(ip_address=first_ip)
         pass
     elif "day" in error.description and first_ip:
-        block_day(ip_address=first_ip)
+        block_hour(ip_address=first_ip)
+        # block_day(ip_address=first_ip)
 
     # Prepare and return the response
     response = make_response(
@@ -1944,8 +1945,7 @@ def get_detailed_metrics():
 
 
 @XON.route("/v2/breach-analytics", methods=["GET"])
-@LIMITER.limit("5 per hour; 100 per day")
-# @LIMITER.limit("100 per day;3 per hour;2 per second")
+@LIMITER.limit("2 per second; 50 per hour; 100 per day")
 def search_data_breaches_v2():
     """Returns AI summary and details of data breaches for a given email"""
     MAX_EMAIL_LENGTH = 254
@@ -2059,8 +2059,7 @@ def search_data_breaches_v2():
 
 
 @XON.route("/v1/breach-analytics", methods=["GET"])
-@LIMITER.limit("10 per hour; 100 per day")
-# @LIMITER.limit("500 per day;100 per hour;2 per second")
+@LIMITER.limit("2 per second; 50 per hour; 100 per day")
 def search_data_breaches():
     """Returns summary and details of data breaches for a given email"""
     verification_token = request.args.get("token", default=None)
@@ -2261,7 +2260,6 @@ def get_breach_analytics(user_email):
 
 
 @XON.route("/v1/check-email/<email>", methods=["GET"])
-# @LIMITER.limit("100 per day;50 per hour;2 per second")
 @LIMITER.limit("2 per second; 50 per hour; 100 per day")
 def search_email(email):
     """Returns exposed breaches for a given email"""
