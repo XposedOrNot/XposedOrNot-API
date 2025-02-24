@@ -488,7 +488,6 @@ def publish_to_pubsub(data):
 
         # Check if this request hash was already published
         if request_hash in recent_requests:
-            print(f"Skipping duplicate publish for request: {request_hash}")
             return
 
         # Publish message
@@ -1893,7 +1892,7 @@ def get_metrics():
 @XON.route("/v1/metrics/detailed", methods=["GET"])
 @LIMITER.limit("500 per day;100 per hour")
 def get_detailed_metrics():
-    """Returns detailed summary of data breaches including yearly count and top breaches"""
+    """Returns detailed summary of data breaches including yearly count, top breaches, and recent breaches"""
     try:
         datastore_client = datastore.Client()
         metrics_key = datastore_client.key("xon_metrics", "metrics")
@@ -1929,6 +1928,21 @@ def get_detailed_metrics():
             }
             top_breaches.append(breach_info)
 
+        recent_query = datastore_client.query(kind="xon_breaches")
+        recent_query.order = ["-timestamp"]
+        recent_breaches_data = list(recent_query.fetch(limit=10))
+
+        recent_breaches = []
+        for breach in recent_breaches_data:
+            breach_info = {
+                "breachid": breach.key.id_or_name,
+                "timestamp": breach.get("timestamp"),
+                "logo": breach.get("logo"),
+                "description": breach.get("xposure_desc"),
+                "count": breach.get("xposed_records"),
+            }
+            recent_breaches.append(breach_info)
+
         return jsonify(
             {
                 "Breaches_Count": breaches_count,
@@ -1937,6 +1951,7 @@ def get_detailed_metrics():
                 "Pastes_Records": pastes_total_records,
                 "Yearly_Breaches_Count": dict(yearly_count),
                 "Top_Breaches": top_breaches,
+                "Recent_Breaches": recent_breaches,
             }
         )
     except Exception as exception_details:
