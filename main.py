@@ -159,7 +159,7 @@ def globe_request():
         else:
             client_ip_address = request.remote_addr
 
-        preferred_ip = client_ip_address        
+        preferred_ip = client_ip_address
 
         if not preferred_ip:
             return
@@ -2462,9 +2462,7 @@ def subscribe_to_alert_me(user_email):
                 datastore_client.put(alert_task_data)
 
         if "X-Forwarded-For" in request.headers:
-            client_ip_address = (
-                request.headers["X-Forwarded-For"].split(",")[0].strip()
-            )
+            client_ip_address = request.headers["X-Forwarded-For"].split(",")[0].strip()
         elif "X-Real-IP" in request.headers:
             client_ip_address = request.headers["X-Real-IP"].strip()
         else:
@@ -2546,9 +2544,7 @@ def alert_me_verification(verification_token):
             breaches_link = (
                 base_url + "email-report.html?" + email_param + "&" + token_param
             )
-            return render_template(
-                "email_success.html", breaches_link=breaches_link
-            )
+            return render_template("email_success.html", breaches_link=breaches_link)
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
@@ -2567,7 +2563,10 @@ def send_verification():
             not validate_url()
             or not user_email
             or not validate_email_with_tld(user_email)
-            or (verification_token != "None" and not validate_variables(verification_token))
+            or (
+                verification_token != "None"
+                and not validate_variables(verification_token)
+            )
         ):
             return make_response(jsonify({"status": "Failed"}), 200)
 
