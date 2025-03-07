@@ -159,8 +159,7 @@ def globe_request():
         else:
             client_ip_address = request.remote_addr
 
-        preferred_ip = client_ip_address
-        print(f"Normalized IP: {preferred_ip}")
+        preferred_ip = client_ip_address        
 
         if not preferred_ip:
             return
@@ -2462,47 +2461,42 @@ def subscribe_to_alert_me(user_email):
                 )
                 datastore_client.put(alert_task_data)
 
-            if "X-Forwarded-For" in request.headers:
-                client_ip_address = (
-                    request.headers["X-Forwarded-For"].split(",")[0].strip()
-                )
-            elif "X-Real-IP" in request.headers:
-                client_ip_address = request.headers["X-Real-IP"].strip()
-            else:
-                client_ip_address = request.remote_addr
-
-            preferred_ip = get_preferred_ip_address(client_ip_address)
-
-            if preferred_ip:
-                location = fetch_location_by_ip(preferred_ip)
-            else:
-                location = "Unknown"
-                # pass
-            user_agent_string = request.headers.get("User-Agent")
-            user_agent = parse(user_agent_string)
-            browser_type = (
-                user_agent.browser.family + " " + user_agent.browser.version_string
+        if "X-Forwarded-For" in request.headers:
+            client_ip_address = (
+                request.headers["X-Forwarded-For"].split(",")[0].strip()
             )
-            client_platform = user_agent.os.family
-
-            send_alert_confirmation(
-                user_email,
-                confirmation_url,
-                f"{preferred_ip} ({location})",
-                browser_type,
-                client_platform,
-            )
-
-            return make_response(jsonify({"Success": "Subscription Successful"}), 200)
+        elif "X-Real-IP" in request.headers:
+            client_ip_address = request.headers["X-Real-IP"].strip()
         else:
-            return make_response(jsonify({"Error": "Not found"}), 404)
+            client_ip_address = request.remote_addr
+
+        preferred_ip = get_preferred_ip_address(client_ip_address)
+
+        if preferred_ip:
+            location = fetch_location_by_ip(preferred_ip)
+        else:
+            location = "Unknown"
+
+        user_agent_string = request.headers.get("User-Agent")
+        user_agent = parse(user_agent_string)
+        browser_type = (
+            user_agent.browser.family + " " + user_agent.browser.version_string
+        )
+        client_platform = user_agent.os.family
+
+        send_alert_confirmation(
+            user_email,
+            confirmation_url,
+            f"{preferred_ip} ({location})",
+            browser_type,
+            client_platform,
+        )
+
+        return make_response(jsonify({"Success": "Subscription Successful"}), 200)
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
         abort(404)
-
-
-#        return make_response(jsonify({"Error": "An error occurred"}), 500)
 
 
 @XON.route("/v1/verifyme/<verification_token>", methods=["GET"])
@@ -2529,7 +2523,10 @@ def alert_me_verification(verification_token):
         alert_task = datastore_client.get(alert_key)
 
         if alert_task["verified"]:
-            return error_template
+            with datastore_client.transaction():
+                alert_task["recent_timestamp"] = datetime.datetime.now()
+                alert_task["token"] = verification_token
+                datastore_client.put(alert_task)
         else:
             with datastore_client.transaction():
                 alert_task["verify_timestamp"] = datetime.datetime.now()
@@ -2537,21 +2534,21 @@ def alert_me_verification(verification_token):
                 alert_task["token"] = verification_token
                 datastore_client.put(alert_task)
 
-            exposure_info = get_exposure(user_email).strip()
-            sensitive_exposure_info = get_sensitive_exposure(user_email).strip()
+        exposure_info = get_exposure(user_email).strip()
+        sensitive_exposure_info = get_sensitive_exposure(user_email).strip()
 
-            if len(exposure_info) == 0 and len(sensitive_exposure_info) == 0:
-                return verification_template
-            else:
-                base_url = "https://xposedornot.com/"
-                email_param = f"email={user_email}"
-                token_param = f"&token={verification_token}"
-                breaches_link = (
-                    base_url + "email-report.html?" + email_param + "&" + token_param
-                )
-                return render_template(
-                    "email_success.html", breaches_link=breaches_link
-                )
+        if len(exposure_info) == 0 and len(sensitive_exposure_info) == 0:
+            return verification_template
+        else:
+            base_url = "https://xposedornot.com/"
+            email_param = f"email={user_email}"
+            token_param = f"&token={verification_token}"
+            breaches_link = (
+                base_url + "email-report.html?" + email_param + "&" + token_param
+            )
+            return render_template(
+                "email_success.html", breaches_link=breaches_link
+            )
 
     except Exception as exception_details:
         log_except(request.url, exception_details)
@@ -2564,22 +2561,16 @@ def send_verification():
     """Verify and send confirmation for report access."""
     try:
         verification_token = request.args.get("token", default="None")
-        if (
-            verification_token != "None"
-            and not validate_variables(verification_token)
-            or not validate_url()
-        ):
-            return make_response(jsonify({"status": "Failed"}), 200)
-
-        user_email = request.args.get("email").lower()
+        user_email = request.args.get("email", "").lower()
 
         if (
-            not verification_token
+            not validate_url()
+            or not user_email
             or not validate_email_with_tld(user_email)
-            or not validate_variables(verification_token)
-            or not validate_url()
+            or (verification_token != "None" and not validate_variables(verification_token))
         ):
             return make_response(jsonify({"status": "Failed"}), 200)
+
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
