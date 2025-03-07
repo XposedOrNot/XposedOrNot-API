@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-""" XposedOrNot Cloudflare API module """
+"""XposedOrNot Cloudflare API module"""
 
 import json
 import datetime

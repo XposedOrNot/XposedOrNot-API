@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-""" XposedOrNot Mailer Sub-module API module using Mailjet """
+"""XposedOrNot Mailer Sub-module API module using Mailjet"""
 
 import os
 import time
