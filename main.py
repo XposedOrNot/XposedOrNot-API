@@ -2,6 +2,7 @@
 
 """XposedOrNot API module"""
 
+
 # Standard Library Imports
 import datetime
 import hashlib
@@ -1754,66 +1755,85 @@ def send_domain_confirmation_email(
     )
 
 
+def list_transactions_for_domain(client, domain):
+    """Fetch transactions for a given domain"""
+    query = client.query(kind="xon")
+    query.add_filter("domain", "=", domain)
+
+    try:
+        return [tx for tx in query.fetch()]
+    except Exception as exception:
+        return []
+
+
 def process_single_domain(domain):
     """
     Processes transactions for a given domain, populates breach details, and updates a
     summary of breaches per domain.
     """
+
     client = datastore.Client()
+    domain_transactions = list_transactions_for_domain(client, domain)
 
-    def list_transactions_for_domain(domain):
-        client = datastore.Client()
-
-        # Create a query and add a filter based on the "domain" column
-        query = client.query(kind="xon")
-        query.add_filter("domain", "=", domain)
-
-        result = []
-
-        try:
-            result = [tx for tx in query.fetch()]
-        except Exception as exception:
-            return []
-
-        return result
-
-    domain_transactions = list_transactions_for_domain(domain)
+    breach_summary = defaultdict(int)
+    details_entities = {}
+    batch_size = 400
 
     if not domain_transactions:
         entity_key = client.key("xon_domains_summary", domain + "+No_Breaches")
         entity = datastore.Entity(key=entity_key)
         entity.update({"domain": domain, "breach": "No_Breaches", "email_count": 0})
         client.put(entity)
+        return
 
-    breach_summary = defaultdict(int)
+    processed_count = 0
+
     for tx in domain_transactions:
-        if "site" in tx and tx["site"]:
-            breaches = tx["site"].split(";")
-            for breach in breaches:
-                email_from_key = tx.key.name
-                entity_key = client.key(
-                    "xon_domains_details", breach + "_" + email_from_key
-                )
+        if not tx.get("site"):
+            continue
+
+        breaches = tx["site"].split(";")
+        for breach in breaches:
+            email_from_key = tx.key.name
+            entity_key_name = f"{breach}_{email_from_key}"
+
+            if entity_key_name not in details_entities:
+                entity_key = client.key("xon_domains_details", entity_key_name)
                 entity = datastore.Entity(key=entity_key)
                 entity.update(
                     {
-                        "breach_email": breach + "_" + email_from_key,
+                        "breach_email": entity_key_name,
                         "domain": domain,
                         "breach": breach,
                         "email": email_from_key,
                     }
                 )
-                client.put(entity)
+                details_entities[entity_key_name] = entity
                 breach_summary[(domain, breach)] += 1
-        else:
-            print(f"Transaction {tx.key.name} does not contain site information.")
 
+            if len(details_entities) >= batch_size:
+                client.put_multi(list(details_entities.values()))
+                processed_count += len(details_entities)
+                details_entities = {}
+
+    if details_entities:
+        client.put_multi(list(details_entities.values()))
+        processed_count += len(details_entities)
+
+    summary_entities = {}
     for (domain, breach), count in breach_summary.items():
-        entity_key = client.key("xon_domains_summary", domain + "+" + breach)
+        entity_key_name = f"{domain}+{breach}"
+        entity_key = client.key("xon_domains_summary", entity_key_name)
         entity = datastore.Entity(key=entity_key)
         entity.update({"domain": domain, "breach": breach, "email_count": count})
-        client.put(entity)
-    # TODO: Need to send an email afer processing completed
+        summary_entities[entity_key_name] = entity
+
+        if len(summary_entities) >= batch_size:
+            client.put_multi(list(summary_entities.values()))
+            summary_entities = {}
+
+    if summary_entities:
+        client.put_multi(list(summary_entities.values()))
 
 
 def get_ai_summary(breach_data):
