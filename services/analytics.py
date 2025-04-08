@@ -1,13 +1,17 @@
 """Analytics-related service functions."""
 
+# Standard library imports
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional
+
+# Third-party imports
 from fastapi import HTTPException
 from google.cloud import datastore
 from openai import OpenAI
-from datetime import datetime
+from openai import OpenAIError
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -18,6 +22,34 @@ ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Constants
 TEMPERATURE = 0.7  # OpenAI temperature parameter
+
+# AI prompts for breach data analysis
+AI_SYSTEM_PROMPT = (
+    "You are a cybersecurity expert providing clear, actionable insights about data breaches. "
+    "Summarize the breach details in a conversational tone, analytical and provide recommendations "
+    "based on risks. Avoid calling or referencing other security products or tools and keep "
+    "recommendations generic."
+)
+
+AI_USER_PROMPT_TEMPLATE = (
+    "Here is the breach data: {breach_data}. "
+    "Analyze and provide an insightful summary in a conversational tone with analytical data, "
+    "risks along with recommendations. Limit the recommendation to the user level only. "
+    "Start with a single para summarizing the breaches with title summary of key data breaches. "
+    "if the breaches are too large in count, talk about the ones with significant risk or size. "
+    "Next section should be the risk assessment. highlight the issues. "
+    "Call out all plain text password breaches. finally provide a recommendation with bullets "
+    "with title Recommendations for you. All topics can have titles in bold text. "
+    "also highlight text which needs focus or attention. Make the language simple and make it "
+    "humanized. all titles should start with these emojis. Add magnifying glass for summary, "
+    "red siren for risk assessment and blue shield for recommendations. add para breaks or "
+    "line breaks as appropriate and make it look presentable. after recommendations add a line "
+    "break and then give that final one liner or two as closure. finally you can also add one "
+    "additional line with a blog link to how to avoid account take over and what to do if your "
+    "data is breached - https://blog.xposedornot.com/what-should-you-do-after-data-breach/. "
+    "add line breaks <br> afer every section and one between section and subsequent text. "
+    "Use markdown for easy readability and highlight essential points."
+)
 
 
 def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
@@ -471,7 +503,7 @@ def get_breaches_data(breaches: str) -> dict:
 
             if months_difference < 6:
                 last_breach_months = 3
-            elif months_difference >= 6 and months_difference <= 12:
+            elif 6 <= months_difference <= 12:
                 last_breach_months = 2
             else:
                 last_breach_months = 1
@@ -753,32 +785,9 @@ def _combine_metrics(regular_metrics: Dict, sensitive_metrics: Dict) -> Dict:
 def get_ai_summary(breach_data: Dict[str, Any]) -> str:
     """Generate AI-powered summary of breach data."""
     try:
-        system_prompt = (
-            "You are a cybersecurity expert providing clear, actionable insights about data breaches. "
-            "Summarize the breach details in a conversational tone, analytical and provide recommendations "
-            "based on risks. Avoid calling or referencing other security products or tools and keep "
-            "recommendations generic."
-        )
+        system_prompt = AI_SYSTEM_PROMPT
 
-        user_prompt = (
-            f"Here is the breach data: {json.dumps(breach_data, indent=2)}. "
-            "Analyze and provide an insightful summary in a conversational tone with analytical data, "
-            "risks along with recommendations. Limit the recommendation to the user level only. "
-            "Start with a single para summarizing the breaches with title summary of key data breaches. "
-            "if the breaches are too large in count, talk about the ones with significant risk or size. "
-            "Next section should be the risk assessment. highlight the issues. "
-            "Call out all plain text password breaches. finally provide a recommendation with bullets "
-            "with title Recommendations for you. All topics can have titles in bold text. "
-            "also highlight text which needs focus or attention. Make the language simple and make it "
-            "humanized. all titles should start with these emojis. Add magnifying glass for summary, "
-            "red siren for risk assessment and blue shield for recommendations. add para breaks or "
-            "line breaks as appropriate and make it look presentable. after recommendations add a line "
-            "break and then give that final one liner or two as closure. finally you can also add one "
-            "additional line with a blog link to how to avoid account take over and what to do if your "
-            "data is breached - https://blog.xposedornot.com/what-should-you-do-after-data-breach/. "
-            "add line breaks <br> afer every section and one between section and subsequent text. "
-            "Use markdown for easy readability and highlight essential points."
-        )
+        user_prompt = AI_USER_PROMPT_TEMPLATE.format(breach_data=json.dumps(breach_data, indent=2))
 
         response = ai_client.chat.completions.create(
             messages=[
@@ -789,7 +798,7 @@ def get_ai_summary(breach_data: Dict[str, Any]) -> str:
             temperature=TEMPERATURE,
         )
         return response.choices[0].message.content
-    except Exception as e:
+    except (ValueError, KeyError, json.JSONDecodeError, OpenAIError) as e:
         return "Error fetching AI summary: " + str(e)
 
 
@@ -867,7 +876,7 @@ async def get_pulse_news() -> List[Dict[str, Any]]:
         raise HTTPException(status_code=404, detail=detail_msg) from e
 
 
-async def get_breaches_analytics(site: str, paste_data: str = "") -> Dict[str, Any]:
+async def get_breaches_analytics(site: str) -> Dict[str, Any]:
     """Returns analytics of data breaches for a given site."""
     try:
         ds_client = datastore.Client()

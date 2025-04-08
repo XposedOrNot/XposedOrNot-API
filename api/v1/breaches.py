@@ -1,12 +1,11 @@
 """Breach-related API endpoints."""
 
 # Standard library imports
-import html
+import json
 import logging
 import sys
 from datetime import datetime
-from typing import Optional, Union, List
-import json
+from typing import Optional, Union
 
 # Third-party imports
 from fastapi import APIRouter, HTTPException, Request, Header, Query, Path
@@ -15,6 +14,31 @@ from google.cloud import datastore
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+# Local imports
+from config.settings import MAX_EMAIL_LENGTH
+from models.responses import (
+    BreachAnalyticsResponse,
+    BreachAnalyticsV2Response,
+    BreachDetailResponse,
+    BreachListResponse,
+    DomainBreachSummaryResponse,
+    EmailBreachErrorResponse,
+    EmailBreachResponse,
+    EmptyBreachResponse,
+)
+from services.analytics import (
+    get_ai_summary,
+    get_summary_and_metrics,
+)
+from services.breach import get_exposure, get_sensitive_exposure
+from utils.helpers import (
+    string_to_boolean,
+    validate_domain,
+    validate_email_with_tld,
+    validate_url,
+)
+from utils.validation import validate_variables
+
 # Configure logging with more detailed format
 logging.basicConfig(
     level=logging.DEBUG,
@@ -22,33 +46,6 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
-
-# Local imports
-from models.responses import (
-    BreachAnalyticsResponse,
-    BreachAnalyticsV2Response,
-    EmptyBreachResponse,
-    BreachListResponse,
-    BreachDetailResponse,
-    EmailBreachResponse,
-    EmailBreachErrorResponse,
-    DomainBreachSummaryResponse,
-)
-from services.breach import get_exposure, get_sensitive_exposure
-from services.analytics import (
-    get_summary_and_metrics,
-    get_ai_summary,
-    get_breaches,
-    get_breaches_data,
-)
-from utils.helpers import (
-    validate_email_with_tld,
-    validate_url,
-    validate_domain,
-    string_to_boolean,
-)
-from utils.validation import validate_variables
-from config.settings import MAX_EMAIL_LENGTH
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -407,16 +404,16 @@ async def search_data_breaches(
                 ExposedPastes=exposed_pastes,
                 PasteMetrics=paste_metrics,
             )
-        else:
-            logger.debug("\n[BREACH-ANALYTICS][9] No summary data found")
-            return BreachAnalyticsResponse(
-                BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
-                PastesSummary={"cnt": 0, "domain": "", "tmpstmp": ""},
-                ExposedBreaches=None,
-                ExposedPastes=None,
-                BreachMetrics=None,
-                PasteMetrics=None,
-            )
+        
+        logger.debug("\n[BREACH-ANALYTICS][9] No summary data found")
+        return BreachAnalyticsResponse(
+            BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
+            PastesSummary={"cnt": 0, "domain": "", "tmpstmp": ""},
+            ExposedBreaches=None,
+            ExposedPastes=None,
+            BreachMetrics=None,
+            PasteMetrics=None,
+        )
 
     except Exception as e:
         logger.error(
@@ -614,8 +611,6 @@ async def get_domain_breach_summary(
                     "[DOMAIN-BREACH-SUMMARY] Latest breach date: %s", breach_last_seen
                 )
 
-        total = emails_count + pastes_count
-
         breaches_dict = {
             "breaches_details": [
                 {
@@ -669,5 +664,5 @@ def _format_log_data(data):
         # Format with compact separators and no extra whitespace
         return json.dumps(prepared_data, separators=(",", ":"))
 
-    except Exception as e:
-        return "Error formatting data: %s" % str(e)
+    except (ValueError, TypeError, KeyError) as e:
+        return f"Error formatting data: {str(e)}"

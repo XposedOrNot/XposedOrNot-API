@@ -5,16 +5,15 @@ import datetime
 import html
 import logging
 from collections import defaultdict
-from typing import Optional, Union, Dict, Any, List
+from typing import Optional, Union, Dict, Any
 
 # Third-party imports
-from fastapi import APIRouter, HTTPException, Request, Depends, Query
+from fastapi import APIRouter, HTTPException, Request, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from google.cloud import datastore
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from user_agents import parse
 
 # Local imports
 from models.responses import (
@@ -22,22 +21,17 @@ from models.responses import (
     PulseNewsResponse,
     DomainAlertResponse,
     DomainAlertErrorResponse,
-    DomainVerifyResponse,
-    DomainVerifyErrorResponse,
     DomainBreachesResponse,
     DomainBreachesErrorResponse,
     BreachDetails,
     DetailedBreachInfo,
     ShieldActivationResponse,
     ShieldActivationErrorResponse,
-    ShieldVerificationResponse,
-    ShieldVerificationErrorResponse,
     BreachHierarchyResponse,
 )
 from services.analytics import (
     get_detailed_metrics,
     get_pulse_news,
-    get_breaches_analytics,
 )
 from services.send_email import send_dashboard_email_confirmation, send_shield_email
 from utils.validation import validate_email_with_tld, validate_url, validate_variables
@@ -200,7 +194,7 @@ async def domain_alert(
 
         return DomainAlertResponse()
 
-    except Exception as e:
+    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as e:
         logging.error("[DOMAIN-ALERT] Unexpected error: %s", str(e), exc_info=True)
         return DomainAlertErrorResponse(
             Error=f"Internal error: {str(e)}", email=user_email
@@ -267,15 +261,13 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
             status_code=200,
         )
 
-    except Exception as e:
-        logging.error(
-            "[DOMAIN-VERIFY] Error processing request: %s", str(e), exc_info=True
-        )
+    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as e:
+        logging.error("[DOMAIN-VERIFY] Unexpected error: %s", str(e), exc_info=True)
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "domain_dashboard_error.html", {"request": request}
             ).body.decode(),
-            status_code=500,
+            status_code=404,
         )
 
 
@@ -330,7 +322,7 @@ async def send_domain_breaches(
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
             tzinfo=None
         ) > datetime.timedelta(hours=24):
-            logging.error(f"[DOMAIN-BREACHES] Session expired for email: {email}")
+            logging.error("[DOMAIN-BREACHES] Session expired for email: %s", email)
             return DomainBreachesErrorResponse(Error="Session expired")
 
         # Get verified domains
@@ -495,11 +487,9 @@ async def send_domain_breaches(
         )
         return response
 
-    except Exception as e:
-        logging.error(
-            "[DOMAIN-BREACHES] Error processing request: %s", str(e), exc_info=True
-        )
-        return DomainBreachesErrorResponse(Error=str(e))
+    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as e:
+        logging.error("[DOMAIN-BREACHES] Unexpected error: %s", str(e), exc_info=True)
+        return DomainBreachesErrorResponse(Error=f"Internal error: {str(e)}")
 
 
 @router.get(
@@ -599,9 +589,9 @@ async def activate_shield(
         logging.error("[SHIELD-ON] Unexpected state for email: %s", email)
         return ShieldActivationErrorResponse(Error="Unexpected state")
 
-    except Exception as e:
-        logging.error("[SHIELD-ON] Error processing request: %s", str(e), exc_info=True)
-        return ShieldActivationErrorResponse(Error=str(e))
+    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as e:
+        logging.error("[SHIELD-ON] Unexpected error: %s", str(e), exc_info=True)
+        return ShieldActivationErrorResponse(Error=f"Internal error: {str(e)}")
 
 
 @router.get(
@@ -678,10 +668,8 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
             status_code=200,
         )
 
-    except Exception as e:
-        logging.error(
-            "[SHIELD-VERIFY] Error processing request: %s", str(e), exc_info=True
-        )
+    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as e:
+        logging.error("[SHIELD-VERIFY] Error processing request: %s", str(e), exc_info=True)
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "email_shield_error.html", {"request": request}
@@ -826,6 +814,8 @@ async def get_analytics(
     except ShieldOnException:
         return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
-    except Exception as e:
-        logging.error("[ANALYTICS] Error processing request: %s", str(e), exc_info=True)
-        return JSONResponse(content={"Error": "Not found"}, status_code=404)
+    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as e:
+        logging.error("[ANALYTICS] Unexpected error: %s", str(e), exc_info=True)
+        return JSONResponse(
+            content={"status": "error", "message": str(e)}, status_code=500
+        )

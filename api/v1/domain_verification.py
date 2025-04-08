@@ -1,31 +1,32 @@
 """Domain verification endpoints and utilities."""
 
-import json
-import threading
+# Standard library imports
 import re
-from datetime import datetime
+import threading
 from collections import defaultdict
-from typing import Optional, Union, List
-import requests
+from datetime import datetime
+from typing import List, Union
+
+# Third-party imports
 import domcheck
 import httpx
-from fastapi import APIRouter, Request, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Request
 from google.cloud import datastore
+from pydantic import EmailStr
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from user_agents import parse
-from pydantic import BaseModel, EmailStr
 
+# Local imports
+from config.settings import XMLAPI_KEY
 from models.base import BaseResponse
-from utils.validation import validate_variables, validate_email_with_tld, validate_url
-from utils.request import get_client_ip, get_user_agent_info
 from services.send_email import (
     send_domain_confirmation,
     send_domain_verified_success,
 )
-from utils.token import generate_confirmation_token
-from config.settings import XMLAPI_KEY
 from utils.helpers import fetch_location_by_ip
+from utils.request import get_client_ip, get_user_agent_info
+from utils.token import generate_confirmation_token
+from utils.validation import validate_email_with_tld, validate_variables
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -80,7 +81,7 @@ def list_transactions_for_domain(client: datastore.Client, domain: str) -> List[
     query.add_filter("domain", "=", domain)
     try:
         return list(query.fetch())
-    except Exception:
+    except (datastore.exceptions.GoogleAPIError, ValueError) as err:
         return []
 
 
@@ -203,7 +204,7 @@ async def check_emails(domain: str) -> DomainVerificationResponse:
         )
 
 
-async def verify_email(domain: str, email: str) -> DomainVerificationResponse:
+async def verify_email(domain: str, email: str, request: Request) -> DomainVerificationResponse:
     """Verify email against domain's WHOIS record."""
     try:
         async with httpx.AsyncClient() as client:
@@ -236,7 +237,6 @@ async def verify_email(domain: str, email: str) -> DomainVerificationResponse:
 
                 # Get client information
                 client_ip_address = get_client_ip(request)
-                location = fetch_location_by_ip(client_ip_address)
                 browser_type, client_platform = get_user_agent_info(request)
 
                 await send_domain_confirmation_email(
@@ -245,12 +245,12 @@ async def verify_email(domain: str, email: str) -> DomainVerificationResponse:
                 return DomainVerificationResponse(
                     status="success", domainVerification="Success"
                 )
-            else:
-                return DomainVerificationResponse(
-                    status="error", domainVerification="Failure"
-                )
-    except Exception as e:
-        print(f"Error in verify_email: {str(e)}")
+            
+            return DomainVerificationResponse(
+                status="error", domainVerification="Failure"
+            )
+    except (httpx.RequestError, httpx.HTTPError, ValueError) as err:
+        print(f"Unexpected error occurred: {str(err)}")
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
@@ -275,7 +275,6 @@ async def verify_dns(
         threading.Thread(target=process_single_domain, args=(domain,)).start()
 
         client_ip_address = get_client_ip(request)
-        location = fetch_location_by_ip(client_ip_address)
         browser_type, client_platform = get_user_agent_info(request)
 
         await send_domain_verified_success(
@@ -284,8 +283,8 @@ async def verify_dns(
         return DomainVerificationResponse(
             status="success", domainVerification="Success"
         )
-    else:
-        return DomainVerificationResponse(status="error", domainVerification="Failure")
+    
+    return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
 async def verify_html(
@@ -318,7 +317,6 @@ async def verify_html(
         threading.Thread(target=process_single_domain, args=(domain,)).start()
 
         client_ip_address = get_client_ip(request)
-        location = fetch_location_by_ip(client_ip_address)
         browser_type, client_platform = get_user_agent_info(request)
 
         await send_domain_verified_success(
@@ -327,9 +325,9 @@ async def verify_html(
         return DomainVerificationResponse(
             status="success", domainVerification="Success"
         )
-    else:
-        print(f"HTML verification failed for domain: {domain}")
-        return DomainVerificationResponse(status="error", domainVerification="Failure")
+    
+    print(f"HTML verification failed for domain: {domain}")
+    return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
 async def check_file(domain: str, prefix: str, code: str) -> bool:
@@ -383,13 +381,9 @@ async def check_file(domain: str, prefix: str, code: str) -> bool:
             else:
                 print(f"Non-200 status code received: {response.status_code}")
 
-    except httpx.RequestError as exception_details:
-        print(f"Request exception occurred: {str(exception_details)}")
-    except Exception as e:
-        print(f"Unexpected error occurred: {str(e)}")
-
-    print("Verification failed")
-    return False
+    except (httpx.RequestError, httpx.HTTPError, ValueError) as err:
+        print(f"Unexpected error occurred: {str(err)}")
+        return False
 
 
 @router.get("/domain_verification", response_model=DomainVerificationResponse)
@@ -418,10 +412,10 @@ async def domain_verification(
             return await verify_dns(d, a, v, prefix, request)
         elif z == "a":
             return await verify_html(d, a, v, prefix, request)
-        else:
-            return DomainVerificationResponse(
-                status="error", domainVerification="Failure"
-            )
+        
+        return DomainVerificationResponse(
+            status="error", domainVerification="Failure"
+        )
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail="Verification failed")
+        raise HTTPException(status_code=404, detail="Verification failed") from e
