@@ -838,9 +838,7 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(
-            "Error processing analytics: %s", str(e), exc_info=True
-        )
+        logger.error("Error processing analytics: %s", str(e), exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
@@ -865,7 +863,9 @@ async def get_pulse_news() -> List[Dict[str, Any]]:
 
     except Exception as e:
         logger.error("Error fetching news feed: %s", str(e), exc_info=True)
-        raise HTTPException(status_code=404, detail=f"Error fetching news feed: {str(e)}") from e
+        raise HTTPException(
+            status_code=404, detail=f"Error fetching news feed: {str(e)}"
+        ) from e
 
 
 async def get_breaches_analytics(site: str, paste_data: str = "") -> Dict[str, Any]:
@@ -904,7 +904,5 @@ async def get_breaches_analytics(site: str, paste_data: str = "") -> Dict[str, A
         }
 
     except Exception as e:
-        logger.error(
-            "Error processing analytics: %s", str(e), exc_info=True
-        )
+        logger.error("Error processing analytics: %s", str(e), exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e

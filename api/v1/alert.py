@@ -117,7 +117,8 @@ async def subscribe_to_alert_me(
                 )
                 datastore_client.put(alert_task_data)
                 logger.debug(
-                    "[ALERT] New alert task created and stored for email: %s", user_email
+                    "[ALERT] New alert task created and stored for email: %s",
+                    user_email,
                 )
 
         # IP Address detection
@@ -278,11 +279,11 @@ async def alert_me_verification(verification_token: str, request: Request):
         if not has_exposure and not has_sensitive_exposure:
             logger.debug("[VERIFY] No exposures found for email: %s", user_email)
             return templates.TemplateResponse("email_verify.html", {"request": request})
-        
+
         # If exposures are found
         logger.debug(
             "[VERIFY] Exposures found for email: %s, generating breach report link",
-            user_email
+            user_email,
         )
         base_url = "https://xposedornot.com/"
         email_param = f"email={user_email}"

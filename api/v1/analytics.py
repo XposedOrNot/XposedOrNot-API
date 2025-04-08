@@ -192,7 +192,7 @@ async def domain_alert(
             logging.info(
                 "[DOMAIN-ALERT] Email sent successfully to %s. Response: %s",
                 user_email,
-                email_response
+                email_response,
             )
         except Exception as e:
             logging.error("[DOMAIN-ALERT] Failed to send email: %s", str(e))
@@ -232,8 +232,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
             or not validate_url(request)
         ):
             logging.error(
-                "[DOMAIN-VERIFY] Invalid token or URL: %s...",
-                verification_token[:10]
+                "[DOMAIN-VERIFY] Invalid token or URL: %s...", verification_token[:10]
             )
             return HTMLResponse(
                 content=templates.TemplateResponse(
@@ -270,9 +269,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
 
     except Exception as e:
         logging.error(
-            "[DOMAIN-VERIFY] Error processing request: %s",
-            str(e),
-            exc_info=True
+            "[DOMAIN-VERIFY] Error processing request: %s", str(e), exc_info=True
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -301,7 +298,9 @@ async def send_domain_breaches(
     Retrieves and sends the data breaches validated by token and email.
 
     """
-    logging.info("[DOMAIN-BREACHES] Starting domain breaches check for email: %s", email)
+    logging.info(
+        "[DOMAIN-BREACHES] Starting domain breaches check for email: %s", email
+    )
     try:
         # Check for presence of email and token
         if email is None or token is None:
@@ -315,8 +314,7 @@ async def send_domain_breaches(
             or not validate_url(request)
         ):
             logging.error(
-                "[DOMAIN-BREACHES] Invalid email or token for email: %s",
-                email
+                "[DOMAIN-BREACHES] Invalid email or token for email: %s", email
             )
             return DomainBreachesErrorResponse(Error="Invalid email or token")
 
@@ -342,8 +340,7 @@ async def send_domain_breaches(
 
         if not verified_domains:
             logging.warning(
-                "[DOMAIN-BREACHES] No verified domains found for email: %s",
-                email
+                "[DOMAIN-BREACHES] No verified domains found for email: %s", email
             )
             return DomainBreachesErrorResponse(Error="No verified domains found")
 
@@ -494,16 +491,13 @@ async def send_domain_breaches(
         )
 
         logging.info(
-            "[DOMAIN-BREACHES] Successfully retrieved breach data for email: %s",
-            email
+            "[DOMAIN-BREACHES] Successfully retrieved breach data for email: %s", email
         )
         return response
 
     except Exception as e:
         logging.error(
-            "[DOMAIN-BREACHES] Error processing request: %s",
-            str(e),
-            exc_info=True
+            "[DOMAIN-BREACHES] Error processing request: %s", str(e), exc_info=True
         )
         return DomainBreachesErrorResponse(Error=str(e))
 
@@ -564,7 +558,9 @@ async def activate_shield(
                     }
                 )
                 datastore_client.put(alert_entity)
-                logging.info("[SHIELD-ON] Created new alert entity for email: %s", email)
+                logging.info(
+                    "[SHIELD-ON] Created new alert entity for email: %s", email
+                )
 
             # Get client information
             client_ip = get_client_ip(request)
@@ -633,8 +629,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
             or not validate_url(request)
         ):
             logging.error(
-                "[SHIELD-VERIFY] Invalid token or URL: %s...",
-                token_shield[:10]
+                "[SHIELD-VERIFY] Invalid token or URL: %s...", token_shield[:10]
             )
             return HTMLResponse(
                 content=templates.TemplateResponse(
@@ -685,9 +680,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
 
     except Exception as e:
         logging.error(
-            "[SHIELD-VERIFY] Error processing request: %s",
-            str(e),
-            exc_info=True
+            "[SHIELD-VERIFY] Error processing request: %s", str(e), exc_info=True
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -792,13 +785,10 @@ async def get_breach_hierarchy_analytics(
         return get_details
     except Exception as e:
         logging.error(
-            "[BREACH-HIERARCHY] Error processing breaches: %s",
-            str(e),
-            exc_info=True
+            "[BREACH-HIERARCHY] Error processing breaches: %s", str(e), exc_info=True
         )
         raise HTTPException(
-            status_code=404,
-            detail="Error processing breach data"
+            status_code=404, detail="Error processing breach data"
         ) from e
 
 
@@ -830,7 +820,7 @@ async def get_analytics(
             site = str(xon_record["site"])
             breach_hierarchy = await get_breach_hierarchy_analytics(site, "")
             return BreachHierarchyResponse(**breach_hierarchy)
-            
+
         return JSONResponse(content=None)
 
     except ShieldOnException:

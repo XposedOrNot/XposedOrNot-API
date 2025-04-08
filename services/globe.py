@@ -42,14 +42,16 @@ async def get_geolocation(ip: str) -> Optional[Dict[str, Any]]:
                     "lat": data.get("lat", 0.0),
                     "lon": data.get("lon", 0.0),
                 }
-            
+
             logger.warning("Failed to get geolocation for IP %s: %s", ip, data)
             return None
     except httpx.HTTPError as e:
         logger.error("HTTP error in geolocation request for IP %s: %s", ip, str(e))
         return None
     except Exception as e:
-        logger.error("Unexpected error in geolocation request for IP %s: %s", ip, str(e))
+        logger.error(
+            "Unexpected error in geolocation request for IP %s: %s", ip, str(e)
+        )
         return None
 
 

@@ -235,12 +235,12 @@ async def search_data_breaches(
         logger.debug("[BREACH-ANALYTICS] Input validation failed")
         logger.debug(
             "[BREACH-ANALYTICS] Email valid: %s",
-            bool(email and validate_email_with_tld(email))
+            bool(email and validate_email_with_tld(email)),
         )
         logger.debug("[BREACH-ANALYTICS] URL valid: %s", bool(validate_url(request)))
         logger.debug(
             "[BREACH-ANALYTICS] Length valid: %s",
-            bool(email and len(email) <= MAX_EMAIL_LENGTH)
+            bool(email and len(email) <= MAX_EMAIL_LENGTH),
         )
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -536,11 +536,10 @@ async def get_domain_breach_summary(
             logger.debug("[DOMAIN-BREACH-SUMMARY] Input validation failed")
             logger.debug(
                 "[DOMAIN-BREACH-SUMMARY] Domain valid: %s",
-                bool(d and validate_domain(d))
+                bool(d and validate_domain(d)),
             )
             logger.debug(
-                "[DOMAIN-BREACH-SUMMARY] URL valid: %s",
-                bool(validate_url(request))
+                "[DOMAIN-BREACH-SUMMARY] URL valid: %s", bool(validate_url(request))
             )
             raise HTTPException(status_code=404, detail="Not found")
 
@@ -579,7 +578,7 @@ async def get_domain_breach_summary(
         logger.debug(
             "[DOMAIN-BREACH-SUMMARY] Found %s unique emails and %s unique breaches",
             emails_count,
-            breach_count
+            breach_count,
         )
 
         # Query paste records
@@ -636,7 +635,9 @@ async def get_domain_breach_summary(
 
     except Exception as e:
         logger.error(
-            "[DOMAIN-BREACH-SUMMARY] Error processing request: %s", str(e), exc_info=True
+            "[DOMAIN-BREACH-SUMMARY] Error processing request: %s",
+            str(e),
+            exc_info=True,
         )
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -652,11 +653,9 @@ def _prepare_for_logging(data):
         return [_prepare_for_logging(item) for item in data]
     elif hasattr(data, "isoformat"):  # Handle datetime objects
         return data.isoformat()
-    
+
     return (
-        str(data)
-        if not isinstance(data, (str, int, float, bool, type(None)))
-        else data
+        str(data) if not isinstance(data, (str, int, float, bool, type(None))) else data
     )
 
 
@@ -669,6 +668,6 @@ def _format_log_data(data):
         prepared_data = _prepare_for_logging(data)
         # Format with compact separators and no extra whitespace
         return json.dumps(prepared_data, separators=(",", ":"))
-    
+
     except Exception as e:
         return "Error formatting data: %s" % str(e)

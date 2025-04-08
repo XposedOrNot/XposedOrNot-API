@@ -85,14 +85,12 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
         if user_data is not None:
             logger.debug("[GET-EXPOSURE] Found user data")
             return dict(user_data)
-        
+
         logger.debug("[GET-EXPOSURE] No user data found in datastore")
         return {}
     except Exception as exception_details:
         logger.error(
-            "[GET-EXPOSURE] Error fetching data: %s",
-            exception_details,
-            exc_info=True
+            "[GET-EXPOSURE] Error fetching data: %s", exception_details, exc_info=True
         )
         print(f"An error occurred while fetching data: {exception_details}")
         return {}
@@ -101,8 +99,7 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
 async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
     """Get sensitive exposure data for a user."""
     logger.debug(
-        "[GET-SENSITIVE] Starting sensitive exposure check for email: %s",
-        user_email
+        "[GET-SENSITIVE] Starting sensitive exposure check for email: %s", user_email
     )
     try:
         datastore_client = datastore.Client()
@@ -112,14 +109,12 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
         if user_data is not None:
             logger.debug("[GET-SENSITIVE] Found sensitive data")
             return dict(user_data)
-        
+
         logger.debug("[GET-SENSITIVE] No sensitive data found")
         return {}
     except Exception as e:
         logger.error(
-            "[GET-SENSITIVE] Error fetching sensitive data: %s",
-            str(e),
-            exc_info=True
+            "[GET-SENSITIVE] Error fetching sensitive data: %s", str(e), exc_info=True
         )
         return {}
 

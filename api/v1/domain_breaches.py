@@ -68,9 +68,7 @@ class DomainBreachesResponse(BaseResponse):
         "Breach_Summary": Dict[str, int],
         "Breaches_Details": List[BreachSummary],
         "Top10_Breaches": Dict[str, int],
-        "Detailed_Breach_Info": Dict[
-            str, Dict
-        ], 
+        "Detailed_Breach_Info": Dict[str, Dict],
     }
 
 
@@ -92,14 +90,13 @@ async def protected(
     """Retrieves the data breaches and related metrics for an API-key"""
     try:
         logger.debug(
-            "Starting domain breaches request with API key: %s...",
-            x_api_key[:4]
+            "Starting domain breaches request with API key: %s...", x_api_key[:4]
         )
 
         if not x_api_key or x_api_key.strip() == "" or not validate_url(request):
             logger.error(
                 "Invalid API key or URL validation failed. API key: %s...",
-                x_api_key[:4]
+                x_api_key[:4],
             )
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 

@@ -119,7 +119,9 @@ async def send_alert_confirmation(
                 )
 
                 if response.status_code != 200:
-                    logging.error("Failed to send alert confirmation: %s", response.text)
+                    logging.error(
+                        "Failed to send alert confirmation: %s", response.text
+                    )
                     raise HTTPException(
                         status_code=500, detail="Failed to send alert confirmation"
                     )
@@ -433,11 +435,11 @@ async def send_subscribe_leaks_initial(email: str, confirm_url: str) -> Dict[str
 
 
 async def send_databreach_alertme(
-    email: str, 
-    breach: str, 
-    date: str, 
+    email: str,
+    breach: str,
+    date: str,
     description: str,
-    confirm_url: Optional[str] = None
+    confirm_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Sends XposedOrNot Databreach Alert Email

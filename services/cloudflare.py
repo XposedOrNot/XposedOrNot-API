@@ -269,8 +269,8 @@ async def unblock() -> CloudflareResponse:
         raise HTTPException(
             status_code=500,
             detail={
-                "status": "error", 
-                "message": f"HTTP error during unblock operation: {str(e)}"
+                "status": "error",
+                "message": f"HTTP error during unblock operation: {str(e)}",
             },
         ) from e
     except Exception as e:
