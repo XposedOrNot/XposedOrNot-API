@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+    <link type="text/css" rel="stylesheet" href="{{ swagger_css_url }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Root variables */
+        :root {
+            --primary-color: #1a73e8;
+            --secondary-color: #174ea6;
+            --accent-color: #4285f4;
+            --background-color: #f0f2f5;
+            --text-color: #202124;
+            --border-radius: 12px;
+            --box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+        }
+
+        /* Main container */
+        .swagger-ui .wrapper {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Info section styling */
+        .swagger-ui .info {
+            background: #fff;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .swagger-ui .info .title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin: 0;
+        }
+
+        /* Improved version badge styling */
+        .swagger-ui .info .version {
+            /*background: #f5f5f5;*/
+            color: #333;
+            padding: 0.4rem 0.8rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border: 1px solid #ddd;
+            align-self: flex-start;
+        }
+
+        .swagger-ui .info .description {
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #5f6368;
+        }
+
+        /* Operation block styling */
+        .swagger-ui .opblock {
+            background: #fff;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            border: 1px solid #e8eaed;
+            margin-bottom: 1rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .swagger-ui .opblock:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .swagger-ui .opblock .opblock-summary {
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .swagger-ui .opblock .opblock-summary-method {
+            background: var(--primary-color);
+            color: #fff;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+
+        .swagger-ui .opblock-description-wrapper p {
+            padding: 0 1rem 1rem;
+            font-size: 1rem;
+            color: #5f6368;
+        }
+
+        /* Scheme selection styling */
+        .swagger-ui .scheme-container {
+            background: #fff;
+            border: 1px solid #e8eaed;
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: var(--box-shadow);
+        }
+
+        .swagger-ui select {
+            border: 1px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            padding: 0.5rem 1rem;
+            background: #fff;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .swagger-ui select:hover {
+            border-color: var(--primary-color);
+        }
+
+        .swagger-ui select:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+        }
+
+        /* Table styling improvements */
+        .swagger-ui table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .swagger-ui table thead th {
+            background: #f1f3f4;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .swagger-ui table tbody td {
+            padding: 1rem;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .swagger-ui .wrapper {
+                padding: 10px;
+            }
+
+            .swagger-ui .info {
+                padding: 1rem;
+            }
+
+            .swagger-ui .info .title {
+                font-size: 2rem;
+            }
+        }
+
+        /* Scrollbar styling */
+        .swagger-ui ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .swagger-ui ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .swagger-ui ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .swagger-ui ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container">
+            <a class="navbar-brand" href="https://xposedornot.com">XposedOrNot</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://xposedornot.com/faq">FAQ</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://xposedornot.com/playground">API Playground</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="swagger-ui">
+        <div id="swagger-ui-container" class="wrapper">
+            <div id="swagger-ui"></div>
+        </div>
+    </div>
+    <script src="{{ swagger_js_url }}"></script>
+    <script>
+        window.onload = function () {
+            const ui = SwaggerUIBundle({
+                url: "{{ openapi_url }}",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                docExpansion: "list",
+                defaultModelsExpandDepth: 1,
+                displayOperationId: true,
+                filter: true,
+                showExtensions: true,
+                showCommonExtensions: true,
+                displayRequestDuration: true,
+                persistAuthorization: true,
+                tryItOutEnabled: true,
+                maxDisplayedTags: null,
+                syntaxHighlight: {
+                    theme: "monokai",
+                    activated: true,
+                },
+                layout: "BaseLayout",
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIBundle.SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                requestInterceptor: (req) => {
+                    return req;
+                },
+                modelPropertyMacro: null,
+                responseInterceptor: (res) => {
+                    return res;
+                },
+                onComplete: function () {
+                    const descriptionElement = document.querySelector('.swagger-ui .info .description');
+                    if (descriptionElement) {
+                        descriptionElement.innerHTML = descriptionElement.innerHTML
+                            .replace(/`([^`]+)`/g, '<code>$1</code>')
+                            .split('\n\n')
+                            .map(p => `<p>${p}</p>`)
+                            .join('');
+                    }
+                },
+                // Filter out analytics and default routes
+                tagsSorter: (tagA, tagB) => {
+                    if (tagA === 'analytics' || tagA === 'default') return 1;
+                    if (tagB === 'analytics' || tagB === 'default') return -1;
+                    return tagA.localeCompare(tagB);
+                },
+                // Filter function to exclude analytics and default routes
+                filterSpecSelector: (spec) => {
+                    const paths = spec.paths;
+                    const filteredPaths = {};
+
+                    for (const path in paths) {
+                        const operations = paths[path];
+                        let include = true;
+
+                        for (const method in operations) {
+                            const operation = operations[method];
+                            if (operation.tags && (operation.tags.includes('analytics') || operation.tags.includes('default'))) {
+                                include = false;
+                                break;
+                            }
+                        }
+
+                        if (include) {
+                            filteredPaths[path] = paths[path];
+                        }
+                    }
+
+                    spec.paths = filteredPaths;
+                    return spec;
+                }
+            });
+            window.ui = ui;
+        }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.2/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
