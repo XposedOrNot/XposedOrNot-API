@@ -1,8 +1,8 @@
 """Analytics-related service functions."""
 
 import json
-import os
 import logging
+import os
 from typing import Dict, List, Any, Tuple, Optional
 from fastapi import HTTPException
 from google.cloud import datastore
@@ -547,7 +547,7 @@ def get_breaches_data(breaches: str) -> dict:
         return metrics
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 async def get_summary_and_metrics(
@@ -805,7 +805,7 @@ async def get_detailed_metrics() -> Dict[str, Any]:
 
         breaches_count = metrics_data["breaches_count"]
         breaches_total_records = metrics_data["breaches_records"]
-        pastes_count = "{:,}".format(metrics_data["pastes_count"])
+        pastes_count = f"{metrics_data['pastes_count']:,}"
         pastes_total_records = metrics_data["pastes_records"]
 
         # Get all breaches for yearly count
@@ -838,7 +838,10 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        raise ValueError(f"Error fetching detailed metrics: {str(e)}") from e
+        logger.error(
+            "Error processing analytics: %s", str(e), exc_info=True
+        )
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 async def get_pulse_news() -> List[Dict[str, Any]]:
@@ -861,7 +864,8 @@ async def get_pulse_news() -> List[Dict[str, Any]]:
         return news_items
 
     except Exception as e:
-        raise ValueError(f"Error fetching news feed: {str(e)}") from e
+        logger.error("Error fetching news feed: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=404, detail=f"Error fetching news feed: {str(e)}") from e
 
 
 async def get_breaches_analytics(site: str, paste_data: str = "") -> Dict[str, Any]:
@@ -901,6 +905,6 @@ async def get_breaches_analytics(site: str, paste_data: str = "") -> Dict[str, A
 
     except Exception as e:
         logger.error(
-            f"[BREACHES-ANALYTICS] Error processing analytics: {str(e)}", exc_info=True
+            "Error processing analytics: %s", str(e), exc_info=True
         )
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e

@@ -31,10 +31,10 @@ topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
 async def get_geolocation(ip: str) -> Optional[Dict[str, Any]]:
     """Fetch city, latitude, and longitude for the given IP."""
-    GEOLOCATION_API_URL = f"http://ip-api.com/json/{ip}"
+    geolocation_api_url = f"http://ip-api.com/json/{ip}"
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(GEOLOCATION_API_URL, timeout=10.0)
+            response = await client.get(geolocation_api_url, timeout=10.0)
             data = response.json()
             if data["status"] == "success":
                 return {

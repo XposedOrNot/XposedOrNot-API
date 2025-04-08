@@ -65,10 +65,8 @@ async def verify_messaging_channel(
         channel_entity = datastore_client.get(channel_key)
 
         if not channel_entity:
-            raise HTTPException(
-                status_code=404,
-                detail=f"{platform.capitalize()} channel not found for domain {channel_data.domain}",
-            )
+            detail = f"{platform.capitalize()} channel not found for domain {channel_data.domain}"
+            raise HTTPException(status_code=404, detail=detail)
 
         channel_entity.update(
             {

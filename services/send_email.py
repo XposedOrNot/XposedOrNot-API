@@ -107,33 +107,33 @@ async def send_alert_confirmation(
                 # Log connectivity information for debugging
                 try:
                     ip_address = socket.gethostbyname("api.mailjet.com")
-                    logging.info(f"Resolved api.mailjet.com to {ip_address}")
+                    logging.info("Resolved api.mailjet.com to %s", ip_address)
                 except Exception as e:
-                    logging.error(f"Could not resolve api.mailjet.com: {str(e)}")
+                    logging.error("Could not resolve api.mailjet.com: %s", str(e))
 
                 logging.info(
-                    f"Attempting to connect to Mailjet API at {MAILJET_API_URL}"
+                    "Attempting to connect to Mailjet API at %s", MAILJET_API_URL
                 )
                 response = await client.post(
                     MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
                 )
 
                 if response.status_code != 200:
-                    logging.error(f"Failed to send alert confirmation: {response.text}")
+                    logging.error("Failed to send alert confirmation: %s", response.text)
                     raise HTTPException(
                         status_code=500, detail="Failed to send alert confirmation"
                     )
                 return response.json()
             except httpx.ConnectError as e:
-                logging.error(f"Connection error to Mailjet API: {str(e)}")
+                logging.error("Connection error to Mailjet API: %s", str(e))
                 raise HTTPException(
                     status_code=500,
                     detail="Unable to connect to email service. Check network connection and firewall settings.",
                 ) from e
     except Exception as e:
-        logging.error(f"Error sending alert confirmation: {str(e)}")
+        logging.error("Error sending alert confirmation: %s", str(e))
         raise HTTPException(
-            status_code=500, detail=f"Failed to send alert confirmation: {str(e)}"
+            status_code=500, detail="Failed to send alert confirmation: " + str(e)
         ) from e
 
 
@@ -433,11 +433,14 @@ async def send_subscribe_leaks_initial(email: str, confirm_url: str) -> Dict[str
 
 
 async def send_databreach_alertme(
-    email: str, confirm_url: str, breach: str, date: str, description: str
+    email: str, 
+    breach: str, 
+    date: str, 
+    description: str,
+    confirm_url: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Sends XposedOrNot Data Breach Alert
-
+    Sends XposedOrNot Databreach Alert Email
     """
     try:
         data = {

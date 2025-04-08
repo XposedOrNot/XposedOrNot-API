@@ -53,6 +53,8 @@ templates = Jinja2Templates(directory="templates")
 class ShieldOnException(Exception):
     """Exception raised when shield is on."""
 
+    pass
+
 
 @router.get("/analytics/metrics", response_model=DetailedMetricsResponse)
 @limiter.limit("5 per minute;100 per hour;500 per day")
@@ -268,8 +270,8 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
 
     except Exception as e:
         logging.error(
-            "[DOMAIN-VERIFY] Error processing request: %s", 
-            str(e), 
+            "[DOMAIN-VERIFY] Error processing request: %s",
+            str(e),
             exc_info=True
         )
         return HTMLResponse(
@@ -324,7 +326,7 @@ async def send_domain_breaches(
         alert_task = client.get(alert_key)
 
         if not alert_task or alert_task.get("domain_magic") != token:
-            logging.error(f"[DOMAIN-BREACHES] Invalid session for email: {email}")
+            logging.error("[DOMAIN-BREACHES] Invalid session for email: %s", email)
             return DomainBreachesErrorResponse(Error="Invalid session")
 
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
@@ -467,7 +469,7 @@ async def send_domain_breaches(
                 )
                 breach_node = {
                     "description": details,
-                    "tooltip": f"Click here for {breach_name} details👇",  # Removed space before emoji
+                    "tooltip": f"View {breach_name} details",
                     "children": [],
                 }
                 year_node["children"].append(breach_node)
@@ -499,8 +501,8 @@ async def send_domain_breaches(
 
     except Exception as e:
         logging.error(
-            "[DOMAIN-BREACHES] Error processing request: %s", 
-            str(e), 
+            "[DOMAIN-BREACHES] Error processing request: %s",
+            str(e),
             exc_info=True
         )
         return DomainBreachesErrorResponse(Error=str(e))
@@ -683,15 +685,15 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
 
     except Exception as e:
         logging.error(
-            "[SHIELD-VERIFY] Error processing request: %s", 
-            str(e), 
+            "[SHIELD-VERIFY] Error processing request: %s",
+            str(e),
             exc_info=True
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "email_shield_error.html", {"request": request}
             ).body.decode(),
-            status_code=500,
+            status_code=404,
         )
 
 
@@ -790,12 +792,12 @@ async def get_breach_hierarchy_analytics(
         return get_details
     except Exception as e:
         logging.error(
-            "[BREACH-HIERARCHY] Error processing breaches: %s", 
-            str(e), 
+            "[BREACH-HIERARCHY] Error processing breaches: %s",
+            str(e),
             exc_info=True
         )
         raise HTTPException(
-            status_code=404, 
+            status_code=404,
             detail="Error processing breach data"
         ) from e
 

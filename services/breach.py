@@ -90,8 +90,8 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
         return {}
     except Exception as exception_details:
         logger.error(
-            "[GET-EXPOSURE] Error fetching data: %s", 
-            exception_details, 
+            "[GET-EXPOSURE] Error fetching data: %s",
+            exception_details,
             exc_info=True
         )
         print(f"An error occurred while fetching data: {exception_details}")
@@ -101,7 +101,7 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
 async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
     """Get sensitive exposure data for a user."""
     logger.debug(
-        "[GET-SENSITIVE] Starting sensitive exposure check for email: %s", 
+        "[GET-SENSITIVE] Starting sensitive exposure check for email: %s",
         user_email
     )
     try:
@@ -117,8 +117,8 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
         return {}
     except Exception as e:
         logger.error(
-            "[GET-SENSITIVE] Error fetching sensitive data: %s", 
-            str(e), 
+            "[GET-SENSITIVE] Error fetching sensitive data: %s",
+            str(e),
             exc_info=True
         )
         return {}
