@@ -489,9 +489,7 @@ async def send_domain_breaches(
         return response
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error(
-            "[DOMAIN-BREACHES] Unexpected error: %s", str(e), exc_info=True
-        )
+        logging.error("[DOMAIN-BREACHES] Unexpected error: %s", str(e), exc_info=True)
         error_detail = f"Error: {str(e)}"
         return DomainBreachesErrorResponse(Error=error_detail)
 
@@ -675,7 +673,9 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
         )
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error("[SHIELD-VERIFY] Error processing request: %s", str(e), exc_info=True)
+        logging.error(
+            "[SHIELD-VERIFY] Error processing request: %s", str(e), exc_info=True
+        )
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "email_shield_error.html", {"request": request}
@@ -822,6 +822,4 @@ async def get_analytics(
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
         logging.error("[ANALYTICS] Unexpected error: %s", str(e), exc_info=True)
-        return JSONResponse(
-            status_code=404, content={"Error": f"Error: {str(e)}"}
-        )
+        return JSONResponse(status_code=404, content={"Error": f"Error: {str(e)}"})

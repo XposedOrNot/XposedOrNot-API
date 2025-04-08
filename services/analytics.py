@@ -788,7 +788,9 @@ def get_ai_summary(breach_data: Dict[str, Any]) -> str:
     try:
         system_prompt = AI_SYSTEM_PROMPT
 
-        user_prompt = AI_USER_PROMPT_TEMPLATE.format(breach_data=json.dumps(breach_data, indent=2))
+        user_prompt = AI_USER_PROMPT_TEMPLATE.format(
+            breach_data=json.dumps(breach_data, indent=2)
+        )
 
         response = ai_client.chat.completions.create(
             messages=[

@@ -404,7 +404,7 @@ async def search_data_breaches(
                 ExposedPastes=exposed_pastes,
                 PasteMetrics=paste_metrics,
             )
-        
+
         logger.debug("\n[BREACH-ANALYTICS][9] No summary data found")
         return BreachAnalyticsResponse(
             BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
@@ -645,17 +645,17 @@ def _prepare_for_logging(data):
 
     if isinstance(data, dict):
         return {k: _prepare_for_logging(v) for k, v in data.items()}
-    
+
     if isinstance(data, list):
         return [_prepare_for_logging(item) for item in data]
-    
+
     if hasattr(data, "isoformat"):  # Handle datetime objects
         return data.isoformat()
 
     # Handle other types
     if not isinstance(data, (str, int, float, bool, type(None))):
         return str(data)
-    
+
     return data
 
 

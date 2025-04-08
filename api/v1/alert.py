@@ -161,7 +161,11 @@ async def subscribe_to_alert_me(
 
         return AlertResponse(status="Success", message="Subscription Successful")
 
-    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
+    except (
+        ValueError,
+        HTTPException,
+        google_exceptions.GoogleAPIError,
+    ) as exception_details:
         logger.error(
             "[ALERT] Error processing request: %s",
             str(exception_details),
@@ -223,7 +227,11 @@ async def alert_me_verification(verification_token: str, request: Request):
                         alert_task["token"] = verification_token
                         datastore_client.put(alert_task)
                     break
-                except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
+                except (
+                    google_exceptions.GoogleAPIError,
+                    ValueError,
+                    RuntimeError,
+                ) as e:
                     retry_count += 1
                     if retry_count >= max_retries:
                         logger.error("[VERIFY] Max retries reached: %s", str(e))
@@ -247,7 +255,11 @@ async def alert_me_verification(verification_token: str, request: Request):
                         alert_task["token"] = verification_token
                         datastore_client.put(alert_task)
                     break
-                except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
+                except (
+                    google_exceptions.GoogleAPIError,
+                    ValueError,
+                    RuntimeError,
+                ) as e:
                     retry_count += 1
                     if retry_count >= max_retries:
                         logger.error("[VERIFY] Max retries reached: %s", str(e))
@@ -357,7 +369,11 @@ async def send_verification(
             return VerificationResponse(status="Failed")
         return VerificationResponse(status="Failed")
 
-    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
+    except (
+        ValueError,
+        HTTPException,
+        google_exceptions.GoogleAPIError,
+    ) as exception_details:
         logger.error(
             "[ALERT] Error processing request: %s",
             str(exception_details),
@@ -436,7 +452,11 @@ async def unsubscribe(user_email: str, request: Request):
         logger.warning("[UNSUB] Invalid state for email: %s", user_email)
         return UnsubscribeResponse(status="Error", message="Not found")
 
-    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
+    except (
+        ValueError,
+        HTTPException,
+        google_exceptions.GoogleAPIError,
+    ) as exception_details:
         logger.error(
             "[UNSUB] Error processing request: %s",
             str(exception_details),
@@ -518,11 +538,13 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
                 )
                 time.sleep(wait_time)
 
-        return templates.TemplateResponse(
-            "verified_unsub.html", {"request": request}
-        )
+        return templates.TemplateResponse("verified_unsub.html", {"request": request})
 
-    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
+    except (
+        ValueError,
+        HTTPException,
+        google_exceptions.GoogleAPIError,
+    ) as exception_details:
         logger.error(
             "[VERIFY_UNSUB] Error processing request: %s",
             str(exception_details),

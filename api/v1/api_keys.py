@@ -17,6 +17,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 class APIKeyResponse(BaseResponse):
     """Response model for API key operations with status and optional API key."""
+
     api_key: Optional[str] = None
 
 
@@ -95,7 +96,7 @@ async def get_api_key(token: str, request: Request):
         if api_key_entity:
             api_key = api_key_entity.get("api_key")
             return APIKeyResponse(status="success", api_key=api_key, status_code=200)
-            
+
         return APIKeyResponse(
             status="error", message="API key not found", status_code=404
         )

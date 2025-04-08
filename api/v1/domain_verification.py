@@ -205,7 +205,9 @@ async def check_emails(domain: str) -> DomainVerificationResponse:
         )
 
 
-async def verify_email(domain: str, email: str, request: Request) -> DomainVerificationResponse:
+async def verify_email(
+    domain: str, email: str, request: Request
+) -> DomainVerificationResponse:
     """Verify email against domain's WHOIS record."""
     try:
         async with httpx.AsyncClient() as client:
@@ -246,7 +248,7 @@ async def verify_email(domain: str, email: str, request: Request) -> DomainVerif
                 return DomainVerificationResponse(
                     status="success", domainVerification="Success"
                 )
-            
+
             return DomainVerificationResponse(
                 status="error", domainVerification="Failure"
             )
@@ -284,7 +286,7 @@ async def verify_dns(
         return DomainVerificationResponse(
             status="success", domainVerification="Success"
         )
-    
+
     return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
@@ -326,7 +328,7 @@ async def verify_html(
         return DomainVerificationResponse(
             status="success", domainVerification="Success"
         )
-    
+
     print(f"HTML verification failed for domain: {domain}")
     return DomainVerificationResponse(status="error", domainVerification="Failure")
 
@@ -413,10 +415,8 @@ async def domain_verification(
             return await verify_dns(d, a, v, prefix, request)
         elif z == "a":
             return await verify_html(d, a, v, prefix, request)
-        
-        return DomainVerificationResponse(
-            status="error", domainVerification="Failure"
-        )
+
+        return DomainVerificationResponse(status="error", domainVerification="Failure")
 
     except Exception as e:
         raise HTTPException(status_code=404, detail="Verification failed") from e
