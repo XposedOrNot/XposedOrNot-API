@@ -1,14 +1,14 @@
 """Feed endpoints for RSS and XON Pulse."""
 
-from datetime import datetime
+import logging
 from typing import List
 from fastapi import APIRouter, Request, Response
 from google.cloud import datastore
+from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from feedgen.feed import FeedGenerator
 from models.base import BaseResponse
-from pydantic import BaseModel
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -49,7 +49,8 @@ async def get_pulse_data(request: Request):
             data.append(item)
 
         return PulseNewsResponse(status="success", data=data, status_code=200)
-    except Exception as e:
+    except Exception as exc:
+        logging.error("Failed to fetch news feed: %s", str(exc))
         return PulseNewsResponse(
             status="error", message="Failed to fetch news feed", status_code=404
         )
@@ -94,5 +95,6 @@ async def rss_feed(request: Request):
         rss_content = feed_generator.rss_str()
         return Response(content=rss_content, media_type="application/rss+xml")
 
-    except Exception as e:
+    except Exception as exc:
+        logging.error("Feed generation failed: %s", str(exc))
         return Response(content="Feed generation failed", status_code=404)

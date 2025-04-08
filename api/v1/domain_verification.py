@@ -12,6 +12,7 @@ import domcheck
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
 from google.cloud import datastore
+from google.api_core import exceptions as google_exceptions
 from pydantic import EmailStr
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -23,7 +24,6 @@ from services.send_email import (
     send_domain_confirmation,
     send_domain_verified_success,
 )
-from utils.helpers import fetch_location_by_ip
 from utils.request import get_client_ip, get_user_agent_info
 from utils.token import generate_confirmation_token
 from utils.validation import validate_email_with_tld, validate_variables
@@ -81,7 +81,8 @@ def list_transactions_for_domain(client: datastore.Client, domain: str) -> List[
     query.add_filter("domain", "=", domain)
     try:
         return list(query.fetch())
-    except (datastore.exceptions.GoogleAPIError, ValueError) as err:
+    except (google_exceptions.GoogleAPIError, ValueError):
+        # Log error if needed but don't use unused variable
         return []
 
 
@@ -197,7 +198,7 @@ async def check_emails(domain: str) -> DomainVerificationResponse:
                 status="success", domainVerification=registrant_email
             )
 
-    except Exception as e:
+    except Exception:
         return DomainVerificationResponse(
             status="success",
             domainVerification=["No email found. Try DNS/HTML Verifications"],

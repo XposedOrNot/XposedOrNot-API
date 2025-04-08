@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 from google.cloud import datastore
+from google.api_core import exceptions as google_exceptions
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from user_agents import parse
@@ -160,7 +161,7 @@ async def subscribe_to_alert_me(
 
         return AlertResponse(status="Success", message="Subscription Successful")
 
-    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as exception_details:
+    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
         logger.error(
             "[ALERT] Error processing request: %s",
             str(exception_details),
@@ -222,7 +223,7 @@ async def alert_me_verification(verification_token: str, request: Request):
                         alert_task["token"] = verification_token
                         datastore_client.put(alert_task)
                     break
-                except (datastore.exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
+                except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
                     retry_count += 1
                     if retry_count >= max_retries:
                         logger.error("[VERIFY] Max retries reached: %s", str(e))
@@ -246,7 +247,7 @@ async def alert_me_verification(verification_token: str, request: Request):
                         alert_task["token"] = verification_token
                         datastore_client.put(alert_task)
                     break
-                except (datastore.exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
+                except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
                     retry_count += 1
                     if retry_count >= max_retries:
                         logger.error("[VERIFY] Max retries reached: %s", str(e))
@@ -290,10 +291,10 @@ async def alert_me_verification(verification_token: str, request: Request):
             {"request": request, "breaches_link": breaches_link},
         )
 
-    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as exception_details:
+    except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
         logger.error(
             "[VERIFY] Error processing request: %s",
-            str(exception_details),
+            str(e),
             exc_info=True,
         )
         return templates.TemplateResponse("email_error.html", {"request": request})
@@ -356,7 +357,7 @@ async def send_verification(
             return VerificationResponse(status="Failed")
         return VerificationResponse(status="Failed")
 
-    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as exception_details:
+    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
         logger.error(
             "[ALERT] Error processing request: %s",
             str(exception_details),
@@ -435,7 +436,7 @@ async def unsubscribe(user_email: str, request: Request):
         logger.warning("[UNSUB] Invalid state for email: %s", user_email)
         return UnsubscribeResponse(status="Error", message="Not found")
 
-    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as exception_details:
+    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
         logger.error(
             "[UNSUB] Error processing request: %s",
             str(exception_details),
@@ -504,7 +505,7 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
                     datastore_client.put(alert_task)
                 logger.debug("[VERIFY_UNSUB] Successfully updated unsubscribe status")
                 break  # Break the loop if successful
-            except (datastore.exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
+            except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
                 retry_count += 1
                 if retry_count >= max_retries:
                     logger.error("[VERIFY_UNSUB] Max retries reached: %s", str(e))
@@ -518,15 +519,13 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
                 time.sleep(wait_time)
 
         return templates.TemplateResponse(
-            "email_unsub_verify.html", {"request": request}
+            "verified_unsub.html", {"request": request}
         )
 
-    except (ValueError, HTTPException, datastore.exceptions.GoogleAPIError) as exception_details:
+    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as exception_details:
         logger.error(
             "[VERIFY_UNSUB] Error processing request: %s",
             str(exception_details),
             exc_info=True,
         )
-        return templates.TemplateResponse(
-            "email_unsub_error.html", {"request": request}
-        )
+        raise HTTPException(status_code=404) from exception_details

@@ -10,6 +10,7 @@ from typing import Dict, List, Any, Tuple, Optional
 # Third-party imports
 from fastapi import HTTPException
 from google.cloud import datastore
+from google.api_core import exceptions as google_exceptions
 from openai import OpenAI
 from openai import OpenAIError
 

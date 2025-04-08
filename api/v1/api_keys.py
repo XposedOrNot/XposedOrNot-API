@@ -2,8 +2,9 @@
 
 import secrets
 import datetime
+import logging
 from typing import Optional
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request
 from google.cloud import datastore
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -15,6 +16,7 @@ limiter = Limiter(key_func=get_remote_address)
 
 
 class APIKeyResponse(BaseResponse):
+    """Response model for API key operations with status and optional API key."""
     api_key: Optional[str] = None
 
 
@@ -58,7 +60,8 @@ async def create_api_key(token: str, request: Request):
         client.put(api_key_entity)
         return APIKeyResponse(status="success", api_key=api_key, status_code=200)
 
-    except Exception as e:
+    except Exception as exc:
+        logging.error("Error creating API key: %s", str(exc))
         return APIKeyResponse(
             status="error",
             message="Unfortunately an error occurred while creating/renewing the API key",
@@ -92,12 +95,13 @@ async def get_api_key(token: str, request: Request):
         if api_key_entity:
             api_key = api_key_entity.get("api_key")
             return APIKeyResponse(status="success", api_key=api_key, status_code=200)
-        else:
-            return APIKeyResponse(
-                status="error", message="API key not found", status_code=404
-            )
+            
+        return APIKeyResponse(
+            status="error", message="API key not found", status_code=404
+        )
 
-    except Exception as e:
+    except Exception as exc:
+        logging.error("Error retrieving API key: %s", str(exc))
         return APIKeyResponse(
             status="error", message="API key not found", status_code=404
         )

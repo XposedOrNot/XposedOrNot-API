@@ -458,6 +458,7 @@ async def search_email(
         example="user@example.com",
         max_length=MAX_EMAIL_LENGTH,
     ),
+    # Keeping parameter but not using it to maintain API compatibility
     include_details: bool = Query(
         False,
         description="Include detailed breach information in the response",
@@ -644,14 +645,18 @@ def _prepare_for_logging(data):
 
     if isinstance(data, dict):
         return {k: _prepare_for_logging(v) for k, v in data.items()}
-    elif isinstance(data, list):
+    
+    if isinstance(data, list):
         return [_prepare_for_logging(item) for item in data]
-    elif hasattr(data, "isoformat"):  # Handle datetime objects
+    
+    if hasattr(data, "isoformat"):  # Handle datetime objects
         return data.isoformat()
 
-    return (
-        str(data) if not isinstance(data, (str, int, float, bool, type(None))) else data
-    )
+    # Handle other types
+    if not isinstance(data, (str, int, float, bool, type(None))):
+        return str(data)
+    
+    return data
 
 
 def _format_log_data(data):
