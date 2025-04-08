@@ -790,7 +790,7 @@ def get_ai_summary(breach_data: Dict[str, Any]) -> str:
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"Error fetching AI summary: {str(e)}"
+        return "Error fetching AI summary: " + str(e)
 
 
 async def get_detailed_metrics() -> Dict[str, Any]:
@@ -863,9 +863,8 @@ async def get_pulse_news() -> List[Dict[str, Any]]:
 
     except Exception as e:
         logger.error("Error fetching news feed: %s", str(e), exc_info=True)
-        raise HTTPException(
-            status_code=404, detail=f"Error fetching news feed: {str(e)}"
-        ) from e
+        detail_msg = "Error fetching news feed: " + str(e)
+        raise HTTPException(status_code=404, detail=detail_msg) from e
 
 
 async def get_breaches_analytics(site: str, paste_data: str = "") -> Dict[str, Any]:

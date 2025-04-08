@@ -65,7 +65,7 @@ async def process_globe_request_background(client_ip: str) -> None:
     try:
         await process_request_for_globe(client_ip)
     except Exception as e:
-        logger.error(f"Error in globe background task: {str(e)}")
+        logger.error("Error in globe background task: %s", str(e))
 
 
 def setup_globe_middleware(app: FastAPI) -> None:
@@ -84,7 +84,7 @@ def setup_globe_middleware(app: FastAPI) -> None:
 
         except Exception as e:
             # Log the error but don't block the request
-            logger.error(f"Error in globe middleware: {str(e)}")
+            logger.error("Error in globe middleware: %s", str(e))
 
         # Continue with the request
         response = await call_next(request)

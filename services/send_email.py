@@ -128,9 +128,11 @@ async def send_alert_confirmation(
                 return response.json()
             except httpx.ConnectError as e:
                 logging.error("Connection error to Mailjet API: %s", str(e))
+                error_msg = "Unable to connect to email service. "
+                error_msg += "Check network connection and firewall settings."
                 raise HTTPException(
                     status_code=500,
-                    detail="Unable to connect to email service. Check network connection and firewall settings.",
+                    detail=error_msg,
                 ) from e
     except Exception as e:
         logging.error("Error sending alert confirmation: %s", str(e))

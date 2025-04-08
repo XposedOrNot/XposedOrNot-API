@@ -3,7 +3,7 @@
 from typing import Optional
 import logging
 from fastapi import HTTPException
-from itsdangerous import URLSafeTimedSerializer
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 from config.settings import SECRET_APIKEY, SECURITY_SALT
 
@@ -16,14 +16,14 @@ async def generate_confirmation_token(email: str) -> str:
     Generate a secure confirmation token for email verification.
     """
     try:
-        logger.debug(f"[TOKEN] Generating confirmation token for email: {email}")
+        logger.debug("[TOKEN] Generating confirmation token for email: %s", email)
         serializer = URLSafeTimedSerializer(SECRET_APIKEY)
         token = serializer.dumps(email, salt=SECURITY_SALT)
-        logger.debug(f"[TOKEN] Successfully generated token for email: {email}")
+        logger.debug("[TOKEN] Successfully generated token for email: %s", email)
         return token
     except Exception as e:
         logger.error(
-            f"[TOKEN] Error generating confirmation token: {str(e)}", exc_info=True
+            "[TOKEN] Error generating confirmation token: %s", str(e), exc_info=True
         )
         raise HTTPException(
             status_code=500, detail="Error generating confirmation token"
@@ -35,11 +35,17 @@ async def confirm_token(token: str, expiration: int = 1296000) -> Optional[str]:
     Verify and decode a confirmation token.
     """
     try:
-        logger.debug(f"[TOKEN] Verifying token with expiration: {expiration}")
+        logger.debug("[TOKEN] Verifying token with expiration: %s", expiration)
         serializer = URLSafeTimedSerializer(SECRET_APIKEY)
         email = serializer.loads(token, salt=SECURITY_SALT, max_age=expiration)
-        logger.debug(f"[TOKEN] Successfully verified token for email: {email}")
+        logger.debug("[TOKEN] Successfully verified token for email: %s", email)
         return email
+    except SignatureExpired:
+        logger.error("[TOKEN] Token expired", exc_info=True)
+        return None
+    except BadSignature:
+        logger.error("[TOKEN] Invalid token signature", exc_info=True)
+        return None
     except Exception as e:
-        logger.error(f"[TOKEN] Error verifying token: {str(e)}", exc_info=True)
+        logger.error("[TOKEN] Error verifying token: %s", str(e), exc_info=True)
         return None
