@@ -1,7 +1,7 @@
 """Globe visualization service.
 
 This module handles the collection and publishing of IP-based location data
-for the globe visualization feature. It captures client IP addresses, 
+for the globe visualization feature. It captures client IP addresses,
 retrieves geolocation information, and publishes the data to a PubSub topic.
 """
 
