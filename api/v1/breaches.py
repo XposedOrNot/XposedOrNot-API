@@ -145,7 +145,7 @@ async def get_xposed_breaches(
         return BreachListResponse(status="success", exposedBreaches=breach_details)
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 @router.get("/v2/breach-analytics", response_model=BreachAnalyticsV2Response)
@@ -224,7 +224,7 @@ async def search_data_breaches(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsResponse:
     """Returns summary and details of data breaches for a given email."""
-    logger.debug(f"[BREACH-ANALYTICS] Starting breach search for email: {email}")
+    logger.debug("[BREACH-ANALYTICS] Starting breach search for email: %s", email)
 
     if (
         not email
@@ -234,11 +234,13 @@ async def search_data_breaches(
     ):
         logger.debug("[BREACH-ANALYTICS] Input validation failed")
         logger.debug(
-            f"[BREACH-ANALYTICS] Email valid: {bool(email and validate_email_with_tld(email))}"
+            "[BREACH-ANALYTICS] Email valid: %s",
+            bool(email and validate_email_with_tld(email))
         )
-        logger.debug(f"[BREACH-ANALYTICS] URL valid: {bool(validate_url(request))}")
+        logger.debug("[BREACH-ANALYTICS] URL valid: %s", bool(validate_url(request)))
         logger.debug(
-            f"[BREACH-ANALYTICS] Length valid: {bool(email and len(email) <= MAX_EMAIL_LENGTH)}"
+            "[BREACH-ANALYTICS] Length valid: %s",
+            bool(email and len(email) <= MAX_EMAIL_LENGTH)
         )
         raise HTTPException(status_code=404, detail="Not found")
 
@@ -418,9 +420,9 @@ async def search_data_breaches(
 
     except Exception as e:
         logger.error(
-            f"[BREACH-ANALYTICS] Error processing request: {str(e)}", exc_info=True
+            "[BREACH-ANALYTICS] Error processing request: %s", str(e), exc_info=True
         )
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Not found") from e
 
 
 @router.get(
@@ -526,17 +528,19 @@ async def get_domain_breach_summary(
         DomainBreachSummaryResponse containing breach summary for the domain
     """
     logger.debug(
-        f"[DOMAIN-BREACH-SUMMARY] Starting domain breach search for domain: {d}"
+        "[DOMAIN-BREACH-SUMMARY] Starting domain breach search for domain: %s", d
     )
 
     try:
         if not d or not validate_domain(d) or not validate_url(request):
             logger.debug("[DOMAIN-BREACH-SUMMARY] Input validation failed")
             logger.debug(
-                f"[DOMAIN-BREACH-SUMMARY] Domain valid: {bool(d and validate_domain(d))}"
+                "[DOMAIN-BREACH-SUMMARY] Domain valid: %s",
+                bool(d and validate_domain(d))
             )
             logger.debug(
-                f"[DOMAIN-BREACH-SUMMARY] URL valid: {bool(validate_url(request))}"
+                "[DOMAIN-BREACH-SUMMARY] URL valid: %s",
+                bool(validate_url(request))
             )
             raise HTTPException(status_code=404, detail="Not found")
 
@@ -547,7 +551,7 @@ async def get_domain_breach_summary(
 
         # Query xon records for domain
         logger.debug(
-            f"[DOMAIN-BREACH-SUMMARY] Querying xon records for domain: {domain}"
+            "[DOMAIN-BREACH-SUMMARY] Querying xon records for domain: %s", domain
         )
         xon_rec = ds_xon.query(kind="xon")
         xon_rec.add_filter("domain", "=", domain)
@@ -573,12 +577,14 @@ async def get_domain_breach_summary(
         emails_count = len(unique_emails)
 
         logger.debug(
-            f"[DOMAIN-BREACH-SUMMARY] Found {emails_count} unique emails and {breach_count} unique breaches"
+            "[DOMAIN-BREACH-SUMMARY] Found %s unique emails and %s unique breaches",
+            emails_count,
+            breach_count
         )
 
         # Query paste records
         logger.debug(
-            f"[DOMAIN-BREACH-SUMMARY] Querying paste records for domain: {domain}"
+            "[DOMAIN-BREACH-SUMMARY] Querying paste records for domain: %s", domain
         )
         ds_paste = datastore.Client()
         paste_rec = ds_paste.query(kind="xon_paste")
@@ -586,7 +592,7 @@ async def get_domain_breach_summary(
         query_paste = paste_rec.fetch(limit=50)
 
         pastes_count = sum(1 for _ in query_paste)
-        logger.debug(f"[DOMAIN-BREACH-SUMMARY] Found {pastes_count} pastes")
+        logger.debug("[DOMAIN-BREACH-SUMMARY] Found %s pastes", pastes_count)
 
         # Get latest breach date
         breach_last_seen = None
@@ -606,7 +612,7 @@ async def get_domain_breach_summary(
             if breach_dates:
                 breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
                 logger.debug(
-                    f"[DOMAIN-BREACH-SUMMARY] Latest breach date: {breach_last_seen}"
+                    "[DOMAIN-BREACH-SUMMARY] Latest breach date: %s", breach_last_seen
                 )
 
         total = emails_count + pastes_count
@@ -630,7 +636,7 @@ async def get_domain_breach_summary(
 
     except Exception as e:
         logger.error(
-            f"[DOMAIN-BREACH-SUMMARY] Error processing request: {str(e)}", exc_info=True
+            "[DOMAIN-BREACH-SUMMARY] Error processing request: %s", str(e), exc_info=True
         )
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -646,12 +652,12 @@ def _prepare_for_logging(data):
         return [_prepare_for_logging(item) for item in data]
     elif hasattr(data, "isoformat"):  # Handle datetime objects
         return data.isoformat()
-    else:
-        return (
-            str(data)
-            if not isinstance(data, (str, int, float, bool, type(None)))
-            else data
-        )
+    
+    return (
+        str(data)
+        if not isinstance(data, (str, int, float, bool, type(None)))
+        else data
+    )
 
 
 def _format_log_data(data):
@@ -663,5 +669,6 @@ def _format_log_data(data):
         prepared_data = _prepare_for_logging(data)
         # Format with compact separators and no extra whitespace
         return json.dumps(prepared_data, separators=(",", ":"))
+    
     except Exception as e:
-        return f"Error formatting data: {str(e)}"
+        return "Error formatting data: %s" % str(e)

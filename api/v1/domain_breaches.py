@@ -2,17 +2,18 @@
 
 from datetime import datetime
 from collections import defaultdict
-from typing import Dict, List, Optional
+from typing import Dict, List
 from operator import itemgetter
+import logging
+
 from fastapi import APIRouter, Request, HTTPException, Header, Depends
 from google.cloud import datastore
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-import logging
+from pydantic import BaseModel, Field
 
 from models.base import BaseResponse
 from utils.validation import validate_url
-from pydantic import BaseModel, Field
 
 # Configure logging with more detailed format
 logging.basicConfig(level=logging.DEBUG)
@@ -69,21 +70,8 @@ class DomainBreachesResponse(BaseResponse):
         "Top10_Breaches": Dict[str, int],
         "Detailed_Breach_Info": Dict[
             str, Dict
-        ],  # Changed to Dict to match Flask implementation
+        ], 
     }
-
-
-# Commenting out the old route
-"""
-@router.post("/domain-breaches", response_model=DomainBreachesResponse, dependencies=[Depends(csrf_exempt)])
-@router.post("/domain-breaches/", response_model=DomainBreachesResponse, dependencies=[Depends(csrf_exempt)])  # Handle trailing slash
-@limiter.limit("500 per day;100 per hour;2 per second")
-async def get_domain_breaches(
-    request: Request,
-    x_api_key: str = Header(..., description="API key for authentication")
-):
-    # ... old implementation ...
-"""
 
 
 @router.post(
@@ -104,12 +92,14 @@ async def protected(
     """Retrieves the data breaches and related metrics for an API-key"""
     try:
         logger.debug(
-            f"Starting domain breaches request with API key: {x_api_key[:4]}..."
+            "Starting domain breaches request with API key: %s...",
+            x_api_key[:4]
         )
 
         if not x_api_key or x_api_key.strip() == "" or not validate_url(request):
             logger.error(
-                f"Invalid API key or URL validation failed. API key: {x_api_key[:4]}..."
+                "Invalid API key or URL validation failed. API key: %s...",
+                x_api_key[:4]
             )
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
@@ -121,7 +111,7 @@ async def protected(
         query = datastore_client.query(kind="xon_api_key")
         query.add_filter("api_key", "=", x_api_key)
         results = list(query.fetch())
-        logger.debug(f"API key validation results count: {len(results)}")
+        logger.debug("API key validation results count: %s", len(results))
 
         if not results:
             logger.error("No API key found in database")
@@ -129,13 +119,13 @@ async def protected(
 
         # If the key is valid, return the associated email
         email = results[0].key.name
-        logger.debug(f"Found associated email: {email}")
+        logger.debug("Found associated email: %s", email)
 
         # Additional operations
         query = datastore_client.query(kind="xon_domains")
         query.add_filter("email", "=", email)
         verified_domains = [entity["domain"] for entity in query.fetch()]
-        logger.debug(f"Found verified domains: {verified_domains}")
+        logger.debug("Found verified domains: %s", verified_domains)
 
         current_year = datetime.utcnow().year
         yearly_summary = defaultdict(int)
@@ -149,7 +139,7 @@ async def protected(
         breach_details = []
 
         for domain in verified_domains:
-            logger.debug(f"Processing domain: {domain}")
+            logger.debug("Processing domain: %s", domain)
             query = datastore_client.query(kind="xon_domains_summary")
             query.add_filter("domain", "=", domain)
             domain_summary[domain] = 0
@@ -211,9 +201,11 @@ async def protected(
         raise
     except Exception as exception_details:
         logger.error(
-            f"Error processing request to {request.url}: {str(exception_details)}",
+            "Error processing request to %s: %s",
+            request.url,
+            str(exception_details),
             exc_info=True,
         )
         raise HTTPException(
             status_code=500, detail="An error occurred during processing"
-        )
+        ) from exception_details

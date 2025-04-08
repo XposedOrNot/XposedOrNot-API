@@ -53,8 +53,6 @@ templates = Jinja2Templates(directory="templates")
 class ShieldOnException(Exception):
     """Exception raised when shield is on."""
 
-    pass
-
 
 @router.get("/analytics/metrics", response_model=DetailedMetricsResponse)
 @limiter.limit("5 per minute;100 per hour;500 per day")
@@ -190,16 +188,18 @@ async def domain_alert(
                 client_platform,
             )
             logging.info(
-                f"[DOMAIN-ALERT] Email sent successfully to {user_email}. Response: {email_response}"
+                "[DOMAIN-ALERT] Email sent successfully to %s. Response: %s",
+                user_email,
+                email_response
             )
         except Exception as e:
-            logging.error(f"[DOMAIN-ALERT] Failed to send email: {str(e)}")
+            logging.error("[DOMAIN-ALERT] Failed to send email: %s", str(e))
             raise
 
         return DomainAlertResponse()
 
     except Exception as e:
-        logging.error(f"[DOMAIN-ALERT] Unexpected error: {str(e)}", exc_info=True)
+        logging.error("[DOMAIN-ALERT] Unexpected error: %s", str(e), exc_info=True)
         return DomainAlertErrorResponse(
             Error=f"Internal error: {str(e)}", email=user_email
         )
@@ -230,7 +230,8 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
             or not validate_url(request)
         ):
             logging.error(
-                f"[DOMAIN-VERIFY] Invalid token or URL: {verification_token[:10]}..."
+                "[DOMAIN-VERIFY] Invalid token or URL: %s...",
+                verification_token[:10]
             )
             return HTMLResponse(
                 content=templates.TemplateResponse(
@@ -249,7 +250,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
                 status_code=404,
             )
 
-        logging.info(f"[DOMAIN-VERIFY] Token confirmed for email: {user_email}")
+        logging.info("[DOMAIN-VERIFY] Token confirmed for email: %s", user_email)
 
         # Generate dashboard link
         base_url = "https://xposedornot.com/"
@@ -267,7 +268,9 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
 
     except Exception as e:
         logging.error(
-            f"[DOMAIN-VERIFY] Error processing request: {str(e)}", exc_info=True
+            "[DOMAIN-VERIFY] Error processing request: %s", 
+            str(e), 
+            exc_info=True
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -296,7 +299,7 @@ async def send_domain_breaches(
     Retrieves and sends the data breaches validated by token and email.
 
     """
-    logging.info(f"[DOMAIN-BREACHES] Starting domain breaches check for email: {email}")
+    logging.info("[DOMAIN-BREACHES] Starting domain breaches check for email: %s", email)
     try:
         # Check for presence of email and token
         if email is None or token is None:
@@ -310,7 +313,8 @@ async def send_domain_breaches(
             or not validate_url(request)
         ):
             logging.error(
-                f"[DOMAIN-BREACHES] Invalid email or token for email: {email}"
+                "[DOMAIN-BREACHES] Invalid email or token for email: %s",
+                email
             )
             return DomainBreachesErrorResponse(Error="Invalid email or token")
 
@@ -336,7 +340,8 @@ async def send_domain_breaches(
 
         if not verified_domains:
             logging.warning(
-                f"[DOMAIN-BREACHES] No verified domains found for email: {email}"
+                "[DOMAIN-BREACHES] No verified domains found for email: %s",
+                email
             )
             return DomainBreachesErrorResponse(Error="No verified domains found")
 
@@ -487,13 +492,16 @@ async def send_domain_breaches(
         )
 
         logging.info(
-            f"[DOMAIN-BREACHES] Successfully retrieved breach data for email: {email}"
+            "[DOMAIN-BREACHES] Successfully retrieved breach data for email: %s",
+            email
         )
         return response
 
     except Exception as e:
         logging.error(
-            f"[DOMAIN-BREACHES] Error processing request: {str(e)}", exc_info=True
+            "[DOMAIN-BREACHES] Error processing request: %s", 
+            str(e), 
+            exc_info=True
         )
         return DomainBreachesErrorResponse(Error=str(e))
 
@@ -514,11 +522,11 @@ async def activate_shield(
     Enable privacy shield for public searches and return status.
 
     """
-    logging.info(f"[SHIELD-ON] Starting shield activation for email: {email}")
+    logging.info("[SHIELD-ON] Starting shield activation for email: %s", email)
     try:
         email = email.lower()
         if not email or not validate_email_with_tld(email) or not validate_url(request):
-            logging.error(f"[SHIELD-ON] Invalid email or URL: {email}")
+            logging.error("[SHIELD-ON] Invalid email or URL: %s", email)
             return ShieldActivationErrorResponse(Error="Not found")
 
         datastore_client = datastore.Client()
@@ -529,7 +537,7 @@ async def activate_shield(
         base_url = str(request.base_url)
         confirmation_url = f"{base_url}v1/verify-shield/{token_shield}"
 
-        logging.debug(f"[SHIELD-ON] Generated confirmation URL: {confirmation_url}")
+        logging.debug("[SHIELD-ON] Generated confirmation URL: %s", confirmation_url)
 
         if alert_task is None or not alert_task.get("shieldOn", False):
             # Create or update alert entity
@@ -554,7 +562,7 @@ async def activate_shield(
                     }
                 )
                 datastore_client.put(alert_entity)
-                logging.info(f"[SHIELD-ON] Created new alert entity for email: {email}")
+                logging.info("[SHIELD-ON] Created new alert entity for email: %s", email)
 
             # Get client information
             client_ip = get_client_ip(request)
@@ -579,14 +587,14 @@ async def activate_shield(
                     browser_type,
                     client_platform,
                 )
-                logging.info(f"[SHIELD-ON] Shield email sent successfully to: {email}")
+                logging.info("[SHIELD-ON] Shield email sent successfully to: %s", email)
             except Exception as e:
-                logging.error(f"[SHIELD-ON] Failed to send shield email: {str(e)}")
+                logging.error("[SHIELD-ON] Failed to send shield email: %s", str(e))
                 raise
 
             return ShieldActivationResponse(Success="ShieldAdded")
 
-        elif alert_task.get("shieldOn", False):
+        if alert_task.get("shieldOn", False):
             logging.info("[SHIELD-ON] Shield already active for email: %s", email)
             return ShieldActivationResponse(Success="AlreadyOn")
 
@@ -594,7 +602,7 @@ async def activate_shield(
         return ShieldActivationErrorResponse(Error="Unexpected state")
 
     except Exception as e:
-        logging.error(f"[SHIELD-ON] Error processing request: {str(e)}", exc_info=True)
+        logging.error("[SHIELD-ON] Error processing request: %s", str(e), exc_info=True)
         return ShieldActivationErrorResponse(Error=str(e))
 
 
@@ -623,7 +631,8 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
             or not validate_url(request)
         ):
             logging.error(
-                f"[SHIELD-VERIFY] Invalid token or URL: {token_shield[:10]}..."
+                "[SHIELD-VERIFY] Invalid token or URL: %s...",
+                token_shield[:10]
             )
             return HTMLResponse(
                 content=templates.TemplateResponse(
@@ -642,7 +651,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
                 status_code=404,
             )
 
-        logging.info(f"[SHIELD-VERIFY] Token confirmed for email: {email}")
+        logging.info("[SHIELD-VERIFY] Token confirmed for email: %s", email)
 
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", email)
@@ -652,7 +661,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
             alert_task["shield_timestamp"] = datetime.datetime.now()
             alert_task["shieldOn"] = True
             datastore_client.put(alert_task)
-            logging.info(f"[SHIELD-VERIFY] Updated existing alert for email: {email}")
+            logging.info("[SHIELD-VERIFY] Updated existing alert for email: %s", email)
         else:
             alert_task = datastore.Entity(key=alert_key)
             alert_task.update(
@@ -663,7 +672,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
                 }
             )
             datastore_client.put(alert_task)
-            logging.info(f"[SHIELD-VERIFY] Created new alert for email: {email}")
+            logging.info("[SHIELD-VERIFY] Created new alert for email: %s", email)
 
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -674,7 +683,9 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
 
     except Exception as e:
         logging.error(
-            f"[SHIELD-VERIFY] Error processing request: {str(e)}", exc_info=True
+            "[SHIELD-VERIFY] Error processing request: %s", 
+            str(e), 
+            exc_info=True
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -716,7 +727,8 @@ async def get_breach_hierarchy_analytics(
 
                 details = (
                     f"<img src='{logo}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{bid}'> &nbsp;Details</a>"
+                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{bid}'>"
+                    " &nbsp;Details</a>"
                 )
 
                 child = {
@@ -752,7 +764,8 @@ async def get_breach_hierarchy_analytics(
 
                 details = (
                     f"<img src='{logo}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{bid}'> &nbsp;Details</a>"
+                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{bid}'>"
+                    " &nbsp;Details</a>"
                 )
 
                 child = {
@@ -777,9 +790,14 @@ async def get_breach_hierarchy_analytics(
         return get_details
     except Exception as e:
         logging.error(
-            f"[BREACH-HIERARCHY] Error processing breaches: {str(e)}", exc_info=True
+            "[BREACH-HIERARCHY] Error processing breaches: %s", 
+            str(e), 
+            exc_info=True
         )
-        raise HTTPException(status_code=404, detail="Error processing breach data")
+        raise HTTPException(
+            status_code=404, 
+            detail="Error processing breach data"
+        ) from e
 
 
 @router.get("/analytics/{user_email}", response_model=BreachHierarchyResponse)
@@ -810,12 +828,12 @@ async def get_analytics(
             site = str(xon_record["site"])
             breach_hierarchy = await get_breach_hierarchy_analytics(site, "")
             return BreachHierarchyResponse(**breach_hierarchy)
-        else:
-            return JSONResponse(content=None)
+            
+        return JSONResponse(content=None)
 
     except ShieldOnException:
         return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
     except Exception as e:
-        logging.error(f"[ANALYTICS] Error processing request: {str(e)}", exc_info=True)
+        logging.error("[ANALYTICS] Error processing request: %s", str(e), exc_info=True)
         return JSONResponse(content={"Error": "Not found"}, status_code=404)

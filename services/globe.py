@@ -42,11 +42,14 @@ async def get_geolocation(ip: str) -> Optional[Dict[str, Any]]:
                     "lat": data.get("lat", 0.0),
                     "lon": data.get("lon", 0.0),
                 }
-            else:
-                logger.warning(f"Failed to get geolocation for IP {ip}: {data}")
-                return None
+            
+            logger.warning("Failed to get geolocation for IP %s: %s", ip, data)
+            return None
+    except httpx.HTTPError as e:
+        logger.error("HTTP error in geolocation request for IP %s: %s", ip, str(e))
+        return None
     except Exception as e:
-        logger.error(f"Error in geolocation request for IP {ip}: {str(e)}")
+        logger.error("Unexpected error in geolocation request for IP %s: %s", ip, str(e))
         return None
 
 
@@ -83,10 +86,10 @@ async def publish_to_pubsub(data: Dict[str, Any]) -> None:
         # Store request hash with timestamp
         recent_requests[request_hash] = current_time
 
-        logger.debug(f"Published location data to PubSub: {data}")
+        logger.debug("Published location data to PubSub: %s", data)
 
     except Exception as e:
-        logger.error(f"Error publishing to Pub/Sub: {str(e)}")
+        logger.error("Error publishing to Pub/Sub: %s", str(e))
 
 
 async def process_request_for_globe(client_ip: str) -> None:
@@ -109,4 +112,4 @@ async def process_request_for_globe(client_ip: str) -> None:
         await publish_to_pubsub(pubsub_data)
 
     except Exception as e:
-        logger.error(f"Error in process_request_for_globe: {str(e)}")
+        logger.error("Error in process_request_for_globe: %s", str(e))

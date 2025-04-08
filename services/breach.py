@@ -76,21 +76,23 @@ async def get_combined_breach_data(email: str) -> Dict[str, Any]:
 
 async def get_exposure(user_email: str) -> Dict[str, Any]:
     """Returns breach data for a given email."""
-    logger.debug(f"[GET-EXPOSURE] Starting exposure check for email: {user_email}")
+    logger.debug("[GET-EXPOSURE] Starting exposure check for email: %s", user_email)
     try:
         datastore_client = datastore.Client()
         search_key = datastore_client.key("xon", user_email)
-        logger.debug(f"[GET-EXPOSURE] Querying datastore with key: {search_key}")
+        logger.debug("[GET-EXPOSURE] Querying datastore with key: %s", search_key)
         user_data = datastore_client.get(search_key)
         if user_data is not None:
             logger.debug("[GET-EXPOSURE] Found user data")
             return dict(user_data)
-        else:
-            logger.debug("[GET-EXPOSURE] No user data found in datastore")
-            return {}
+        
+        logger.debug("[GET-EXPOSURE] No user data found in datastore")
+        return {}
     except Exception as exception_details:
         logger.error(
-            f"[GET-EXPOSURE] Error fetching data: {exception_details}", exc_info=True
+            "[GET-EXPOSURE] Error fetching data: %s", 
+            exception_details, 
+            exc_info=True
         )
         print(f"An error occurred while fetching data: {exception_details}")
         return {}
@@ -99,7 +101,8 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
 async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
     """Get sensitive exposure data for a user."""
     logger.debug(
-        f"[GET-SENSITIVE] Starting sensitive exposure check for email: {user_email}"
+        "[GET-SENSITIVE] Starting sensitive exposure check for email: %s", 
+        user_email
     )
     try:
         datastore_client = datastore.Client()
@@ -109,12 +112,14 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
         if user_data is not None:
             logger.debug("[GET-SENSITIVE] Found sensitive data")
             return dict(user_data)
-        else:
-            logger.debug("[GET-SENSITIVE] No sensitive data found")
-            return {}
+        
+        logger.debug("[GET-SENSITIVE] No sensitive data found")
+        return {}
     except Exception as e:
         logger.error(
-            f"[GET-SENSITIVE] Error fetching sensitive data: {str(e)}", exc_info=True
+            "[GET-SENSITIVE] Error fetching sensitive data: %s", 
+            str(e), 
+            exc_info=True
         )
         return {}
 

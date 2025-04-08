@@ -217,7 +217,7 @@ async def unblock_cloudflare(token: str, request: Request):
         return result
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
 
 
 def custom_openapi():

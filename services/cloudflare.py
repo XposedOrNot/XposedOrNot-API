@@ -102,8 +102,11 @@ async def get_isp_from_ip(ip_address: str) -> Optional[str]:
                     "message": f"Failed to fetch ISP info: {response.text}",
                 },
             )
-    except Exception as e:
+    except httpx.HTTPError as e:
         print(f"Error fetching ISP for IP {ip_address}: {e}")
+        return None
+    except Exception as e:
+        print(f"Unexpected error fetching ISP for IP {ip_address}: {e}")
         return None
 
 
@@ -149,6 +152,11 @@ async def block_hour(ip_address: str) -> CloudflareResponse:
                 },
             )
 
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"HTTP error blocking IP: {str(e)}"},
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -198,6 +206,11 @@ async def block_day(ip_address: str) -> CloudflareResponse:
                 },
             )
 
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"status": "error", "message": f"HTTP error blocking IP: {str(e)}"},
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -252,6 +265,14 @@ async def unblock() -> CloudflareResponse:
             details={"unblocked_count": unblocked_count},
         )
 
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error", 
+                "message": f"HTTP error during unblock operation: {str(e)}"
+            },
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
