@@ -1,7 +1,6 @@
 """Teams channel-related API endpoints."""
 
-from fastapi import APIRouter, HTTPException, Request, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, HTTPException, Request
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -40,10 +39,7 @@ async def setup_teams_channel_endpoint(
                 return ChannelSetupResponse(
                     status="success", message="Teams channel setup successful"
                 )
-            else:
-                raise HTTPException(
-                    status_code=400, detail="Teams channel setup failed"
-                )
+            raise HTTPException(status_code=400, detail="Teams channel setup failed")
         elif channel_data.action == "verify":
             if not channel_data.verify_token:
                 raise HTTPException(
@@ -55,25 +51,21 @@ async def setup_teams_channel_endpoint(
                 return ChannelSetupResponse(
                     status="success", message="Teams channel verified successfully"
                 )
-            else:
-                raise HTTPException(
-                    status_code=400, detail="Teams channel verification failed"
-                )
+            raise HTTPException(
+                status_code=400, detail="Teams channel verification failed"
+            )
         elif channel_data.action == "delete":
             success = await delete_teams_channel(channel_data)
             if success:
                 return ChannelSetupResponse(
                     status="success", message="Teams channel deleted successfully"
                 )
-            else:
-                raise HTTPException(
-                    status_code=400, detail="Teams channel deletion failed"
-                )
+            raise HTTPException(status_code=400, detail="Teams channel deletion failed")
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.get("/teams/config/{domain}", response_model=ChannelConfigResponse)
@@ -96,10 +88,9 @@ async def get_teams_channel_config_endpoint(
                 message="Teams channel configuration retrieved successfully",
                 data=config,
             )
-        else:
-            raise HTTPException(
-                status_code=404, detail="Teams channel configuration not found"
-            )
+        raise HTTPException(
+            status_code=404, detail="Teams channel configuration not found"
+        )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
