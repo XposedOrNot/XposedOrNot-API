@@ -9,26 +9,25 @@ from requests.exceptions import RequestException
 from user_agents import parse
 from fastapi import Request
 from utils.validation import validate_url, validate_variables, validate_email_with_tld
+import re
 
 
 def validate_domain(domain: str) -> bool:
     """Returns True if the domain is valid, False otherwise."""
-    if not is_valid_domain_name(domain):
+    if not domain:
         return False
-    try:
-        socket.gethostbyname(domain)
-        return True
-    except socket.gaierror:
+    domain_pattern = r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$"
+
+    parts = domain.split(".")
+    if len(parts) < 2 or len(parts[-1]) < 2:
         return False
+
+    return bool(re.match(domain_pattern, domain))
 
 
 def is_valid_domain_name(domain: str) -> bool:
     """Check if a domain name is valid."""
-    try:
-        socket.gethostbyname(domain)
-        return True
-    except socket.gaierror:
-        return False
+    return validate_domain(domain)
 
 
 def is_valid_ip(ip_address: str) -> bool:
