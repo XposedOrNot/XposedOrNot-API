@@ -83,6 +83,7 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
             Pastes_Count=str(metrics["pastes_count"]),
             Pastes_Records=metrics["pastes_total_records"],
             Yearly_Breaches_Count=metrics["yearly_count"],
+            Industry_Breaches_Count=metrics["industry_breaches_count"],
             Top_Breaches=top_breaches,
             Recent_Breaches=recent_breaches,
         )
@@ -99,8 +100,6 @@ async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")
 
-        # This is a placeholder for domain-specific metrics
-        # Implement the actual domain metrics retrieval logic
         domain_metrics = {
             "status": "success",
             "message": "Domain metrics retrieved successfully",
@@ -111,6 +110,7 @@ async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
                     "total_records": 0,
                     "last_breach": None,
                     "risk_score": 0,
+                    "industry_breaches_count": {},
                 },
             },
         }

@@ -825,10 +825,20 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         breaches = list(query.fetch())
 
         yearly_count = {}
+        industry_count = {}
+
         for breach in breaches:
+            # Get yearly counts
             breach_date = breach["breached_date"]
             year = breach_date.year
             yearly_count[year] = yearly_count.get(year, 0) + 1
+
+            # Get industry counts
+            industry = breach.get("industry", "Unknown")
+            if industry:
+                industry_count[industry] = industry_count.get(industry, 0) + 1
+            else:
+                industry_count["Unknown"] = industry_count.get("Unknown", 0) + 1
 
         # Get top breaches by exposed records
         query.order = ["-xposed_records"]
@@ -839,12 +849,18 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         recent_query.order = ["-timestamp"]
         recent_breaches = list(recent_query.fetch(limit=10))
 
+        # Sort industry count by value for consistency
+        industry_breaches_count = dict(
+            sorted(industry_count.items(), key=lambda x: x[1], reverse=True)
+        )
+
         return {
             "breaches_count": breaches_count,
             "breaches_total_records": breaches_total_records,
             "pastes_count": pastes_count,
             "pastes_total_records": pastes_total_records,
             "yearly_count": yearly_count,
+            "industry_breaches_count": industry_breaches_count,
             "top_breaches": top_breaches,
             "recent_breaches": recent_breaches,
         }
@@ -889,17 +905,16 @@ async def get_breaches_analytics(site: str) -> Dict[str, Any]:
         total_records = 0
         first_breach = None
         last_breach = None
+        industry_count = {}
 
         for breach in breach_list:
             key = ds_client.key("xon_breaches", breach)
             breach_data = ds_client.get(key)
 
             if breach_data:
-                # Update total records
                 records = breach_data.get("xposed_records", 0)
                 total_records += records if isinstance(records, int) else 0
 
-                # Update breach dates
                 breach_date = breach_data.get("breached_date")
                 if breach_date:
                     if not first_breach or breach_date < first_breach:
@@ -907,11 +922,22 @@ async def get_breaches_analytics(site: str) -> Dict[str, Any]:
                     if not last_breach or breach_date > last_breach:
                         last_breach = breach_date
 
+                industry = breach_data.get("industry", "Unknown")
+                if industry:
+                    industry_count[industry] = industry_count.get(industry, 0) + 1
+                else:
+                    industry_count["Unknown"] = industry_count.get("Unknown", 0) + 1
+
+        industry_breaches_count = dict(
+            sorted(industry_count.items(), key=lambda x: x[1], reverse=True)
+        )
+
         return {
             "total_breaches": total_breaches,
             "total_records": total_records,
             "first_breach": first_breach.strftime("%Y-%m-%d") if first_breach else None,
             "last_breach": last_breach.strftime("%Y-%m-%d") if last_breach else None,
+            "industry_breaches_count": industry_breaches_count,
         }
 
     except Exception as e:

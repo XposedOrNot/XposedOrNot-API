@@ -158,6 +158,7 @@ class DetailedMetricsResponse(BaseMetrics):
     """Response model for detailed metrics."""
 
     Yearly_Breaches_Count: Dict[int, int]
+    Industry_Breaches_Count: Dict[str, int]
     Top_Breaches: List[BaseBreachInfo]
     Recent_Breaches: List[BaseBreachInfo]
 
