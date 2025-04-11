@@ -5,7 +5,7 @@ import json
 import logging
 import os
 from datetime import datetime
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Tuple, Optional, Set
 
 # Third-party imports
 from fastapi import HTTPException
@@ -23,6 +23,172 @@ ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Constants
 TEMPERATURE = 0.7  # OpenAI temperature parameter
+
+# Data categories mapping
+data_categories = {
+    "Names": {"category": "👤 Personal Identification", "group": "A"},
+    "Usernames": {"category": "👤 Personal Identification", "group": "A"},
+    "Genders": {"category": "👤 Personal Identification", "group": "A"},
+    "Nationalities": {"category": "👤 Personal Identification", "group": "A"},
+    "Ethnicities": {"category": "👤 Personal Identification", "group": "A"},
+    "Places of Birth": {"category": "👤 Personal Identification", "group": "A"},
+    "Photos": {"category": "👤 Personal Identification", "group": "A"},
+    "Profile Photos": {"category": "👤 Personal Identification", "group": "A"},
+    "Salutations": {"category": "👤 Personal Identification", "group": "A"},
+    "Nicknames": {"category": "👤 Personal Identification", "group": "A"},
+    "Vehicle Identification Numbers": {
+        "category": "👤 Personal Identification",
+        "group": "A",
+    },
+    "Licence Plates": {"category": "👤 Personal Identification", "group": "A"},
+    "Social media profiles": {"category": "👤 Personal Identification", "group": "A"},
+    "Avatars": {"category": "👤 Personal Identification", "group": "A"},
+    "Credit Card Info": {"category": "💳 Financial Details", "group": "B"},
+    "Income levels": {"category": "💳 Financial Details", "group": "B"},
+    "Credit card details": {"category": "💳 Financial Details", "group": "B"},
+    "Bank Account Numbers": {"category": "💳 Financial Details", "group": "B"},
+    "Apps Installed on Devices": {
+        "category": "🍔 Personal Habits and Lifestyle",
+        "group": "C",
+    },
+    "Buying Preferences": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Drinking Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Drug Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Eating Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Living Costs": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Travel Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Work Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Professional Skills": {
+        "category": "🍔 Personal Habits and Lifestyle",
+        "group": "C",
+    },
+    "Spoken languages": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Time Zones": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Vehicle Details": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Passwords": {"category": "🔒 Security Practices", "group": "D"},
+    "Historical Passwords": {"category": "🔒 Security Practices", "group": "D"},
+    "Password Hints": {"category": "🔒 Security Practices", "group": "D"},
+    "Password Strengths": {"category": "🔒 Security Practices", "group": "D"},
+    "Security Questions and Answers": {
+        "category": "🔒 Security Practices",
+        "group": "D",
+    },
+    "Security questions and answers": {
+        "category": "🔒 Security Practices",
+        "group": "D",
+    },
+    "Auth Tokens": {"category": "🔒 Security Practices", "group": "D"},
+    "Encrypted Keys": {"category": "🔒 Security Practices", "group": "D"},
+    "Mnemonic Phrases": {"category": "🔒 Security Practices", "group": "D"},
+    "Job Applications": {"category": "🎓 Employment and Education", "group": "E"},
+    "Job titles": {"category": "🎓 Employment and Education", "group": "E"},
+    "Employers": {"category": "🎓 Employment and Education", "group": "E"},
+    "Employment Statuses": {"category": "🎓 Employment and Education", "group": "E"},
+    "Occupations": {"category": "🎓 Employment and Education", "group": "E"},
+    "Education Levels": {"category": "🎓 Employment and Education", "group": "E"},
+    "Years of Professional Experience": {
+        "category": "🎓 Employment and Education",
+        "group": "E",
+    },
+    "School Grades (Class Levels)": {
+        "category": "🎓 Employment and Education",
+        "group": "E",
+    },
+    "Email addresses": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "Email Messages": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "Chat Logs": {"category": "📞 Communication and Social Interactions", "group": "F"},
+    "Instant Messenger Identities": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "Instant messenger identities": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "Phone numbers": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "Private Messages": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "Social connections": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "IP addresses": {"category": "🖥️ Device and Network Information", "group": "G"},
+    "Device information": {
+        "category": "🖥️ Device and Network Information",
+        "group": "G",
+    },
+    "Device Serial Numbers": {
+        "category": "🖥️ Device and Network Information",
+        "group": "G",
+    },
+    "Device Usage Tracking Data": {
+        "category": "🖥️ Device and Network Information",
+        "group": "G",
+    },
+    "Browser user agent details": {
+        "category": "🖥️ Device and Network Information",
+        "group": "G",
+    },
+    "MAC Addresses": {"category": "🖥️ Device and Network Information", "group": "G"},
+    "IMEI Numbers": {"category": "🖥️ Device and Network Information", "group": "G"},
+    "IMSI Numbers": {"category": "🖥️ Device and Network Information", "group": "G"},
+    "Homepage URLs": {"category": "🖥️ Device and Network Information", "group": "G"},
+    "User Website URLs": {
+        "category": "🖥️ Device and Network Information",
+        "group": "G",
+    },
+    "Website Activity": {"category": "🖥️ Device and Network Information", "group": "G"},
+    "Personal Health Data": {"category": "🩺 Health Information", "group": "H"},
+    "HIV Statuses": {"category": "🩺 Health Information", "group": "H"},
+    "Blood Types": {"category": "🩺 Health Information", "group": "H"},
+    "Medical Conditions": {"category": "🩺 Health Information", "group": "H"},
+    "Medications": {"category": "🩺 Health Information", "group": "H"},
+    "Body Measurements": {"category": "🩺 Health Information", "group": "H"},
+    "Physical Activity Levels": {"category": "🩺 Health Information", "group": "H"},
+    "Physical Disabilities": {"category": "🩺 Health Information", "group": "H"},
+    "Psychological Conditions": {"category": "🩺 Health Information", "group": "H"},
+    "Sexual Orientations": {"category": "🩺 Health Information", "group": "H"},
+    "Dietary Preferences": {"category": "🩺 Health Information", "group": "H"},
+    "Gambling Habits": {"category": "🩺 Health Information", "group": "H"},
+    "Smoking Habits": {"category": "🩺 Health Information", "group": "H"},
+    "Sexual Fetishes": {"category": "🩺 Health Information", "group": "H"},
+    "Sleep Patterns": {"category": "🩺 Health Information", "group": "H"},
+    "Ages": {"category": "Demographics", "group": "I"},
+    "Dates of birth": {"category": "👥 Demographics", "group": "I"},
+    "Physical addresses": {"category": "👥 Demographics", "group": "I"},
+    "Geographic locations": {"category": "👥 Demographics", "group": "I"},
+    "GPS Coordinates": {"category": "👥 Demographics", "group": "I"},
+    "Languages": {"category": "👥 Demographics", "group": "I"},
+    "Marital statuses": {"category": "👥 Demographics", "group": "I"},
+    "Political Views": {"category": "👥 Demographics", "group": "I"},
+    "Religions": {"category": "👥 Demographics", "group": "I"},
+    "Races": {"category": "👥 Demographics", "group": "I"},
+    "Astronomical Observations": {"category": "Science and Technology", "group": "J"},
+    "Chemical Analyses": {"category": "Science and Technology", "group": "J"},
+    "Scientific Measurements": {"category": "Science and Technology", "group": "J"},
+    "Weather Observations": {"category": "Science and Technology", "group": "J"},
+    "Books Read": {"category": "Arts and Entertainment", "group": "K"},
+    "Games Played": {"category": "Arts and Entertainment", "group": "K"},
+    "Movies Watched": {"category": "Arts and Entertainment", "group": "K"},
+    "Music Listened To": {"category": "Arts and Entertainment", "group": "K"},
+    "Photos Uploaded": {"category": "Arts and Entertainment", "group": "K"},
+    "Videos Watched": {"category": "Arts and Entertainment", "group": "K"},
+    "Aircraft Details": {"category": "Transport and Travel", "group": "L"},
+    "Flight Details": {"category": "Transport and Travel", "group": "L"},
+    "Public Transport Details": {"category": "Transport and Travel", "group": "L"},
+    "Shipping Details": {"category": "Transport and Travel", "group": "L"},
+}
 
 # AI prompts for breach data analysis
 AI_SYSTEM_PROMPT = (
@@ -53,25 +219,159 @@ AI_USER_PROMPT_TEMPLATE = (
 )
 
 
+def calculate_data_sensitivity_score(exposed_data_types: Set[str]) -> float:
+    """
+    Calculate sensitivity score based on exposed data types.
+    Returns a score between 0-25
+    """
+    # Define risk weights for different categories
+    category_weights = {
+        "🔒 Security Practices": 5.0,  # Highest risk - passwords, security questions
+        "💳 Financial Details": 5.0,  # Highest risk - credit cards, bank accounts
+        "🩺 Health Information": 4.0,  # Very high risk - medical data, conditions
+        "👤 Personal Identification": 3.0,  # High risk - identity data
+        "👥 Demographics": 2.0,  # Medium risk - demographic info
+        "📞 Communication and Social Interactions": 2.0,  # Medium risk - contact info
+        "🖥️ Device and Network Information": 1.5,  # Lower risk - technical data
+        "🎓 Employment and Education": 1.5,  # Lower risk - professional info
+        "🍔 Personal Habits and Lifestyle": 1.0,  # Low risk - lifestyle data
+        "Arts and Entertainment": 0.5,  # Very low risk
+        "Transport and Travel": 0.5,  # Very low risk
+        "Science and Technology": 0.5,  # Very low risk
+    }
+
+    # Track which categories have exposed data
+    exposed_categories = set()
+    category_data_counts = {}
+
+    # Count exposed data types per category
+    for data_type in exposed_data_types:
+        if data_type in data_categories:
+            category = data_categories[data_type]["category"]
+            exposed_categories.add(category)
+            category_data_counts[category] = category_data_counts.get(category, 0) + 1
+
+    # Calculate weighted score
+    sensitivity_score = 0
+    for category in exposed_categories:
+        if category in category_weights:
+            # More exposed data types in a category increases the risk
+            data_count_multiplier = min(category_data_counts[category] / 2, 2)
+            sensitivity_score += category_weights[category] * data_count_multiplier
+
+    # Normalize to 0-25 range
+    return min(25, sensitivity_score)
+
+
+def calculate_risk_score(
+    total_breaches: int,
+    password_counts: Dict[str, int],
+    breach_dates: List[datetime],
+    exposed_data_types: Set[str],
+) -> Tuple[int, str]:
+    """
+    Calculate normalized risk score (0-100) based on multiple factors.
+    Returns tuple of (risk_score, risk_label)
+    """
+    # Base score just for being in breaches (0-15)
+    base_score = min(15, total_breaches * 3)
+
+    # Password risk score (0-40)
+    password_risk = 0
+    total_passwords = sum(password_counts.values())
+    if total_passwords > 0:
+        # Weighted sum of different password types
+        password_risk = (
+            (password_counts.get("PlainText", 0) * 40)
+            + (password_counts.get("EasyToCrack", 0) * 30)
+            + (password_counts.get("Unknown", 0) * 20)
+            + (password_counts.get("StrongHash", 0) * 10)
+        ) / total_passwords
+
+    # Recency score (0-25)
+    recency_score = 0
+    if breach_dates:
+        most_recent = max(breach_dates)
+        months_since = (datetime.now().date() - most_recent).days / 30
+        if months_since <= 3:
+            recency_score = 25
+        elif months_since <= 6:
+            recency_score = 20
+        elif months_since <= 12:
+            recency_score = 15
+        elif months_since <= 24:
+            recency_score = 10
+        else:
+            recency_score = 5
+
+    # Sensitive data score (0-20)
+    sensitive_data_score = 0
+    high_risk_categories = {
+        "🔒 Security Practices",  # Passwords, security questions, etc.
+        "💳 Financial Details",  # Credit cards, bank accounts
+        "🩺 Health Information",  # Medical data, conditions
+        "👤 Personal Identification",  # Identity data
+    }
+
+    # Count exposed data types in high-risk categories
+    high_risk_count = 0
+    for data_type in exposed_data_types:
+        if data_type in data_categories:
+            category = data_categories[data_type]["category"]
+            if category in high_risk_categories:
+                high_risk_count += 1
+
+    sensitive_data_score = min(
+        20, high_risk_count * 4
+    )  # 4 points per high-risk data type, max 20
+
+    # Calculate final score (0-100)
+    final_score = min(
+        100, base_score + password_risk + recency_score + sensitive_data_score
+    )
+
+    # Determine risk label
+    if final_score >= 70:
+        risk_label = "High"
+    elif final_score >= 40:
+        risk_label = "Medium"
+    else:
+        risk_label = "Low"
+
+    return (round(final_score), risk_label)
+
+
 def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
     """Returns the exposed breaches with details including records, domain, industry, and other metadata."""
+    logger.debug("[GET_BREACHES][1] Starting get_breaches with input: %s", breaches)
     ds_client = datastore.Client()
     breaches_output = {"breaches_details": []}
 
     breaches = breaches.split(";")
+    logger.debug("[GET_BREACHES][2] Split breaches into list: %s", breaches)
 
     for breach in breaches:
         try:
+            logger.debug("[GET_BREACHES][3] Processing breach: %s", breach)
             key = ds_client.key("xon_breaches", breach)
+            logger.debug("[GET_BREACHES][4] Created datastore key: %s", key)
             query_result = ds_client.get(key)
+            logger.debug("[GET_BREACHES][5] Datastore query result: %s", query_result)
 
             if query_result is not None:
                 xposed_records = query_result.get("xposed_records", 0)
                 breach_date = query_result.get("breached_date")
                 breach_year = breach_date.strftime("%Y") if breach_date else ""
+                logger.debug(
+                    "[GET_BREACHES][6] Extracted basic fields - records: %s, date: %s, year: %s",
+                    xposed_records,
+                    breach_date,
+                    breach_year,
+                )
 
                 # Convert searchable to "Yes"/"No" string format
                 searchable = query_result.get("searchable", "")
+                logger.debug("[GET_BREACHES][7] Raw searchable value: %s", searchable)
                 if isinstance(searchable, bool):
                     searchable = "Yes" if searchable else "No"
                 elif isinstance(searchable, str):
@@ -80,9 +380,13 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                         if searchable.lower() in ("true", "t", "yes", "y", "1")
                         else "No"
                     )
+                logger.debug(
+                    "[GET_BREACHES][8] Processed searchable value: %s", searchable
+                )
 
                 # Convert verified to "Yes"/"No" string format
                 verified = query_result.get("verified", "")
+                logger.debug("[GET_BREACHES][9] Raw verified value: %s", verified)
                 if isinstance(verified, bool):
                     verified = "Yes" if verified else "No"
                 elif isinstance(verified, str):
@@ -91,37 +395,58 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                         if verified.lower() in ("true", "t", "yes", "y", "1")
                         else "No"
                     )
-
-                breaches_output["breaches_details"].append(
-                    {
-                        "breach": breach,
-                        "details": query_result.get("xposure_desc", ""),
-                        "domain": query_result.get("domain", ""),
-                        "industry": query_result.get("industry", ""),
-                        "logo": query_result.get("logo", ""),
-                        "password_risk": query_result.get("password_risk", ""),
-                        "references": query_result.get("references", ""),
-                        "searchable": searchable,
-                        "verified": verified,
-                        "xposed_data": query_result.get("xposed_data", ""),
-                        "xposed_date": breach_year,
-                        "xposed_records": xposed_records,
-                    }
+                logger.debug(
+                    "[GET_BREACHES][10] Processed verified value: %s", verified
                 )
+
+                breach_details = {
+                    "breach": breach,
+                    "details": query_result.get("xposure_desc", ""),
+                    "domain": query_result.get("domain", ""),
+                    "industry": query_result.get("industry", ""),
+                    "logo": query_result.get("logo", ""),
+                    "password_risk": query_result.get("password_risk", ""),
+                    "references": query_result.get("references", ""),
+                    "searchable": searchable,
+                    "verified": verified,
+                    "xposed_data": query_result.get("xposed_data", ""),
+                    "xposed_date": breach_year,
+                    "xposed_records": xposed_records,
+                }
+                logger.debug(
+                    "[GET_BREACHES][11] Created breach details: %s", breach_details
+                )
+                breaches_output["breaches_details"].append(breach_details)
+                logger.debug("[GET_BREACHES][12] Added breach details to output")
             else:
+                logger.error("[GET_BREACHES][ERROR] Breach not found: %s", breach)
                 raise HTTPException(status_code=404, detail="Breach not found")
 
         except Exception as e:
+            logger.error(
+                "[GET_BREACHES][ERROR] Error processing breach %s: %s",
+                breach,
+                str(e),
+                exc_info=True,
+            )
             raise HTTPException(status_code=404, detail=str(e)) from e
 
+    logger.debug(
+        "[GET_BREACHES][13] Completed processing all breaches. Final output: %s",
+        breaches_output,
+    )
     return breaches_output
 
 
 def get_breaches_data(breaches: str) -> dict:
     """Returns a dictionary with the count of various types of exposed data in breaches"""
     try:
+        logger.debug(
+            "[GET_BREACHES_DATA][1] Starting get_breaches_data with input: %s", breaches
+        )
         ds_client = datastore.Client()
         breach_list = breaches.split(";")
+        logger.debug("[GET_BREACHES_DATA][2] Split breaches into list: %s", breach_list)
 
         # Initialize metrics structure
         metrics = {
@@ -184,351 +509,96 @@ def get_breaches_data(breaches: str) -> dict:
                 }
             ],
         }
-
-        # Data type categories and their emojis
-        data_categories = {
-            "Names": {"category": "👤 Personal Identification", "group": "A"},
-            "Usernames": {"category": "👤 Personal Identification", "group": "A"},
-            "Genders": {"category": "👤 Personal Identification", "group": "A"},
-            "Nationalities": {"category": "👤 Personal Identification", "group": "A"},
-            "Ethnicities": {"category": "👤 Personal Identification", "group": "A"},
-            "Places of Birth": {"category": "👤 Personal Identification", "group": "A"},
-            "Photos": {"category": "👤 Personal Identification", "group": "A"},
-            "Profile Photos": {"category": "👤 Personal Identification", "group": "A"},
-            "Salutations": {"category": "👤 Personal Identification", "group": "A"},
-            "Nicknames": {"category": "👤 Personal Identification", "group": "A"},
-            "Vehicle Identification Numbers": {
-                "category": "👤 Personal Identification",
-                "group": "A",
-            },
-            "Licence Plates": {"category": "👤 Personal Identification", "group": "A"},
-            "Social media profiles": {
-                "category": "👤 Personal Identification",
-                "group": "A",
-            },
-            "Avatars": {"category": "👤 Personal Identification", "group": "A"},
-            "Credit Card Info": {"category": "💳 Financial Details", "group": "B"},
-            "Income levels": {"category": "💳 Financial Details", "group": "B"},
-            "Credit card details": {"category": "💳 Financial Details", "group": "B"},
-            "Bank Account Numbers": {"category": "💳 Financial Details", "group": "B"},
-            "Apps Installed on Devices": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Buying Preferences": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Drinking Habits": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Drug Habits": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Eating Habits": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Living Costs": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Travel Habits": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Work Habits": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Professional Skills": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Spoken languages": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Time Zones": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Vehicle Details": {
-                "category": "🍔 Personal Habits and Lifestyle",
-                "group": "C",
-            },
-            "Passwords": {"category": "🔒 Security Practices", "group": "D"},
-            "Historical Passwords": {"category": "🔒 Security Practices", "group": "D"},
-            "Password Hints": {"category": "🔒 Security Practices", "group": "D"},
-            "Password Strengths": {"category": "🔒 Security Practices", "group": "D"},
-            "Security Questions and Answers": {
-                "category": "🔒 Security Practices",
-                "group": "D",
-            },
-            "Security questions and answers": {
-                "category": "🔒 Security Practices",
-                "group": "D",
-            },
-            "Auth Tokens": {"category": "🔒 Security Practices", "group": "D"},
-            "Encrypted Keys": {"category": "🔒 Security Practices", "group": "D"},
-            "Mnemonic Phrases": {"category": "🔒 Security Practices", "group": "D"},
-            "Job Applications": {
-                "category": "🎓 Employment and Education",
-                "group": "E",
-            },
-            "Job titles": {"category": "🎓 Employment and Education", "group": "E"},
-            "Employers": {"category": "🎓 Employment and Education", "group": "E"},
-            "Employment Statuses": {
-                "category": "🎓 Employment and Education",
-                "group": "E",
-            },
-            "Occupations": {"category": "🎓 Employment and Education", "group": "E"},
-            "Education Levels": {
-                "category": "🎓 Employment and Education",
-                "group": "E",
-            },
-            "Years of Professional Experience": {
-                "category": "🎓 Employment and Education",
-                "group": "E",
-            },
-            "School Grades (Class Levels)": {
-                "category": "🎓 Employment and Education",
-                "group": "E",
-            },
-            "Email addresses": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "Email Messages": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "Chat Logs": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "Instant Messenger Identities": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "Instant messenger identities": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "Phone numbers": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "Private Messages": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "Social connections": {
-                "category": "📞 Communication and Social Interactions",
-                "group": "F",
-            },
-            "IP addresses": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "Device information": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "Device Serial Numbers": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "Device Usage Tracking Data": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "Browser user agent details": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "MAC Addresses": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "IMEI Numbers": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "IMSI Numbers": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "Homepage URLs": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "User Website URLs": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "Website Activity": {
-                "category": "🖥️ Device and Network Information",
-                "group": "G",
-            },
-            "Personal Health Data": {"category": "🩺 Health Information", "group": "H"},
-            "HIV Statuses": {"category": "🩺 Health Information", "group": "H"},
-            "Blood Types": {"category": "🩺 Health Information", "group": "H"},
-            "Medical Conditions": {"category": "🩺 Health Information", "group": "H"},
-            "Medications": {"category": "🩺 Health Information", "group": "H"},
-            "Body Measurements": {"category": "🩺 Health Information", "group": "H"},
-            "Physical Activity Levels": {
-                "category": "🩺 Health Information",
-                "group": "H",
-            },
-            "Physical Disabilities": {
-                "category": "🩺 Health Information",
-                "group": "H",
-            },
-            "Psychological Conditions": {
-                "category": "🩺 Health Information",
-                "group": "H",
-            },
-            "Sexual Orientations": {"category": "🩺 Health Information", "group": "H"},
-            "Dietary Preferences": {"category": "🩺 Health Information", "group": "H"},
-            "Gambling Habits": {"category": "🩺 Health Information", "group": "H"},
-            "Smoking Habits": {"category": "🩺 Health Information", "group": "H"},
-            "Sexual Fetishes": {"category": "🩺 Health Information", "group": "H"},
-            "Sleep Patterns": {"category": "🩺 Health Information", "group": "H"},
-            "Ages": {"category": "Demographics", "group": "I"},
-            "Dates of birth": {"category": "👥 Demographics", "group": "I"},
-            "Physical addresses": {"category": "👥 Demographics", "group": "I"},
-            "Geographic locations": {"category": "👥 Demographics", "group": "I"},
-            "GPS Coordinates": {"category": "👥 Demographics", "group": "I"},
-            "Languages": {"category": "👥 Demographics", "group": "I"},
-            "Marital statuses": {"category": "👥 Demographics", "group": "I"},
-            "Political Views": {"category": "👥 Demographics", "group": "I"},
-            "Religions": {"category": "👥 Demographics", "group": "I"},
-            "Races": {"category": "👥 Demographics", "group": "I"},
-            "Astronomical Observations": {
-                "category": "Science and Technology",
-                "group": "J",
-            },
-            "Chemical Analyses": {"category": "Science and Technology", "group": "J"},
-            "Scientific Measurements": {
-                "category": "Science and Technology",
-                "group": "J",
-            },
-            "Weather Observations": {
-                "category": "Science and Technology",
-                "group": "J",
-            },
-            "Books Read": {"category": "Arts and Entertainment", "group": "K"},
-            "Games Played": {"category": "Arts and Entertainment", "group": "K"},
-            "Movies Watched": {"category": "Arts and Entertainment", "group": "K"},
-            "Music Listened To": {"category": "Arts and Entertainment", "group": "K"},
-            "Photos Uploaded": {"category": "Arts and Entertainment", "group": "K"},
-            "Videos Watched": {"category": "Arts and Entertainment", "group": "K"},
-            "Aircraft Details": {"category": "Transport and Travel", "group": "L"},
-            "Flight Details": {"category": "Transport and Travel", "group": "L"},
-            "Public Transport Details": {
-                "category": "Transport and Travel",
-                "group": "L",
-            },
-            "Shipping Details": {"category": "Transport and Travel", "group": "L"},
-        }
+        logger.debug("[GET_BREACHES_DATA][3] Initialized metrics structure")
 
         # Process each breach
+        exposed_data_types = set()
         date_list = []
         password_risk_counters = {
-            "plaintext": 0,
-            "easytocrack": 0,
-            "hardtocrack": 0,
-            "unknown": 0,
+            "PlainText": 0,
+            "EasyToCrack": 0,
+            "StrongHash": 0,
+            "Unknown": 0,
         }
 
         for breach in breach_list:
-            key = ds_client.key("xon_breaches", breach)
-            query_result = ds_client.get(key)
+            try:
+                key = ds_client.key("xon_breaches", breach)
+                query_result = ds_client.get(key)
 
-            if query_result:
-                # Update industry count
-                industry = query_result.get("industry", "").lower()[:4]
-                for ind in metrics["industry"][0]:
-                    if ind[0] == industry:
-                        ind[1] += 1
+                if query_result:
+                    # Update industry count
+                    industry = query_result.get("industry", "").lower()[:4]
+                    for ind in metrics["industry"][0]:
+                        if ind[0] == industry:
+                            ind[1] += 1
 
-                # Update password strength and collect breach dates
-                password_risk = query_result.get("password_risk", "").lower()
-                if password_risk == "plaintext":
-                    metrics["passwords_strength"][0]["PlainText"] += 1
-                    password_risk_counters["plaintext"] += 1
-                elif password_risk == "easytocrack":
-                    metrics["passwords_strength"][0]["EasyToCrack"] += 1
-                    password_risk_counters["easytocrack"] += 1
-                elif password_risk == "hardtocrack":
-                    metrics["passwords_strength"][0]["StrongHash"] += 1
-                    password_risk_counters["hardtocrack"] += 1
-                else:
-                    metrics["passwords_strength"][0]["Unknown"] += 1
-                    password_risk_counters["unknown"] += 1
+                    # Collect breach dates
+                    if breach_date := query_result.get("breached_date"):
+                        date_list.append(breach_date.date())
+                        year = breach_date.year
+                        if 2007 <= year <= 2025:
+                            metrics["yearwise_details"][0][f"y{year}"] += 1
 
-                # Update yearwise details and collect breach dates
-                if breach_date := query_result.get("breached_date"):
-                    year = breach_date.year
-                    if 2007 <= year <= 2025:
-                        metrics["yearwise_details"][0][f"y{year}"] += 1
-                    date_list.append(breach_date.date())
+                    # Update password strength counters
+                    password_risk = query_result.get("password_risk", "").lower()
+                    if password_risk == "plaintext":
+                        password_risk_counters["PlainText"] += 1
+                        metrics["passwords_strength"][0]["PlainText"] += 1
+                    elif password_risk == "easytocrack":
+                        password_risk_counters["EasyToCrack"] += 1
+                        metrics["passwords_strength"][0]["EasyToCrack"] += 1
+                    elif password_risk == "hardtocrack":
+                        password_risk_counters["StrongHash"] += 1
+                        metrics["passwords_strength"][0]["StrongHash"] += 1
+                    else:
+                        password_risk_counters["Unknown"] += 1
+                        metrics["passwords_strength"][0]["Unknown"] += 1
 
-        # Calculate risk score using Flask logic
-        # Calculate password strength score
-        total_passwords = sum(password_risk_counters.values())
-        password_score = (
-            (password_risk_counters["plaintext"] / total_passwords)
-            if total_passwords > 0
-            else 0
+                    # Update yearwise details and collect breach dates
+                    if breach_date := query_result.get("breached_date"):
+                        year = breach_date.year
+                        logger.debug(
+                            "[GET_BREACHES_DATA][11] Processing breach date: %s, year: %s",
+                            breach_date,
+                            year,
+                        )
+                        if 2007 <= year <= 2025:
+                            metrics["yearwise_details"][0][f"y{year}"] += 1
+                            logger.debug(
+                                "[GET_BREACHES_DATA][12] Updated year count for %s",
+                                year,
+                            )
+                        date_list.append(breach_date.date())
+
+                    # Collect exposed data types
+                    if xposed_data := query_result.get("xposed_data"):
+                        data_types = {dt.strip() for dt in xposed_data.split(";")}
+                        exposed_data_types.update(data_types)
+
+            except Exception as e:
+                logger.error(f"Error processing breach {breach}: {str(e)}")
+                continue
+
+        logger.debug("[GET_BREACHES_DATA][13] Completed processing all breaches")
+        logger.debug("[GET_BREACHES_DATA][14] Date list: %s", date_list)
+        logger.debug(
+            "[GET_BREACHES_DATA][15] Final password risk counters: %s",
+            password_risk_counters,
         )
 
-        if password_score <= 0.33:
-            password_strength = 1
-        elif password_score <= 0.66:
-            password_strength = 2
-        else:
-            password_strength = 3
-
-        # Calculate breach recency score
-        if date_list:
-            sorted_dates = sorted(date_list)
-            least_date = sorted_dates[0]
-            current_date = datetime.now().date()
-            months_difference = (current_date.year - least_date.year) * 12 + (
-                current_date.month - least_date.month
-            )
-
-            if months_difference < 6:
-                last_breach_months = 3
-            elif 6 <= months_difference <= 12:
-                last_breach_months = 2
-            else:
-                last_breach_months = 1
-        else:
-            last_breach_months = 1
-
-        # Calculate final risk score
-        num_breaches = len(breach_list)
-        high_severity = password_risk_counters["plaintext"]
-
-        risk_score = round(
-            (num_breaches * high_severity)
-            + (high_severity * 2)
-            + (last_breach_months / 12)
-            + (password_strength * 3)
+        # Calculate risk score using new method
+        risk_score, risk_label = calculate_risk_score(
+            total_breaches=len(breach_list),
+            password_counts=password_risk_counters,
+            breach_dates=date_list,
+            exposed_data_types=exposed_data_types,
         )
-
-        # Determine risk label
-        if risk_score >= 61:
-            risk_label = "High"
-        elif risk_score >= 21:
-            risk_label = "Medium"
-        else:
-            risk_label = "Low"
+        logger.debug(
+            "[GET_BREACHES_DATA][16] Calculated new risk score: %s, label: %s",
+            risk_score,
+            risk_label,
+        )
 
         metrics["risk"] = [{"risk_label": risk_label, "risk_score": risk_score}]
 
@@ -540,16 +610,31 @@ def get_breaches_data(breaches: str) -> dict:
         for breach in breach_list:
             key = ds_client.key("xon_breaches", breach)
             query_result = ds_client.get(key)
+            logger.debug(
+                "[GET_BREACHES_DATA][23] Processing exposed data for breach: %s", breach
+            )
             if query_result and "xposed_data" in query_result:
                 data_list = query_result["xposed_data"].split(";")
+                logger.debug(
+                    "[GET_BREACHES_DATA][24] Raw exposed data list: %s", data_list
+                )
                 for data in data_list:
                     data = data.strip()
                     if data:
                         exposed_data_types[data] = exposed_data_types.get(data, 0) + 1
+        logger.debug(
+            "[GET_BREACHES_DATA][25] Collected exposed data types: %s",
+            exposed_data_types,
+        )
 
         # Map exposed data to categories
         category_dict = {}
         for data_type, count in exposed_data_types.items():
+            logger.debug(
+                "[GET_BREACHES_DATA][26] Mapping data type: %s (count: %s)",
+                data_type,
+                count,
+            )
             if data_type in data_categories:
                 category = data_categories[data_type]["category"]
                 group = data_categories[data_type]["group"]
@@ -566,13 +651,12 @@ def get_breaches_data(breaches: str) -> dict:
                         "colname": "level3",
                         "group": group,
                         "name": f"data_{data_type}",
-                        "value": count,
+                        "value": 1,  # Count of occurrences
                     }
                 )
 
-        # Add each category to the final structure
         for category in category_dict.values():
-            if len(category["children"]) > 0:
+            if category["children"]:
                 xposed_data_structure["children"].append(category)
 
         metrics["xposed_data"] = [xposed_data_structure]
@@ -580,6 +664,11 @@ def get_breaches_data(breaches: str) -> dict:
         return metrics
 
     except Exception as e:
+        logger.error(
+            "[GET_BREACHES_DATA][ERROR] Error processing data: %s",
+            str(e),
+            exc_info=True,
+        )
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 

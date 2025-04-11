@@ -628,7 +628,6 @@ async def get_domain_breach_summary(
         return DomainBreachSummaryResponse(
             sendDomains=breaches_dict, SearchStatus="Success"
         )
-
     except Exception as e:
         logger.error(
             "[DOMAIN-BREACH-SUMMARY] Error processing request: %s",
