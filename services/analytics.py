@@ -51,7 +51,10 @@ data_categories = {
         "category": "🍔 Personal Habits and Lifestyle",
         "group": "C",
     },
-    "Buying Preferences": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
+    "Buying Preferences": {
+        "category": "🍔 Personal Habits and Lifestyle",
+        "group": "C",
+    },
     "Drinking Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
     "Drug Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
     "Eating Habits": {"category": "🍔 Personal Habits and Lifestyle", "group": "C"},
