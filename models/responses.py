@@ -117,6 +117,28 @@ class EmptyBreachResponse(BaseModel):
     PastesSummary: PasteSummary
 
 
+class DomainBreachDetail(BaseModel):
+    """Model for individual domain breach details."""
+
+    domain: str = Field(..., description="Domain that was breached")
+    breach_pastes: int = Field(..., description="Number of paste records found")
+    breach_emails: int = Field(..., description="Number of unique emails found")
+    breach_total: int = Field(..., description="Total number of breach records")
+    breach_count: int = Field(..., description="Number of unique breaches")
+    breach_last_seen: Optional[str] = Field(
+        None, description="Date when the breach was last seen"
+    )
+
+
+class DomainBreachSummaryResponse(BaseModel):
+    """Response model for domain breach summary endpoint."""
+
+    sendDomains: Dict[str, List[DomainBreachDetail]] = Field(
+        ..., description="Dictionary containing list of breach details"
+    )
+    SearchStatus: str = Field(..., description="Status of the search (Success/Error)")
+
+
 class DomainBreachDetails(BaseModel):
     """Model for domain breach details."""
 
@@ -126,13 +148,6 @@ class DomainBreachDetails(BaseModel):
     breach_total: int
     breach_count: int
     breach_last_seen: Optional[str] = None
-
-
-class DomainBreachSummaryResponse(BaseModel):
-    """Response model for domain breach summary."""
-
-    sendDomains: Dict[str, Dict[str, List[DomainBreachDetails]]]
-    SearchStatus: str
 
 
 class WebhookConfigResponse(BaseResponse):
@@ -329,34 +344,16 @@ class ShieldVerificationErrorResponse(BaseModel):
     status: str = "error"
 
 
-class DomainBreachDetail(BaseModel):
-    """Model for individual domain breach details."""
-
-    domain: str = Field(..., description="Domain that was breached")
-    breach_pastes: int = Field(..., description="Number of paste records found")
-    breach_emails: int = Field(..., description="Number of unique emails found")
-    breach_total: int = Field(..., description="Total number of breach records")
-    breach_count: int = Field(..., description="Number of unique breaches")
-    breach_last_seen: Optional[str] = Field(
-        None, description="Date when the breach was last seen"
-    )
-
-
-class DomainBreachSummaryResponse(BaseModel):
-    """Response model for domain breach summary endpoint."""
-
-    sendDomains: Dict[str, List[DomainBreachDetail]] = Field(
-        ..., description="Dictionary containing list of breach details"
-    )
-    SearchStatus: str = Field(..., description="Status of the search (Success/Error)")
-
-
 class AlertResponse(BaseModel):
+    """Response model for alert operations."""
+
     status: str
     message: str
 
 
 class VerificationResponse(BaseModel):
+    """Response model for verification operations."""
+
     status: str
     sensitive_breach_details: Optional[str] = None
     BreachMetrics: Optional[Dict] = None
