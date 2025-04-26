@@ -1,10 +1,8 @@
 """Validation utilities for the application."""
 
 import re
-from typing import List
 from urllib.parse import urlparse
 from fastapi import Request
-from validate_email import validate_email
 
 
 def validate_variables(variables_to_validate: list) -> bool:
