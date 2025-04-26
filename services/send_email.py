@@ -75,7 +75,9 @@ async def send_alert_confirmation(
     try:
         # Check if API credentials are set
         if not API_KEY or not API_SECRET:
-            logging.error("Mailjet API credentials are not set in environment variables")
+            logging.error(
+                "Mailjet API credentials are not set in environment variables"
+            )
             raise HTTPException(
                 status_code=500,
                 detail="Email service configuration error: API credentials not set",
@@ -110,13 +112,17 @@ async def send_alert_confirmation(
                 except socket.gaierror as e:
                     logging.error("Could not resolve api.mailjet.com: %s", str(e))
 
-                logging.info("Attempting to connect to Mailjet API at %s", MAILJET_API_URL)
+                logging.info(
+                    "Attempting to connect to Mailjet API at %s", MAILJET_API_URL
+                )
                 response = await client.post(
                     MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
                 )
 
                 if response.status_code != 200:
-                    logging.error("Failed to send alert confirmation: %s", response.text)
+                    logging.error(
+                        "Failed to send alert confirmation: %s", response.text
+                    )
                     raise HTTPException(
                         status_code=500, detail="Failed to send alert confirmation"
                     )
@@ -483,9 +489,7 @@ async def send_databreach_alertme(
         ) from e
     except httpx.TimeoutException as e:
         logging.error("Timeout error to Mailjet API: %s", str(e))
-        raise HTTPException(
-            status_code=500, detail="Email service timeout"
-        ) from e
+        raise HTTPException(status_code=500, detail="Email service timeout") from e
     except Exception as e:
         logging.error("Error sending databreach alert: %s", str(e))
         raise HTTPException(

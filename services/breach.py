@@ -101,24 +101,14 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
         return {}
     except api_exceptions.GoogleAPIError as exception_details:
         logger.error(
-            "[GET-EXPOSURE] Error fetching data: %s",
-            exception_details,
-            exc_info=True
+            "[GET-EXPOSURE] Error fetching data: %s", exception_details, exc_info=True
         )
         return {}
     except (ValueError, TypeError) as e:
-        logger.error(
-            "[GET-EXPOSURE] Invalid input: %s",
-            str(e),
-            exc_info=True
-        )
+        logger.error("[GET-EXPOSURE] Invalid input: %s", str(e), exc_info=True)
         return {}
     except Exception as e:
-        logger.error(
-            "[GET-EXPOSURE] Unexpected error: %s",
-            str(e),
-            exc_info=True
-        )
+        logger.error("[GET-EXPOSURE] Unexpected error: %s", str(e), exc_info=True)
         return {}
 
 
@@ -140,24 +130,14 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
         return {}
     except api_exceptions.GoogleAPIError as e:
         logger.error(
-            "[GET-SENSITIVE] Error fetching sensitive data: %s",
-            str(e),
-            exc_info=True
+            "[GET-SENSITIVE] Error fetching sensitive data: %s", str(e), exc_info=True
         )
         return {}
     except (ValueError, TypeError) as e:
-        logger.error(
-            "[GET-SENSITIVE] Invalid input: %s",
-            str(e),
-            exc_info=True
-        )
+        logger.error("[GET-SENSITIVE] Invalid input: %s", str(e), exc_info=True)
         return {}
     except Exception as e:
-        logger.error(
-            "[GET-SENSITIVE] Unexpected error: %s",
-            str(e),
-            exc_info=True
-        )
+        logger.error("[GET-SENSITIVE] Unexpected error: %s", str(e), exc_info=True)
         return {}
 
 
@@ -173,20 +153,19 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
 
             if query_result is not None:
                 xposed_records = query_result.get("xposed_records", 0)
-                breaches_output["breaches_details"].append(
-                    {
-                        "breach": breach,
-                        "xposed_records": xposed_records,
-                        "details": query_result.get("xposure_desc", ""),
-                        "domain": query_result.get("domain", ""),
-                        "industry": query_result.get("industry", ""),
-                        "logo": query_result.get("logo", ""),
-                        "password_risk": query_result.get("password_risk", ""),
-                        "xposed_data": query_result.get("xposed_data", ""),
-                        "searchable": query_result.get("searchable", ""),
-                        "verified": query_result.get("verified", ""),
-                    }
-                )
+                breach_details = {
+                    "breach": breach,
+                    "xposed_records": xposed_records,
+                    "details": query_result.get("xposure_desc", ""),
+                    "domain": query_result.get("domain", ""),
+                    "industry": query_result.get("industry", ""),
+                    "logo": query_result.get("logo", ""),
+                    "password_risk": query_result.get("password_risk", ""),
+                    "xposed_data": query_result.get("xposed_data", ""),
+                    "searchable": query_result.get("searchable", ""),
+                    "verified": query_result.get("verified", ""),
+                }
+                breaches_output["breaches_details"].append(breach_details)
             else:
                 raise HTTPException(status_code=404, detail="Breach not found")
 

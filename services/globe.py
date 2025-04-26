@@ -83,7 +83,7 @@ async def publish_to_pubsub(data: Dict[str, Any]) -> None:
 
         # Publish message - note: pubsub client is synchronous but we wrap it in async
         message = json.dumps(data).encode("utf-8")
-        future = publisher.publish(topic_path, message)
+        publisher.publish(topic_path, message)
 
         # Store request hash with timestamp
         recent_requests[request_hash] = current_time
