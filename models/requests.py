@@ -19,7 +19,12 @@ class WebhookSetupRequest(BaseModel):
     action: str
     verify_token: Optional[str] = None
 
-    class Config:
+    class Config:  # pylint: disable=too-few-public-methods
+        """Configuration class for WebhookSetupRequest.
+
+        Defines validation settings and provides example data for API documentation.
+        """
+
         validate_by_name = True
         json_schema_extra = {
             "example": {
@@ -60,7 +65,12 @@ class ChannelSetupRequest(BaseModel):
     verify_token: Optional[str] = None
     tokens: Optional[Dict[str, Any]] = None
 
-    class Config:
+    class Config:  # pylint: disable=too-few-public-methods
+        """Configuration class for ChannelSetupRequest.
+
+        Defines validation settings and provides example data for API documentation.
+        """
+
         validate_by_name = True
         json_schema_extra = {
             "example": {
@@ -97,7 +107,12 @@ class EmailVerificationRequest(BaseModel):
     domain: str
     token: str
 
-    class Config:
+    class Config:  # pylint: disable=too-few-public-methods
+        """Configuration class for EmailVerificationRequest.
+
+        Defines validation settings and provides example data for API documentation.
+        """
+
         validate_by_name = True
         json_schema_extra = {
             "example": {
@@ -130,7 +145,12 @@ class DomainVerificationRequest(BaseModel):
     )
     token: str
 
-    class Config:
+    class Config:  # pylint: disable=too-few-public-methods
+        """Configuration class for DomainVerificationRequest.
+
+        Defines validation settings and provides example data for API documentation.
+        """
+
         validate_by_name = True
         json_schema_extra = {
             "example": {
@@ -160,6 +180,11 @@ class ApiKeyRequest(BaseModel):
     email: EmailStr
 
     class Config:
+        """Configuration class for ApiKeyRequest.
+
+        Defines validation settings and provides example data for API documentation.
+        """
+
         validate_by_name = True
         json_schema_extra = {
             "example": {"token": "your_token", "email": "user@example.com"}

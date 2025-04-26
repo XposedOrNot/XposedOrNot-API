@@ -1,22 +1,28 @@
 """General utility functions for the application."""
 
-import socket
+# Standard library imports
 import hashlib
 import ipaddress
-from typing import Optional, Dict, Any
-import requests
-from requests.exceptions import RequestException
-from user_agents import parse
-from fastapi import Request
-from utils.validation import validate_url, validate_variables, validate_email_with_tld
 import re
+from typing import Optional, Dict, Any
+
+# Third-party imports
+import requests
+from fastapi import Request
+from user_agents import parse
+
+# Local imports
+from utils.validation import validate_url, validate_variables, validate_email_with_tld
 
 
 def validate_domain(domain: str) -> bool:
     """Returns True if the domain is valid, False otherwise."""
     if not domain:
         return False
-    domain_pattern = r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$"
+    domain_pattern = (
+        r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+"
+        r"[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]$"
+    )
 
     parts = domain.split(".")
     if len(parts) < 2 or len(parts[-1]) < 2:
@@ -64,7 +70,7 @@ def fetch_location_by_ip(ip_address: str) -> str:
             data = response.json()
             if data.get("status") == "success":
                 return data.get("isp", "Unknown ISP")
-    except RequestException:
+    except requests.RequestException:
         # Log the error if needed
         pass
     return "Unknown ISP"

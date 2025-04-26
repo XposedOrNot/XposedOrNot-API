@@ -1,13 +1,11 @@
 """Main XON-API entry point."""
 
 # Standard library imports
-import os
-from typing import Dict, Any
+from typing import List
 
 # Third-party imports
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -43,40 +41,11 @@ from api.v1 import (
     webhooks,
 )
 
-# Local imports - Models
-from models.responses import (
-    AlertResponse,
-    BreachAnalyticsResponse,
-    BreachAnalyticsV2Response,
-    BreachDetailResponse,
-    BreachListResponse,
-    DetailedMetricsResponse,
-    DomainAlertErrorResponse,
-    DomainAlertResponse,
-    DomainBreachesErrorResponse,
-    DomainBreachesResponse,
-    DomainVerifyErrorResponse,
-    DomainVerifyResponse,
-    EmailBreachErrorResponse,
-    EmailBreachResponse,
-    EmptyBreachResponse,
-    MetricsResponse,
-    PulseNewsResponse,
-    ShieldActivationErrorResponse,
-    ShieldActivationResponse,
-    ShieldVerificationErrorResponse,
-    ShieldVerificationResponse,
-    UnsubscribeResponse,
-    UnsubscribeVerifyErrorResponse,
-    UnsubscribeVerifyResponse,
-    VerificationResponse,
-)
-
 # Local imports - Services
 from services.cloudflare import unblock
 
-# Local imports - Utils
-from utils.validation import validate_variables
+# Local imports - Models
+from models.responses import AlertResponse
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -167,29 +136,37 @@ async def index():
 
 @app.get("/v1/help/", include_in_schema=False)
 @limiter.limit("500 per day;100 per hour")
-async def helper(request: Request):
-    """Basic guidance to API documentation page"""
+async def helper(request: Request):  # pylint: disable=unused-argument
+    """
+    Provides basic guidance to the API documentation page.
+    Returns an HTML response with the documentation landing page.
+    """
     return HTMLResponse(content=open("templates/index.html", encoding="utf-8").read())
 
 
 @app.get("/robots.txt", include_in_schema=False)
 @limiter.limit("500 per day;100 per hour")
-async def serve_robots_txt(request: Request):
-    """Returns robots.txt"""
+async def serve_robots_txt(request: Request):  # pylint: disable=unused-argument
+    """Returns robots.txt file content."""
     return HTMLResponse(content=open("static/robots.txt", encoding="utf-8").read())
 
 
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html(request: Request):
     """Custom Swagger UI endpoint with enhanced styling."""
+    swagger_js_url = "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js"
+    swagger_css_url = (
+        "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css"
+    )
+
     return templates.TemplateResponse(
         "swagger/custom_swagger.html",
         {
             "request": request,
             "openapi_url": "/openapi.json",
             "title": f"{API_TITLE} - API Documentation",
-            "swagger_js_url": "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js",
-            "swagger_css_url": "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css",
+            "swagger_js_url": swagger_js_url,
+            "swagger_css_url": swagger_css_url,
         },
     )
 
@@ -207,8 +184,15 @@ async def get_openapi_json():
 
 @app.get("/v1/unblock_cf/{token}", include_in_schema=False)
 @limiter.limit("24 per day;2 per hour;2 per second")
-async def unblock_cloudflare(token: str, request: Request):
-    """Returns status of unblock done at Cloudflare"""
+async def unblock_cloudflare(
+    token: str, request: Request
+):  # pylint: disable=unused-argument
+    """
+    Returns status of unblock done at Cloudflare.
+    Args:
+        token: Authentication token for the unblock operation
+        request: FastAPI request object (used by rate limiter)
+    """
     try:
         if not token or token != CF_UNBLOCK_MAGIC:
             raise HTTPException(status_code=404, detail="Not found")
@@ -221,6 +205,12 @@ async def unblock_cloudflare(token: str, request: Request):
 
 
 def custom_openapi():
+    """
+    Generate custom OpenAPI schema for the API documentation.
+
+    Returns:
+        dict: The customized OpenAPI schema.
+    """
     if app.openapi_schema:
         return app.openapi_schema
 
@@ -281,7 +271,11 @@ def custom_openapi():
     openapi_schema["paths"]["/v1/breaches"] = {
         "get": {
             "summary": "Get List Of Breaches",
-            "description": "Retrieves a list of all known data breaches in the system. This endpoint provides information about each breach including its name, title, breach date, and when it was added to the system.",
+            "description": (
+                "Retrieves a list of all known data breaches in the system. "
+                "This endpoint provides information about each breach including "
+                "its name, title, breach date, and when it was added to the system."
+            ),
             "tags": ["breaches"],
             "parameters": [
                 {
@@ -398,7 +392,11 @@ def custom_openapi():
     openapi_schema["paths"]["/v1/check-email/{email}"] = {
         "get": {
             "summary": "Check Email For Breaches",
-            "description": "Searches for any data breaches containing the specified email address. This endpoint provides information about breaches where the email was found.",
+            "description": (
+                "Searches for any data breaches containing the specified email "
+                "address. This endpoint provides information about breaches where "
+                "the email was found."
+            ),
             "tags": ["breaches"],
             "parameters": [
                 {
@@ -411,14 +409,18 @@ def custom_openapi():
                 {
                     "name": "include_details",
                     "in": "query",
-                    "description": "Include detailed breach information in the response",
+                    "description": (
+                        "Include detailed breach information in the response"
+                    ),
                     "required": False,
                     "schema": {"type": "boolean", "default": False},
                 },
             ],
             "responses": {
                 "200": {
-                    "description": "Successfully retrieved breach information for the email",
+                    "description": (
+                        "Successfully retrieved breach information for the email"
+                    ),
                     "content": {
                         "application/json": {
                             "schema": {
@@ -426,7 +428,9 @@ def custom_openapi():
                                 "properties": {
                                     "breaches": {
                                         "type": "array",
-                                        "description": "List of breaches containing the email",
+                                        "description": (
+                                            "List of breaches containing the email"
+                                        ),
                                         "items": {
                                             "type": "array",
                                             "items": {"type": "string"},
@@ -434,7 +438,9 @@ def custom_openapi():
                                     },
                                     "email": {
                                         "type": "string",
-                                        "description": "Email address that was checked",
+                                        "description": (
+                                            "Email address that was checked"
+                                        ),
                                     },
                                 },
                             }
@@ -462,7 +468,11 @@ def custom_openapi():
     openapi_schema["paths"]["/v1/breach-analytics"] = {
         "get": {
             "summary": "Get Breach Analytics",
-            "description": "Retrieves analytics and statistics about breaches for a specific email address. This endpoint provides information about breaches and associated paste data.",
+            "description": (
+                "Retrieves analytics and statistics about breaches for a specific "
+                "email address. This endpoint provides information about breaches "
+                "and associated paste data."
+            ),
             "tags": ["analytics"],
             "parameters": [
                 {
@@ -527,7 +537,10 @@ def custom_openapi():
     openapi_schema["paths"]["/v1/domain-breaches"] = {
         "post": {
             "summary": "Get Domain Breaches",
-            "description": "Retrieves information about data breaches associated with verified domains for an API key. This endpoint provides detailed metrics and statistics about breaches affecting the domains.",
+            "description": (
+                "Retrieves information about data breaches associated with verified domains for an API key. "
+                "This endpoint provides detailed metrics and statistics about breaches affecting the domains."
+            ),
             "tags": ["domain_breaches"],
             "parameters": [
                 {

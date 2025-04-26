@@ -22,7 +22,7 @@ def validate_url(request: Request) -> bool:
         url = str(request.url)
         result = urlparse(url)
         return all([result.scheme, result.netloc])
-    except Exception:
+    except (ValueError, AttributeError):
         return False
 
 

@@ -1,9 +1,14 @@
 """Response models for the application."""
 
-from typing import Optional, List, Dict, Any, Union
-from pydantic import BaseModel, Field
+# Standard library imports
 from datetime import datetime
-from .base import BaseResponse, BaseBreachInfo, BaseMetrics, BaseAnalytics
+from typing import Optional, List, Dict, Any, Union
+
+# Third-party imports
+from pydantic import BaseModel, Field
+
+# Local imports
+from .base import BaseResponse, BaseBreachInfo, BaseMetrics
 
 
 class AlertMeResponse(BaseResponse):
@@ -325,7 +330,7 @@ class ShieldVerificationErrorResponse(BaseModel):
 
 
 class DomainBreachDetail(BaseModel):
-    """Model for individual domain breach details"""
+    """Model for individual domain breach details."""
 
     domain: str = Field(..., description="Domain that was breached")
     breach_pastes: int = Field(..., description="Number of paste records found")
@@ -333,12 +338,12 @@ class DomainBreachDetail(BaseModel):
     breach_total: int = Field(..., description="Total number of breach records")
     breach_count: int = Field(..., description="Number of unique breaches")
     breach_last_seen: Optional[str] = Field(
-        None, description="Date of the most recent breach (format: DD-Mon-YYYY)"
+        None, description="Date when the breach was last seen"
     )
 
 
 class DomainBreachSummaryResponse(BaseModel):
-    """Response model for domain breach summary endpoint"""
+    """Response model for domain breach summary endpoint."""
 
     sendDomains: Dict[str, List[DomainBreachDetail]] = Field(
         ..., description="Dictionary containing list of breach details"
@@ -358,14 +363,14 @@ class VerificationResponse(BaseModel):
 
 
 class BreachHierarchyChild(BaseModel):
-    """Model for breach hierarchy child items"""
+    """Model for breach hierarchy child items."""
 
     description: str
     children: List["BreachHierarchyChild"] = []
     tooltip: Optional[str] = None
 
     def dict(self, *args, **kwargs):
-        """Custom dict serialization to exclude null values and handle emoji encoding"""
+        """Convert the model to a dictionary with custom handling for recursive structures."""
         d = super().dict(*args, **kwargs)
         # Only include non-null values and properly handle tooltip
         return {
@@ -376,13 +381,13 @@ class BreachHierarchyChild(BaseModel):
 
 
 class BreachHierarchyResponse(BaseModel):
-    """Model for breach hierarchy response"""
+    """Model for breach hierarchy response."""
 
     description: str
     children: List[BreachHierarchyChild] = []
 
     def dict(self, *args, **kwargs):
-        """Custom dict serialization to exclude null values"""
+        """Convert the model to a dictionary with custom handling for recursive structures."""
         d = super().dict(*args, **kwargs)
         return {k: v for k, v in d.items() if v is not None}
 

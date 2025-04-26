@@ -1,10 +1,11 @@
 """Metrics-related API endpoints."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from datetime import datetime
 
 from models.responses import MetricsResponse, DetailedMetricsResponse
 from services.analytics import get_detailed_metrics
