@@ -1,8 +1,13 @@
 """Teams-specific service functions."""
 
+# Standard library imports
 from typing import Dict, Optional
+
+# Third-party imports
 import httpx
 from fastapi import HTTPException
+
+# Local imports
 from models.requests import ChannelSetupRequest
 from services.messaging import (
     setup_messaging_channel,
@@ -10,8 +15,6 @@ from services.messaging import (
     get_channel_config,
     delete_messaging_channel,
 )
-import os
-import json
 
 # Constants
 MAX_CARDS = 10  # Teams' maximum number of cards per message

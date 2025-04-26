@@ -1,11 +1,13 @@
 """Breach-related service functions."""
 
-from typing import Dict, List, Optional, Set, Any
-from google.cloud import datastore
-from fastapi import HTTPException
-import os
+# Standard library imports
 import logging
 import sys
+from typing import Dict, List, Any
+
+# Third-party imports
+from google.cloud import datastore
+from fastapi import HTTPException
 
 # Configure logging with more detailed format
 logging.basicConfig(
@@ -70,8 +72,13 @@ async def get_combined_breach_data(email: str) -> Dict[str, Any]:
 
         return breach_data
 
+    except datastore.exceptions.EntityNotFoundError as e:
+        raise HTTPException(status_code=404, detail="Entity not found") from e
+    except datastore.exceptions.Error as e:
+        raise HTTPException(status_code=500, detail="Datastore error") from e
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        logger.error("Unexpected error in get_combined_breach_data: %s", str(e))
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 async def get_exposure(user_email: str) -> Dict[str, Any]:
@@ -88,11 +95,19 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
 
         logger.debug("[GET-EXPOSURE] No user data found in datastore")
         return {}
-    except Exception as exception_details:
+    except datastore.exceptions.Error as exception_details:
         logger.error(
-            "[GET-EXPOSURE] Error fetching data: %s", exception_details, exc_info=True
+            "[GET-EXPOSURE] Error fetching data: %s", 
+            exception_details, 
+            exc_info=True
         )
-        print(f"An error occurred while fetching data: {exception_details}")
+        return {}
+    except Exception as e:
+        logger.error(
+            "[GET-EXPOSURE] Unexpected error: %s", 
+            str(e), 
+            exc_info=True
+        )
         return {}
 
 
@@ -112,9 +127,18 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
 
         logger.debug("[GET-SENSITIVE] No sensitive data found")
         return {}
+    except datastore.exceptions.Error as e:
+        logger.error(
+            "[GET-SENSITIVE] Error fetching sensitive data: %s", 
+            str(e), 
+            exc_info=True
+        )
+        return {}
     except Exception as e:
         logger.error(
-            "[GET-SENSITIVE] Error fetching sensitive data: %s", str(e), exc_info=True
+            "[GET-SENSITIVE] Unexpected error: %s", 
+            str(e), 
+            exc_info=True
         )
         return {}
 
@@ -148,7 +172,9 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
             else:
                 raise HTTPException(status_code=404, detail="Breach not found")
 
-        except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
+        except datastore.exceptions.EntityNotFoundError as e:
+            raise HTTPException(status_code=404, detail="Breach not found") from e
+        except datastore.exceptions.Error as e:
+            raise HTTPException(status_code=500, detail="Datastore error") from e
 
     return breaches_output

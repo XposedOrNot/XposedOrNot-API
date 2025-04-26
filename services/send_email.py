@@ -6,6 +6,7 @@
 import os
 import time
 import logging
+import socket
 from typing import Dict, Any, Optional
 import httpx
 from fastapi import HTTPException
@@ -74,9 +75,7 @@ async def send_alert_confirmation(
     try:
         # Check if API credentials are set
         if not API_KEY or not API_SECRET:
-            logging.error(
-                "Mailjet API credentials are not set in environment variables"
-            )
+            logging.error("Mailjet API credentials are not set in environment variables")
             raise HTTPException(
                 status_code=500,
                 detail="Email service configuration error: API credentials not set",
@@ -108,20 +107,16 @@ async def send_alert_confirmation(
                 try:
                     ip_address = socket.gethostbyname("api.mailjet.com")
                     logging.info("Resolved api.mailjet.com to %s", ip_address)
-                except Exception as e:
+                except socket.gaierror as e:
                     logging.error("Could not resolve api.mailjet.com: %s", str(e))
 
-                logging.info(
-                    "Attempting to connect to Mailjet API at %s", MAILJET_API_URL
-                )
+                logging.info("Attempting to connect to Mailjet API at %s", MAILJET_API_URL)
                 response = await client.post(
                     MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
                 )
 
                 if response.status_code != 200:
-                    logging.error(
-                        "Failed to send alert confirmation: %s", response.text
-                    )
+                    logging.error("Failed to send alert confirmation: %s", response.text)
                     raise HTTPException(
                         status_code=500, detail="Failed to send alert confirmation"
                     )
@@ -130,10 +125,14 @@ async def send_alert_confirmation(
                 logging.error("Connection error to Mailjet API: %s", str(e))
                 error_msg = "Unable to connect to email service. "
                 error_msg += "Check network connection and firewall settings."
+                raise HTTPException(status_code=500, detail=error_msg) from e
+            except httpx.TimeoutException as e:
+                logging.error("Timeout error to Mailjet API: %s", str(e))
                 raise HTTPException(
-                    status_code=500,
-                    detail=error_msg,
+                    status_code=500, detail="Email service timeout"
                 ) from e
+    except HTTPException:
+        raise
     except Exception as e:
         logging.error("Error sending alert confirmation: %s", str(e))
         raise HTTPException(
@@ -444,7 +443,7 @@ async def send_databreach_alertme(
     confirm_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Sends XposedOrNot Databreach Alert Email
+    Sends databreach alert email to user
     """
     try:
         data = {
@@ -462,6 +461,7 @@ async def send_databreach_alertme(
                         "breach": breach,
                         "date": date,
                         "description": description,
+                        "confirm_url": confirm_url if confirm_url else "",
                     },
                 }
             ]
@@ -470,13 +470,22 @@ async def send_databreach_alertme(
             response = await client.post(
                 MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
             )
-
             if response.status_code != 200:
                 logging.error("Failed to send databreach alert: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send databreach alert"
                 )
             return response.json()
+    except httpx.ConnectError as e:
+        logging.error("Connection error to Mailjet API: %s", str(e))
+        raise HTTPException(
+            status_code=500, detail="Unable to connect to email service"
+        ) from e
+    except httpx.TimeoutException as e:
+        logging.error("Timeout error to Mailjet API: %s", str(e))
+        raise HTTPException(
+            status_code=500, detail="Email service timeout"
+        ) from e
     except Exception as e:
         logging.error("Error sending databreach alert: %s", str(e))
         raise HTTPException(
