@@ -28,3 +28,22 @@ def validate_email_with_tld(email: str) -> bool:
     """Validate email with a basic format check."""
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
     return bool(re.match(pattern, email))
+
+
+def validate_token(token: str) -> bool:
+    """
+    Validates a token format based on allowed characters.
+    Allowed characters: alphanumeric, dots, underscores, hyphens, and base64 characters
+
+    Args:
+        token: The token to validate
+
+    Returns:
+        bool: True if token contains only allowed characters, False otherwise
+    """
+    try:
+        # Pattern allows alphanumeric, dots, underscores, hyphens, and base64 characters
+        pattern = r"^[a-zA-Z0-9._\-=]+$"
+        return bool(re.match(pattern, token))
+    except Exception:
+        return False

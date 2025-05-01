@@ -26,8 +26,10 @@ def setup_middleware(app: FastAPI) -> None:
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=True,
-        allow_methods=["*"],
+        allow_methods=["GET", "POST"],
         allow_headers=["*"],
+        expose_headers=["*"],
+        max_age=600,
     )
 
 
@@ -48,7 +50,7 @@ def setup_security_headers(app: FastAPI) -> None:
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;"
             "object-src 'none';"
             "base-uri 'self';"
-            "connect-src 'self' https://xposedornot.com https://cdnjs.cloudflare.com;"
+            "connect-src 'self' https://xposedornot.com https://api.xposedornot.com https://cdnjs.cloudflare.com;"
             "worker-src 'self' blob:;"
         )
 

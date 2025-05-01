@@ -35,7 +35,12 @@ from services.analytics import (
     get_pulse_news,
 )
 from services.send_email import send_dashboard_email_confirmation, send_shield_email
-from utils.validation import validate_email_with_tld, validate_url, validate_variables
+from utils.validation import (
+    validate_email_with_tld,
+    validate_url,
+    validate_variables,
+    validate_token,
+)
 from utils.token import generate_confirmation_token, confirm_token
 from utils.helpers import get_preferred_ip_address, fetch_location_by_ip
 from utils.request import get_client_ip, get_user_agent_info
@@ -274,7 +279,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
 
 @router.get(
     "/send_domain_breaches",
-    response_model=DomainBreachesResponse,
+    response_model=Union[DomainBreachesResponse, DomainBreachesErrorResponse],
     responses={
         200: {"model": DomainBreachesResponse},
         400: {"model": DomainBreachesErrorResponse},
@@ -289,7 +294,6 @@ async def send_domain_breaches(
 ) -> Union[DomainBreachesResponse, DomainBreachesErrorResponse]:
     """
     Retrieves and sends the data breaches validated by token and email.
-
     """
     logging.info(
         "[DOMAIN-BREACHES] Starting domain breaches check for email: %s", email
@@ -298,33 +302,71 @@ async def send_domain_breaches(
         # Check for presence of email and token
         if email is None or token is None:
             logging.error("[DOMAIN-BREACHES] Missing email or token")
-            return DomainBreachesErrorResponse(Error="Missing email or token")
+            raise HTTPException(
+                status_code=400,
+                detail=DomainBreachesErrorResponse(
+                    Error="Missing email or token"
+                ).dict(),
+            )
 
         # Validate email and token
-        if (
-            not validate_email_with_tld(email)
-            or not validate_variables([token])
-            or not validate_url(request)
-        ):
-            logging.error(
-                "[DOMAIN-BREACHES] Invalid email or token for email: %s", email
+        if not validate_email_with_tld(email):
+            logging.error("[DOMAIN-BREACHES] Invalid email format: %s", email)
+            raise HTTPException(
+                status_code=400,
+                detail=DomainBreachesErrorResponse(Error="Invalid email format").dict(),
             )
-            return DomainBreachesErrorResponse(Error="Invalid email or token")
+
+        if not validate_token(token):
+            logging.error(
+                "[DOMAIN-BREACHES] Invalid token format: %s", token[:10] + "..."
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=DomainBreachesErrorResponse(Error="Invalid token format").dict(),
+            )
+
+        if not validate_url(request):
+            logging.error("[DOMAIN-BREACHES] Invalid request URL: %s", request.url)
+            raise HTTPException(
+                status_code=400,
+                detail=DomainBreachesErrorResponse(Error="Invalid request URL").dict(),
+            )
 
         # Check for matching session in xon_domains_session
         client = datastore.Client()
         alert_key = client.key("xon_domains_session", email)
         alert_task = client.get(alert_key)
 
-        if not alert_task or alert_task.get("domain_magic") != token:
-            logging.error("[DOMAIN-BREACHES] Invalid session for email: %s", email)
-            return DomainBreachesErrorResponse(Error="Invalid session")
+        logging.info("[DOMAIN-BREACHES] Checking session for email: %s", email)
+        logging.debug("[DOMAIN-BREACHES] Session data: %s", alert_task)
+
+        if not alert_task:
+            logging.error("[DOMAIN-BREACHES] No session found for email: %s", email)
+            raise HTTPException(
+                status_code=401,
+                detail=DomainBreachesErrorResponse(Error="No session found").dict(),
+            )
+
+        if alert_task.get("domain_magic") != token:
+            logging.error(
+                "[DOMAIN-BREACHES] Token mismatch. Expected: %s, Got: %s",
+                alert_task.get("domain_magic"),
+                token,
+            )
+            raise HTTPException(
+                status_code=401,
+                detail=DomainBreachesErrorResponse(Error="Invalid session").dict(),
+            )
 
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
             tzinfo=None
         ) > datetime.timedelta(hours=24):
             logging.error("[DOMAIN-BREACHES] Session expired for email: %s", email)
-            return DomainBreachesErrorResponse(Error="Session expired")
+            raise HTTPException(
+                status_code=401,
+                detail=DomainBreachesErrorResponse(Error="Session expired").dict(),
+            )
 
         # Get verified domains
         query = client.query(kind="xon_domains")
