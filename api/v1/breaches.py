@@ -449,7 +449,7 @@ async def search_data_breaches(
     Rate Limit: 2 requests/second, 50/hour, 100/day
     """,
     tags=["breaches"],
-    operation_id="check_email_breaches"
+    operation_id="check_email_breaches",
 )
 @limiter.limit("2 per second;50 per hour;100 per day")
 async def search_email(
