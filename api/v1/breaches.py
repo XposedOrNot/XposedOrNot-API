@@ -5,17 +5,16 @@ import json
 import logging
 import sys
 from datetime import datetime
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict
 
 # Third-party imports
 from fastapi import APIRouter, HTTPException, Request, Header, Query, Path
 from fastapi.responses import JSONResponse, Response
 from google.cloud import datastore
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 # Local imports
 from config.settings import MAX_EMAIL_LENGTH
+from config.limiter import limiter
 from models.responses import (
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
@@ -30,12 +29,13 @@ from services.analytics import (
     get_ai_summary,
     get_summary_and_metrics,
 )
-from services.breach import get_exposure, get_sensitive_exposure
+from services.breach import get_exposure, get_sensitive_exposure, get_breaches
 from utils.helpers import (
     string_to_boolean,
     validate_domain,
     validate_email_with_tld,
     validate_url,
+    get_client_ip,
 )
 from utils.validation import validate_variables
 
@@ -48,7 +48,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/breaches", response_model=BreachListResponse)
@@ -460,10 +459,9 @@ async def search_email(
         example="user@example.com",
         max_length=MAX_EMAIL_LENGTH,
     ),
-    # Keeping parameter but not using it to maintain API compatibility
-    include_details: bool = Query(
+    details: bool = Query(
         False,
-        description="Include detailed breach information in the response",
+        description="Include detailed breach information in the response (case-insensitive: true/false, yes/no, 1/0)",
         example=False,
     ),
 ) -> Union[EmailBreachResponse, EmailBreachErrorResponse]:
@@ -486,7 +484,12 @@ async def search_email(
         alert_record = data_store.get(alert_key)
         if alert_record and alert_record.get("shieldOn", False):
             return JSONResponse(
-                status_code=404, content={"Error": "Email is protected", "email": email}
+                status_code=404,
+                content={
+                    "Error": "No breaches found",
+                    "email": email,
+                    "status": "failed",
+                },
             )
 
         # Get breach data
@@ -498,17 +501,55 @@ async def search_email(
             filtered_domains = [domain.strip() for domain in domains if domain.strip()]
 
             if filtered_domains:
-                return JSONResponse(
-                    status_code=200,
-                    content={"breaches": [filtered_domains], "email": email},
-                )
+                response_content = {
+                    "breaches": [filtered_domains],
+                    "email": email,
+                    "status": "success",
+                }
+
+                # Include detailed breach information if requested
+                if details:
+                    raw_breaches = get_breaches(xon_record["site"])
+                    formatted_breaches = []
+
+                    for breach in raw_breaches["breaches_details"]:
+                        formatted_breach = {
+                            "name": breach["breach"],
+                            "records_exposed": breach["xposed_records"],
+                            "description": breach["details"],
+                            "breach_date": breach.get("breached_date", ""),
+                            "company": {
+                                "name": breach["domain"] or "Unknown",
+                                "industry": breach["industry"] or "Unknown",
+                                "logo_url": breach["logo"] or "",
+                            },
+                            "security": {
+                                "password_risk": breach["password_risk"],
+                                "is_searchable": breach["searchable"] == "Yes",
+                                "is_verified": breach["verified"] == "Yes",
+                            },
+                            "exposed_data": (
+                                breach["xposed_data"].split(";")
+                                if breach["xposed_data"]
+                                else []
+                            ),
+                        }
+                        formatted_breaches.append(formatted_breach)
+
+                    response_content["breach_details"] = formatted_breaches
+
+                return JSONResponse(status_code=200, content=response_content)
 
         return JSONResponse(
-            status_code=404, content={"Error": "No breaches found", "email": email}
+            status_code=404,
+            content={"Error": "No breaches found", "email": email, "status": "failed"},
         )
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        return JSONResponse(
+            status_code=404,
+            content={"Error": "Not found", "email": email, "status": "failed"},
+        )
 
 
 @router.get("/domain-breach-summary", response_model=DomainBreachSummaryResponse)
