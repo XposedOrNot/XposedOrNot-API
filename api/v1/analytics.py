@@ -253,6 +253,26 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
 
         logging.info("[DOMAIN-VERIFY] Token confirmed for email: %s", user_email)
 
+        # Create session data
+        try:
+            client = datastore.Client()
+            alert_task_data = datastore.Entity(
+                client.key("xon_domains_session", user_email)
+            )
+            alert_task_data.update(
+                {
+                    "magic_timestamp": datetime.datetime.now(),
+                    "domain_magic": verification_token,
+                }
+            )
+            client.put(alert_task_data)
+            logging.info(
+                "[DOMAIN-VERIFY] Stored session data for email: %s", user_email
+            )
+        except Exception as e:
+            logging.error("[DOMAIN-VERIFY] Failed to store session data: %s", str(e))
+            raise
+
         # Generate dashboard link
         base_url = "https://xposedornot.com/"
         email_param = f"email={user_email}"
