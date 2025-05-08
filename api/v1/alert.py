@@ -12,11 +12,10 @@ from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 from google.cloud import datastore
 from google.api_core import exceptions as google_exceptions
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from user_agents import parse
 
 # Local imports
+from config.limiter import limiter
 from models.responses import (
     AlertResponse,
     UnsubscribeResponse,
@@ -38,7 +37,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 templates = Jinja2Templates(directory="templates")
 
 

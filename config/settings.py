@@ -17,6 +17,16 @@ WTF_CSRF_SECRET_KEY: str = os.environ["WTF_CSRF_SECRET_KEY"]
 XMLAPI_KEY: str = os.environ["XMLAPI_KEY"]
 BASE_URL: str = os.environ.get("BASE_URL", "https://api.xposedornot.com")
 
+# Redis Configuration
+REDIS_HOST: str = os.environ.get("REDIS_HOST", "localhost")
+REDIS_PORT: int = int(os.environ.get("REDIS_PORT", "6379"))
+REDIS_DB: int = int(os.environ.get("REDIS_DB", "0"))
+REDIS_PASSWORD: Optional[str] = os.environ.get("REDIS_PASSWORD")
+
+# Redis URL for rate limiter
+REDIS_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+if REDIS_PASSWORD:
+    REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
 # Constants
 MAX_EMAIL_LENGTH: int = 254

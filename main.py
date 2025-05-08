@@ -1,29 +1,35 @@
 """Main XON-API entry point."""
 
 # Standard library imports
-from typing import List
+from typing import Dict, Any, Optional
 
 # Third-party imports
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from fastapi.middleware.cors import CORSMiddleware
 
 # Local imports - Config
 from config.middleware import (
     setup_middleware,
     setup_security_headers,
-    setup_rate_limiter,
 )
 from config.settings import (
     API_VERSION,
     API_TITLE,
     API_DESCRIPTION,
     CF_UNBLOCK_MAGIC,
+)
+from config.limiter import (
+    limiter,
+    RATE_LIMIT_HELP,
+    RATE_LIMIT_UNBLOCK,
+    rate_limit_exceeded_handler,
+    setup_limiter,
 )
 
 # Local imports - API Routers
@@ -68,19 +74,12 @@ app = FastAPI(
 # Setup middleware and security
 setup_middleware(app)
 setup_security_headers(app)
-limiter = setup_rate_limiter(app)
 
-# Add rate limiter exception handler
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# Setup rate limiter
+setup_limiter(app)
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Add rate limit exceeded handler
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -135,7 +134,7 @@ async def index():
 
 
 @app.get("/v1/help/", include_in_schema=False)
-@limiter.limit("500 per day;100 per hour")
+@limiter.limit(RATE_LIMIT_HELP)
 async def helper(request: Request):  # pylint: disable=unused-argument
     """
     Provides basic guidance to the API documentation page.
@@ -145,7 +144,7 @@ async def helper(request: Request):  # pylint: disable=unused-argument
 
 
 @app.get("/robots.txt", include_in_schema=False)
-@limiter.limit("500 per day;100 per hour")
+@limiter.limit(RATE_LIMIT_HELP)
 async def serve_robots_txt(request: Request):  # pylint: disable=unused-argument
     """Returns robots.txt file content."""
     return HTMLResponse(content=open("static/robots.txt", encoding="utf-8").read())
@@ -183,7 +182,7 @@ async def get_openapi_json():
 
 
 @app.get("/v1/unblock_cf/{token}", include_in_schema=False)
-@limiter.limit("24 per day;2 per hour;2 per second")
+@limiter.limit(RATE_LIMIT_UNBLOCK)
 async def unblock_cloudflare(
     token: str, request: Request
 ):  # pylint: disable=unused-argument
@@ -375,8 +374,8 @@ def custom_openapi():
                                         },
                                     },
                                 },
-                            }
-                        }
+                            },
+                        },
                     },
                 },
                 "304": {

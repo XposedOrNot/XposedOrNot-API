@@ -6,13 +6,12 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Request
 from google.cloud import datastore
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+
+from config.limiter import limiter
 from models.base import BaseResponse
 from utils.validation import validate_variables, validate_url
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 class APIKeyResponse(BaseResponse):

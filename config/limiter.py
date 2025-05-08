@@ -1,52 +1,85 @@
 """Centralized rate limiter configuration."""
 
 from datetime import datetime, timedelta
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict
+import logging
 
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from slowapi.util import get_remote_address
 
+# Local imports
 from utils.helpers import get_client_ip
+from config.settings import REDIS_URL
 
-# Create a single limiter instance to be used across the application
-limiter = Limiter(key_func=get_client_ip)
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
-def _parse_rate_limit(rate_limit: str) -> Tuple[int, str]:
+def get_key_func(request: Request) -> str:
     """
-    Parse rate limit string into count and period.
-    Example: "2 per second" -> (2, "second")
+    Enhanced key function that combines IP and endpoint for more granular rate limiting.
     """
-    count, _, period = rate_limit.partition(" per ")
-    return int(count), period.strip()
+    client_ip = get_client_ip(request)
+    endpoint = request.url.path
+    return f"{client_ip}:{endpoint}"
 
 
-def _calculate_retry_after(rate_limit: str, reset_time: datetime) -> int:
+# Initialize the rate limiter with enhanced key function and Redis storage
+limiter = Limiter(
+    key_func=get_key_func,  # Use our enhanced key function
+    default_limits=["2 per second;5 per hour;100 per day"],
+    storage_uri=REDIS_URL,  # Use Redis URL from settings
+    strategy="fixed-window",  # Use fixed window strategy for more predictable rate limiting
+)
+
+# Define specific rate limits for different types of routes
+RATE_LIMIT_HELP = "50 per day;10 per hour"  # For help/documentation routes
+RATE_LIMIT_UNBLOCK = "24 per day;2 per hour;2 per second"  # For unblock operations
+RATE_LIMIT_BREACHES = "2 per second;5 per hour;100 per day"  # For breach listing
+RATE_LIMIT_CHECK_EMAIL = "2 per second;5 per hour;100 per day"  # For email checks
+RATE_LIMIT_ANALYTICS = (
+    "5 per minute;100 per hour;500 per day"  # For analytics endpoints
+)
+RATE_LIMIT_DOMAIN = (
+    "2 per second;10 per hour;50 per day"  # For domain-related endpoints
+)
+
+
+def _parse_rate_limit(limit_str: str) -> Tuple[int, str]:
     """
-    Calculate retry-after value in seconds based on rate limit and reset time.
+    Parse a rate limit string into a tuple of (limit, period).
+
+    Args:
+        limit_str: String in format "X per Y" (e.g., "2 per second")
+
+    Returns:
+        Tuple of (limit, period)
     """
-    now = datetime.utcnow()
-    if reset_time <= now:
-        return 0
+    try:
+        limit, _, period = limit_str.strip().split()
+        return int(limit), period
+    except ValueError:
+        logger.error(f"Invalid rate limit format: {limit_str}")
+        return 2, "second"  # Default fallback
 
-    # Get the period from rate limit string
-    _, period = _parse_rate_limit(rate_limit)
 
-    # Calculate seconds based on period
-    if period == "second":
-        return 1
-    elif period == "minute":
-        return 60
-    elif period == "hour":
-        return 3600
-    elif period == "day":
-        return 86400
+def get_rate_limit_key(request: Request) -> str:
+    """
+    Get a unique key for rate limiting based on the request.
 
-    # Default to 1 second if period is unknown
-    return 1
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        String key for rate limiting
+    """
+    client_ip = get_remote_address(request)  # Use slowapi's built-in IP detection
+    endpoint = request.url.path
+    return f"{client_ip}:{endpoint}"
 
 
 def rate_limit_exceeded_handler(
@@ -56,33 +89,28 @@ def rate_limit_exceeded_handler(
     Custom handler for rate limit exceeded exceptions.
     Includes retry-after header and detailed response.
     """
-    retry_after = _calculate_retry_after(exc.rate_limit, exc.reset_time)
+    client_ip = get_remote_address(request)  # Use slowapi's built-in IP detection
+    endpoint = request.url.path
 
-    # Get all rate limits for this endpoint
-    rate_limits = exc.rate_limit.split(";")
-    retry_after_values = []
+    logger.debug(
+        "[RATE-LIMIT] Rate limit exceeded for IP: %s, Endpoint: %s", client_ip, endpoint
+    )
 
-    for limit in rate_limits:
-        count, period = _parse_rate_limit(limit)
-        if period == "second":
-            retry_after_values.append(1)
-        elif period == "minute":
-            retry_after_values.append(60)
-        elif period == "hour":
-            retry_after_values.append(3600)
-        elif period == "day":
-            retry_after_values.append(86400)
-
-    # Use the smallest retry-after value
-    retry_after = min(retry_after_values) if retry_after_values else 1
+    # Calculate retry after time based on the rate limit that was exceeded
+    retry_after = 1  # Default to 1 second
+    if hasattr(exc, "retry_after"):
+        retry_after = exc.retry_after
+    reset_time = datetime.now() + timedelta(seconds=retry_after)
 
     return JSONResponse(
         status_code=429,
         content={
             "error": "Rate limit exceeded",
-            "detail": f"Rate limit of {exc.rate_limit} exceeded",
+            "detail": str(exc),
             "retry_after": retry_after,
-            "reset_time": exc.reset_time.isoformat() if exc.reset_time else None,
+            "reset_time": reset_time.isoformat(),
+            # "client_ip": client_ip,
+            # "endpoint": endpoint,
         },
         headers={"Retry-After": str(retry_after)},
     )
@@ -103,3 +131,5 @@ def setup_limiter(app: FastAPI) -> None:
 
     # Add custom rate limit exceeded handler
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+
+    logger.info("[RATE-LIMIT] Rate limiter setup completed successfully")

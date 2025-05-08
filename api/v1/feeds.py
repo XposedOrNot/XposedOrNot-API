@@ -5,13 +5,11 @@ from typing import List
 from fastapi import APIRouter, Request, Response
 from google.cloud import datastore
 from pydantic import BaseModel
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from feedgen.feed import FeedGenerator
 from models.base import BaseResponse
+from config.limiter import limiter
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 class PulseNewsItem(BaseModel):

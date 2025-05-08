@@ -14,7 +14,15 @@ from google.cloud import datastore
 
 # Local imports
 from config.settings import MAX_EMAIL_LENGTH
-from config.limiter import limiter
+from config.limiter import (
+    limiter,
+    RATE_LIMIT_BREACHES,
+    RATE_LIMIT_CHECK_EMAIL,
+    RATE_LIMIT_ANALYTICS,
+    RATE_LIMIT_DOMAIN,
+    get_rate_limit_key,
+    _parse_rate_limit,
+)
 from models.responses import (
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
@@ -39,19 +47,23 @@ from utils.helpers import (
 )
 from utils.validation import validate_variables
 
-# Configure logging with more detailed format
+# Configure logging with more detailed format and ensure DEBUG level
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)  # Explicitly set DEBUG level
+
+# Add a test log to verify logging is working
+logger.debug("=== BREACH API DEBUG LOGGING ENABLED ===")
 
 router = APIRouter()
 
 
 @router.get("/breaches", response_model=BreachListResponse)
-@limiter.limit("2 per second;50 per hour;1000 per day")
+@limiter.limit(RATE_LIMIT_BREACHES)
 async def get_xposed_breaches(
     request: Request,
     domain: Optional[str] = None,
@@ -145,7 +157,7 @@ async def get_xposed_breaches(
 
 
 @router.get("/v2/breach-analytics", response_model=BreachAnalyticsV2Response)
-@limiter.limit("2 per second;50 per hour;100 per day")
+@limiter.limit(RATE_LIMIT_ANALYTICS)
 async def search_data_breaches_v2(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsV2Response:
@@ -215,7 +227,7 @@ async def search_data_breaches_v2(
 
 
 @router.get("/breach-analytics", response_model=BreachAnalyticsResponse)
-@limiter.limit("2 per second;50 per hour;100 per day")
+@limiter.limit(RATE_LIMIT_ANALYTICS)
 async def search_data_breaches(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsResponse:
@@ -450,7 +462,7 @@ async def search_data_breaches(
     tags=["breaches"],
     operation_id="check_email_breaches",
 )
-@limiter.limit("2 per second;50 per hour;100 per day")
+@limiter.limit(RATE_LIMIT_CHECK_EMAIL)
 async def search_email(
     request: Request,
     email: str = Path(
@@ -467,22 +479,33 @@ async def search_email(
 ) -> Union[EmailBreachResponse, EmailBreachErrorResponse]:
     """Check if an email address appears in any known data breaches."""
     try:
+        # Log the request
+        client_ip = get_client_ip(request)
+        logger.debug("[RATE-LIMIT] Request from IP: %s", client_ip)
+
         if not email or not validate_email_with_tld(email) or not validate_url(request):
+            logger.debug("[RATE-LIMIT] Email validation failed")
             return EmailBreachErrorResponse(Error="Not found")
 
         email = email.lower()
+        logger.debug("[RATE-LIMIT] Getting exposure data for email: %s", email)
         breach_data = await get_exposure(email)
 
         if not breach_data:
+            logger.debug("[RATE-LIMIT] No breach data found for email: %s", email)
             return EmailBreachErrorResponse(Error="Not found")
 
         # Initialize datastore client
+        logger.debug("[RATE-LIMIT] Initializing datastore client")
         data_store = datastore.Client()
 
         # Check if email is protected by shield
+        logger.debug("[RATE-LIMIT] Checking shield status")
         alert_key = data_store.key("xon_alert", email)
         alert_record = data_store.get(alert_key)
+
         if alert_record and alert_record.get("shieldOn", False):
+            logger.debug("[RATE-LIMIT] Shield is on for email: %s", email)
             return JSONResponse(
                 status_code=404,
                 content={
@@ -493,14 +516,19 @@ async def search_email(
             )
 
         # Get breach data
+        logger.debug("[RATE-LIMIT] Getting xon record")
         xon_key = data_store.key("xon", email)
         xon_record = data_store.get(xon_key)
 
         if xon_record and "site" in xon_record:
+            logger.debug("[RATE-LIMIT] Processing xon record")
             domains = xon_record["site"].split(";")
             filtered_domains = [domain.strip() for domain in domains if domain.strip()]
 
             if filtered_domains:
+                logger.debug(
+                    "[RATE-LIMIT] Found %d filtered domains", len(filtered_domains)
+                )
                 response_content = {
                     "breaches": [filtered_domains],
                     "email": email,
@@ -509,6 +537,7 @@ async def search_email(
 
                 # Include detailed breach information if requested
                 if details:
+                    logger.debug("[RATE-LIMIT] Getting detailed breach information")
                     raw_breaches = get_breaches(xon_record["site"])
                     formatted_breaches = []
 
@@ -537,15 +566,20 @@ async def search_email(
                         formatted_breaches.append(formatted_breach)
 
                     response_content["breach_details"] = formatted_breaches
+                    logger.debug(
+                        "[RATE-LIMIT] Added %d breach details", len(formatted_breaches)
+                    )
 
                 return JSONResponse(status_code=200, content=response_content)
 
+        logger.debug("[RATE-LIMIT] No breaches found for email: %s", email)
         return JSONResponse(
             status_code=404,
             content={"Error": "No breaches found", "email": email, "status": "failed"},
         )
 
     except Exception as e:
+        logger.error("[RATE-LIMIT] Error in search_email: %s", str(e), exc_info=True)
         return JSONResponse(
             status_code=404,
             content={"Error": "Not found", "email": email, "status": "failed"},
@@ -553,7 +587,7 @@ async def search_email(
 
 
 @router.get("/domain-breach-summary", response_model=DomainBreachSummaryResponse)
-@limiter.limit("2 per second;10 per hour;50 per day")
+@limiter.limit(RATE_LIMIT_DOMAIN)
 async def get_domain_breach_summary(
     request: Request,
     d: Optional[str] = Query(None, description="Domain to search for breaches"),

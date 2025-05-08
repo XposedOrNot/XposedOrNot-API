@@ -4,15 +4,13 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
+from config.limiter import limiter
 from models.responses import MetricsResponse, DetailedMetricsResponse
 from services.analytics import get_detailed_metrics
 from utils.helpers import validate_url
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/metrics", response_model=MetricsResponse)

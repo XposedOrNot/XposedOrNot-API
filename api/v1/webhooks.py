@@ -1,9 +1,8 @@
 """Webhook-related API endpoints."""
 
 from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
+from config.limiter import limiter
 from models.requests import WebhookSetupRequest
 from models.responses import WebhookConfigResponse, WebhookSetupResponse
 from services.webhook import (
@@ -15,7 +14,6 @@ from services.webhook import (
 from utils.helpers import validate_url, validate_variables
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/webhook/setup", response_model=WebhookSetupResponse)

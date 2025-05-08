@@ -14,10 +14,9 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from google.cloud import datastore
 from google.api_core import exceptions as google_exceptions
 from pydantic import EmailStr
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
 # Local imports
+from config.limiter import limiter
 from config.settings import XMLAPI_KEY
 from models.base import BaseResponse
 from services.send_email import (
@@ -29,7 +28,6 @@ from utils.token import generate_confirmation_token
 from utils.validation import validate_email_with_tld, validate_variables
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 def validate_domain(domain: str) -> bool:

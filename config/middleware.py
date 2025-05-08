@@ -7,12 +7,12 @@ import logging
 # Third-party imports
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from slowapi.middleware import SlowAPIMiddleware
 
 # Local imports
 from services.globe import process_request_for_globe
 from utils.request import get_client_ip
+from config.limiter import limiter
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -21,7 +21,11 @@ logger = logging.getLogger(__name__)
 def setup_middleware(app: FastAPI) -> None:
     """Configure middleware for the FastAPI application."""
 
-    # Add CORS middleware
+    # Add rate limiting middleware first
+    app.state.limiter = limiter
+    app.add_middleware(SlowAPIMiddleware)
+
+    # Add CORS middleware after rate limiting
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -84,30 +88,16 @@ def setup_globe_middleware(app: FastAPI) -> None:
     async def globe_request_middleware(request: Request, call_next):
         """Process request for globe visualization before processing the request."""
         try:
-            # Extract client IP using the existing utility
+
             client_ip = get_client_ip(request)
 
-            # Create a background task for processing the globe request
-            # This ensures the request is non-blocking
             asyncio.create_task(process_globe_request_background(client_ip))
         except (ValueError, KeyError) as e:
-            # Log the error but don't block the request
+
             logger.error("Error extracting client IP: %s", str(e))
         except Exception as e:
             # Log the error but don't block the request
             logger.error("Unexpected error in globe middleware: %s", str(e))
 
-        # Continue with the request
         response = await call_next(request)
         return response
-
-
-def setup_rate_limiter(app: FastAPI) -> Limiter:
-    """Configure rate limiter for the application."""
-    limiter = Limiter(
-        key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"],
-        storage_uri="memory://",
-    )
-    app.state.limiter = limiter
-    return limiter

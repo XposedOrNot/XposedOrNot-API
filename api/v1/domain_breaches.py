@@ -8,10 +8,9 @@ import logging
 
 from fastapi import APIRouter, Request, HTTPException, Header, Depends
 from google.cloud import datastore
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 from pydantic import BaseModel, Field
 
+from config.limiter import limiter
 from models.base import BaseResponse
 from utils.validation import validate_url
 
@@ -20,7 +19,6 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 # CSRF exemption dependency

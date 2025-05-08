@@ -1,9 +1,8 @@
 """Teams channel-related API endpoints."""
 
 from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter
-from slowapi.util import get_remote_address
 
+from config.limiter import limiter
 from models.requests import ChannelSetupRequest
 from models.responses import ChannelConfigResponse, ChannelSetupResponse
 from services.teams import (
@@ -15,7 +14,6 @@ from services.teams import (
 from utils.helpers import validate_url, validate_variables
 
 router = APIRouter()
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/teams/setup", response_model=ChannelSetupResponse)
