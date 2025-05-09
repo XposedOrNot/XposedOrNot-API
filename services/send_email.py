@@ -3,12 +3,15 @@
 
 """XposedOrNot Mailer Sub-module API module using Mailjet"""
 
+# Standard library imports
 import os
 import time
 import socket
-import requests
 from typing import Dict, Any, Optional
+
+# Third-party imports
 import httpx
+import requests
 from fastapi import HTTPException
 
 # Mailjet configuration
@@ -59,13 +62,11 @@ async def send_shield_email(
             )
 
             if response.status_code != 200:
-                logging.error("Failed to send shield email: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send shield email"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending shield email: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send shield email"
         ) from e
@@ -81,9 +82,6 @@ async def send_alert_confirmation(
     try:
         # Check if API credentials are set
         if not API_KEY or not API_SECRET:
-            logging.error(
-                "Mailjet API credentials are not set in environment variables"
-            )
             raise HTTPException(
                 status_code=500,
                 detail="Email service configuration error: API credentials not set",
@@ -111,42 +109,33 @@ async def send_alert_confirmation(
         }
         async with httpx.AsyncClient() as client:
             try:
-                # Log connectivity information for debugging
+                # Check connectivity
                 try:
                     ip_address = socket.gethostbyname("api.mailjet.com")
 
                 except socket.gaierror as e:
                     logging.error("Could not resolve api.mailjet.com: %s", str(e))
 
-                logging.info(
-                    "Attempting to connect to Mailjet API at %s", MAILJET_API_URL
-                )
                 response = await client.post(
                     MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
                 )
 
                 if response.status_code != 200:
-                    logging.error(
-                        "Failed to send alert confirmation: %s", response.text
-                    )
                     raise HTTPException(
                         status_code=500, detail="Failed to send alert confirmation"
                     )
                 return response.json()
             except httpx.ConnectError as e:
-                logging.error("Connection error to Mailjet API: %s", str(e))
                 error_msg = "Unable to connect to email service. "
                 error_msg += "Check network connection and firewall settings."
                 raise HTTPException(status_code=500, detail=error_msg) from e
             except httpx.TimeoutException as e:
-                logging.error("Timeout error to Mailjet API: %s", str(e))
                 raise HTTPException(
                     status_code=500, detail="Email service timeout"
                 ) from e
     except HTTPException:
         raise
     except Exception as e:
-        logging.error("Error sending alert confirmation: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send alert confirmation: " + str(e)
         ) from e
@@ -190,13 +179,11 @@ async def send_dashboard_email_confirmation(
             )
 
             if response.status_code != 200:
-                logging.error("Failed to send dashboard email: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send confirmation email"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending dashboard confirmation email: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send confirmation email"
         ) from e
@@ -242,8 +229,7 @@ async def send_exception_email(api: str) -> Optional[Dict[str, Any]]:
                 MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
             )
             return response.json() if response.status_code == 200 else None
-    except Exception as e:
-        logging.error("Error sending exception email: %s", str(e))
+    except Exception:
         return None
 
 
@@ -251,8 +237,7 @@ async def send_domain_confirmation(
     email: str, confirm_url: str, ip_address: str, browser: str, platform: str
 ) -> Dict[str, Any]:
     """
-    Sends XposedOrNot Domain Confirmation Email
-
+    Sends XposedOrNot domain Confirmation Email
     """
     try:
         data = {
@@ -281,13 +266,11 @@ async def send_domain_confirmation(
             )
 
             if response.status_code != 200:
-                logging.error("Failed to send domain confirmation: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send domain confirmation"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending domain confirmation: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send domain confirmation"
         ) from e
@@ -295,8 +278,7 @@ async def send_domain_confirmation(
 
 async def send_unsub_email(email: str, confirm_url: str) -> Dict[str, Any]:
     """
-    Sends XposedOrNot Unsubscribe Email
-
+    Sends XposedOrNot Unsubscribe Confirmation Email
     """
     try:
         data = {
@@ -309,8 +291,10 @@ async def send_unsub_email(email: str, confirm_url: str) -> Dict[str, Any]:
                     "To": [{"Email": email}],
                     "TemplateID": 320586,
                     "TemplateLanguage": True,
-                    "Subject": "XposedOrNot: Un-Subscribe from XposedOrNot",
-                    "Variables": {"confirm_url": confirm_url},
+                    "Subject": "XposedOrNot: Unsubscribe Confirmation",
+                    "Variables": {
+                        "confirm_url": confirm_url,
+                    },
                 }
             ]
         }
@@ -320,13 +304,11 @@ async def send_unsub_email(email: str, confirm_url: str) -> Dict[str, Any]:
             )
 
             if response.status_code != 200:
-                logging.error("Failed to send unsubscribe email: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send unsubscribe email"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending unsubscribe email: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send unsubscribe email"
         ) from e
@@ -334,8 +316,7 @@ async def send_unsub_email(email: str, confirm_url: str) -> Dict[str, Any]:
 
 async def send_domain_email(email: str, confirm_url: str) -> Dict[str, Any]:
     """
-    Sends XposedOrNot Domain Email with Breach Data
-
+    Sends XposedOrNot Domain Email
     """
     try:
         data = {
@@ -348,8 +329,10 @@ async def send_domain_email(email: str, confirm_url: str) -> Dict[str, Any]:
                     "To": [{"Email": email}],
                     "TemplateID": 357300,
                     "TemplateLanguage": True,
-                    "Subject": "XposedOrNot: Domain Data Breaches",
-                    "Variables": {"confirm_url": confirm_url},
+                    "Subject": "XposedOrNot: Domain Verification",
+                    "Variables": {
+                        "confirm_url": confirm_url,
+                    },
                 }
             ]
         }
@@ -359,13 +342,11 @@ async def send_domain_email(email: str, confirm_url: str) -> Dict[str, Any]:
             )
 
             if response.status_code != 200:
-                logging.error("Failed to send domain email: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send domain email"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending domain email: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send domain email"
         ) from e
@@ -373,8 +354,7 @@ async def send_domain_email(email: str, confirm_url: str) -> Dict[str, Any]:
 
 async def send_alert_email(email: str, confirm_url: str) -> Dict[str, Any]:
     """
-    Sends XposedOrNot Breach Data for AlertMe Confirmation
-
+    Sends XposedOrNot Alert Email
     """
     try:
         data = {
@@ -387,8 +367,10 @@ async def send_alert_email(email: str, confirm_url: str) -> Dict[str, Any]:
                     "To": [{"Email": email}],
                     "TemplateID": 324635,
                     "TemplateLanguage": True,
-                    "Subject": "XposedOrNot: New Databreach Notification",
-                    "Variables": {"confirm_url": confirm_url},
+                    "Subject": "XposedOrNot: DataBreach Alert",
+                    "Variables": {
+                        "confirm_url": confirm_url,
+                    },
                 }
             ]
         }
@@ -398,20 +380,17 @@ async def send_alert_email(email: str, confirm_url: str) -> Dict[str, Any]:
             )
 
             if response.status_code != 200:
-                logging.error("Failed to send alert email: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send alert email"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending alert email: %s", str(e))
         raise HTTPException(status_code=500, detail="Failed to send alert email") from e
 
 
 async def send_subscribe_leaks_initial(email: str, confirm_url: str) -> Dict[str, Any]:
     """
-    Sends XposedOrNot initial leak
-
+    Sends XposedOrNot Subscribe Leaks Initial Email
     """
     try:
         data = {
@@ -424,8 +403,10 @@ async def send_subscribe_leaks_initial(email: str, confirm_url: str) -> Dict[str
                     "To": [{"Email": email}],
                     "TemplateID": 10886213,
                     "TemplateLanguage": True,
-                    "Subject": "XposedOrNot: Data Breaches Report",
-                    "Variables": {"confirm_url": confirm_url},
+                    "Subject": "XposedOrNot: Subscribe to Leaks",
+                    "Variables": {
+                        "confirm_url": confirm_url,
+                    },
                 }
             ]
         }
@@ -435,13 +416,11 @@ async def send_subscribe_leaks_initial(email: str, confirm_url: str) -> Dict[str
             )
 
             if response.status_code != 200:
-                logging.error("Failed to send initial leak email: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send initial leak email"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending initial leak email: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send initial leak email"
         ) from e
@@ -455,7 +434,7 @@ async def send_databreach_alertme(
     confirm_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Sends databreach alert email to user
+    Sends XposedOrNot DataBreach Alert Me Email
     """
     try:
         data = {
@@ -468,7 +447,7 @@ async def send_databreach_alertme(
                     "To": [{"Email": email}],
                     "TemplateID": 11789921,
                     "TemplateLanguage": True,
-                    "Subject": "XposedOrNot: Data Breach Alert",
+                    "Subject": "XposedOrNot: DataBreach Alert",
                     "Variables": {
                         "breach": breach,
                         "date": date,
@@ -482,22 +461,19 @@ async def send_databreach_alertme(
             response = await client.post(
                 MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
             )
+
             if response.status_code != 200:
-                logging.error("Failed to send databreach alert: %s", response.text)
                 raise HTTPException(
                     status_code=500, detail="Failed to send databreach alert"
                 )
             return response.json()
     except httpx.ConnectError as e:
-        logging.error("Connection error to Mailjet API: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Unable to connect to email service"
         ) from e
     except httpx.TimeoutException as e:
-        logging.error("Timeout error to Mailjet API: %s", str(e))
         raise HTTPException(status_code=500, detail="Email service timeout") from e
     except Exception as e:
-        logging.error("Error sending databreach alert: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send databreach alert"
         ) from e
@@ -507,8 +483,7 @@ async def send_domain_verified_success(
     email: str, ip_address: str, browser: str, platform: str
 ) -> Dict[str, Any]:
     """
-    Sends email after a domain is successfully verified
-
+    Sends XposedOrNot Domain Verified Success Email
     """
     try:
         data = {
@@ -521,7 +496,7 @@ async def send_domain_verified_success(
                     "To": [{"Email": email}],
                     "TemplateID": 5893448,
                     "TemplateLanguage": True,
-                    "Subject": "Domain Verified Successfully",
+                    "Subject": "XposedOrNot: Domain Verified Success",
                     "Variables": {
                         "ip": ip_address,
                         "browser": browser,
@@ -536,15 +511,11 @@ async def send_domain_verified_success(
             )
 
             if response.status_code != 200:
-                logging.error(
-                    "Failed to send domain verification success: %s", response.text
-                )
                 raise HTTPException(
                     status_code=500, detail="Failed to send verification success email"
                 )
             return response.json()
     except Exception as e:
-        logging.error("Error sending domain verification success: %s", str(e))
         raise HTTPException(
             status_code=500, detail="Failed to send verification success email"
         ) from e

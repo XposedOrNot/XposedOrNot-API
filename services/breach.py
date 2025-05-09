@@ -1,15 +1,12 @@
 """Breach-related service functions."""
 
 # Standard library imports
-import logging
-import sys
 from typing import Dict, List, Any
 
 # Third-party imports
 from google.cloud import datastore
 from google.api_core import exceptions as api_exceptions
 from fastapi import HTTPException
-
 
 # Initialize datastore client
 ds_client = datastore.Client()
@@ -71,10 +68,8 @@ async def get_combined_breach_data(email: str) -> Dict[str, Any]:
     except api_exceptions.GoogleAPIError as e:
         raise HTTPException(status_code=500, detail="Datastore error") from e
     except (ValueError, TypeError) as e:
-        logger.error("Invalid input in get_combined_breach_data: %s", str(e))
         raise HTTPException(status_code=400, detail="Invalid input") from e
     except Exception as e:
-        logger.error("Unexpected error in get_combined_breach_data: %s", str(e))
         raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
@@ -87,20 +82,14 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
 
         user_data = datastore_client.get(search_key)
         if user_data is not None:
-
             return dict(user_data)
 
         return {}
-    except api_exceptions.GoogleAPIError as exception_details:
-        logger.error(
-            "[GET-EXPOSURE] Error fetching data: %s", exception_details, exc_info=True
-        )
+    except api_exceptions.GoogleAPIError:
         return {}
-    except (ValueError, TypeError) as e:
-        logger.error("[GET-EXPOSURE] Invalid input: %s", str(e), exc_info=True)
+    except (ValueError, TypeError):
         return {}
     except Exception as e:
-        logger.error("Error getting exposure data: %s", str(e), exc_info=True)
         raise
 
 
@@ -109,24 +98,16 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
     try:
         datastore_client = datastore.Client()
         search_key = datastore_client.key("xon_sensitive", user_email)
-        logger.debug("[GET-SENSITIVE] Querying sensitive exposure data")
         user_data = datastore_client.get(search_key)
         if user_data is not None:
-            logger.debug("[GET-SENSITIVE] Found sensitive data")
             return dict(user_data)
 
-        logger.debug("[GET-SENSITIVE] No sensitive data found")
         return {}
-    except api_exceptions.GoogleAPIError as e:
-        logger.error(
-            "[GET-SENSITIVE] Error fetching sensitive data: %s", str(e), exc_info=True
-        )
+    except api_exceptions.GoogleAPIError:
         return {}
-    except (ValueError, TypeError) as e:
-        logger.error("[GET-SENSITIVE] Invalid input: %s", str(e), exc_info=True)
+    except (ValueError, TypeError):
         return {}
     except Exception as e:
-        logger.error("Error getting sensitive exposure data: %s", str(e), exc_info=True)
         raise
 
 

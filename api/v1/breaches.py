@@ -167,21 +167,19 @@ async def search_data_breaches_v2(
 
         # Handle sensitive data if available
         if breach_data and sensitive_data and token:
-            # Get existing sites from breach record
-            existing_sites = (
-                set(breach_data["site"].split(";"))
-                if "site" in breach_data and breach_data["site"]
-                else set()
-            )
-            # Get sites from sensitive data
-            sensitive_sites = (
-                set(sensitive_data["site"].split(";"))
-                if "site" in sensitive_data and sensitive_data["site"]
-                else set()
-            )
-            # Combine sites
-            unique_sites = existing_sites.union(sensitive_sites)
-            breach_data["site"] = ";".join(unique_sites)
+            if isinstance(breach_data, dict) and isinstance(sensitive_data, dict):
+                existing_sites = (
+                    set(breach_data["site"].split(";"))
+                    if "site" in breach_data and breach_data["site"]
+                    else set()
+                )
+                sensitive_sites = (
+                    set(sensitive_data["site"].split(";"))
+                    if "site" in sensitive_data and sensitive_data["site"]
+                    else set()
+                )
+                unique_sites = existing_sites.union(sensitive_sites)
+                breach_data["site"] = ";".join(unique_sites)
 
         # Get summary and metrics
         (
@@ -208,8 +206,8 @@ async def search_data_breaches_v2(
         ai_summary = get_ai_summary(breach_data)
         return BreachAnalyticsV2Response(AI_Summary=ai_summary)
 
-    except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/breach-analytics", response_model=BreachAnalyticsResponse)
@@ -228,8 +226,6 @@ async def search_data_breaches(
 
     try:
         email = email.lower()
-
-        # Check shield status first
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", email)
         alert_record = datastore_client.get(alert_key)
@@ -239,20 +235,13 @@ async def search_data_breaches(
 
         # Validate token if provided
         if token:
-            stored_token = alert_record.get("token") if alert_record else None
             token_valid = bool(alert_record and alert_record.get("token") == token)
-
             if not token_valid:
                 raise HTTPException(status_code=403, detail="Invalid token")
 
-        # Get breach and sensitive data
         breach_data = await get_exposure(email)
+        sensitive_data = await get_sensitive_exposure(email) if token else None
 
-        sensitive_data = None
-        if token:
-            sensitive_data = await get_sensitive_exposure(email)
-
-        # Return empty response if no data found
         if not breach_data and not sensitive_data:
             return BreachAnalyticsResponse(
                 BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
@@ -263,26 +252,21 @@ async def search_data_breaches(
                 PasteMetrics=None,
             )
 
-        # Combine breach and sensitive data sites if token is valid
         if breach_data and sensitive_data and token:
-            # Get existing sites from breach record
-            existing_sites = (
-                set(breach_data["site"].split(";"))
-                if "site" in breach_data and breach_data["site"]
-                else set()
-            )
-            # Get sites from sensitive data
-            sensitive_sites = (
-                set(sensitive_data["site"].split(";"))
-                if "site" in sensitive_data and sensitive_data["site"]
-                else set()
-            )
+            if isinstance(breach_data, dict) and isinstance(sensitive_data, dict):
+                existing_sites = (
+                    set(breach_data["site"].split(";"))
+                    if "site" in breach_data and breach_data["site"]
+                    else set()
+                )
+                sensitive_sites = (
+                    set(sensitive_data["site"].split(";"))
+                    if "site" in sensitive_data and sensitive_data["site"]
+                    else set()
+                )
+                unique_sites = existing_sites.union(sensitive_sites)
+                breach_data["site"] = ";".join(unique_sites)
 
-            # Combine sites
-            unique_sites = existing_sites.union(sensitive_sites)
-            breach_data["site"] = ";".join(unique_sites)
-
-        # Get summary and metrics
         summary_result = await get_summary_and_metrics(breach_data, sensitive_data)
         (
             breach_summary,
@@ -293,7 +277,6 @@ async def search_data_breaches(
             paste_metrics,
         ) = summary_result
 
-        # Return appropriate response based on data availability
         if breach_summary or paste_summary:
             return BreachAnalyticsResponse(
                 ExposedBreaches=exposed_breaches,
@@ -314,8 +297,8 @@ async def search_data_breaches(
             PasteMetrics=None,
         )
 
-    except Exception as e:
-        raise HTTPException(status_code=404, detail="Not found") from e
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail="Not found") from exc
 
 
 @router.get(
@@ -376,10 +359,7 @@ async def search_email(
         if not breach_data:
             return EmailBreachErrorResponse(Error="Not found")
 
-        # Initialize datastore client
         data_store = datastore.Client()
-
-        # Check if email is protected by shield
         alert_key = data_store.key("xon_alert", email)
         alert_record = data_store.get(alert_key)
 
@@ -393,7 +373,6 @@ async def search_email(
                 },
             )
 
-        # Get breach data
         xon_key = data_store.key("xon", email)
         xon_record = data_store.get(xon_key)
 
@@ -408,7 +387,6 @@ async def search_email(
                     "status": "success",
                 }
 
-                # Include detailed breach information if requested
                 if details:
                     raw_breaches = get_breaches(xon_record["site"])
                     formatted_breaches = []
@@ -446,7 +424,7 @@ async def search_email(
             content={"Error": "No breaches found", "email": email, "status": "failed"},
         )
 
-    except Exception as e:
+    except Exception:
         return JSONResponse(
             status_code=404,
             content={"Error": "Not found", "email": email, "status": "failed"},

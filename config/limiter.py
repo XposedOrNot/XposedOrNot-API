@@ -84,9 +84,6 @@ def rate_limit_exceeded_handler(
     Custom handler for rate limit exceeded exceptions.
     Includes retry-after header and detailed response.
     """
-    client_ip = get_remote_address(request)  # Use slowapi's built-in IP detection
-    endpoint = request.url.path
-
     # Calculate retry after time based on the rate limit that was exceeded
     retry_after = 1  # Default to 1 second
     if hasattr(exc, "retry_after"):
@@ -100,8 +97,6 @@ def rate_limit_exceeded_handler(
             "detail": str(exc),
             "retry_after": retry_after,
             "reset_time": reset_time.isoformat(),
-            # "client_ip": client_ip,
-            # "endpoint": endpoint,
         },
         headers={"Retry-After": str(retry_after)},
     )
