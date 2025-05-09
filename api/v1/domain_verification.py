@@ -251,7 +251,6 @@ async def verify_email(
                 status="error", domainVerification="Failure"
             )
     except (httpx.RequestError, httpx.HTTPError, ValueError) as err:
-        print(f"Unexpected error occurred: {str(err)}")
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
@@ -292,26 +291,17 @@ async def verify_html(
     domain: str, email: str, code: str, prefix: str, request: Request
 ) -> DomainVerificationResponse:
     """Verify domain using HTML file."""
-    print(
-        f"Starting HTML verification for domain: {domain}, email: {email}, code: {code}"
-    )
-
     if not validate_email_with_tld(email) or not validate_variables([code]):
-        print(f"Validation failed - email: {email}, code: {code}")
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
-    print(f"Attempting to check HTML file for domain: {domain}")
     if await check_file(domain, prefix, code):
-        print(f"HTML verification successful for domain: {domain}")
         datastore_client = datastore.Client()
         domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
         domain_record = datastore_client.get(domain_key)
 
         if domain_record is None:
-            print(f"Creating new domain record for {domain}_{email}")
             create_new_record(domain, email, code, "html_file", datastore_client)
         else:
-            print(f"Updating existing domain record for {domain}_{email}")
             domain_record["last_verified"] = datetime.now()
             datastore_client.put(domain_record)
 
@@ -327,7 +317,6 @@ async def verify_html(
             status="success", domainVerification="Success"
         )
 
-    print(f"HTML verification failed for domain: {domain}")
     return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
@@ -343,10 +332,7 @@ async def check_file(domain: str, prefix: str, code: str) -> bool:
     Returns:
         bool: True if verification successful, False otherwise
     """
-    print(f"Starting check_file for domain: {domain}, prefix: {prefix}, code: {code}")
-
     if not validate_domain(domain) or not validate_variables([code]):
-        print(f"Initial validation failed for domain: {domain}")
         return False
 
     headers = {
@@ -360,30 +346,19 @@ async def check_file(domain: str, prefix: str, code: str) -> bool:
     url = f"https://{domain}/{code}.html"
     token = f"{prefix}={code}"
 
-    print(f"Attempting to fetch URL: {url}")
-    print(f"Expected token: {token}")
-
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(url, headers=headers, timeout=20)
-            print(f"Response status code: {response.status_code}")
 
             if response.status_code == 200:
                 data = response.content[:1000]
                 decoded_data = data.strip().decode("utf-8")
-                print(f"Received data: {decoded_data}")
-                print(f"Comparing token: {token.strip()} with data: {decoded_data}")
 
                 if str(token.strip()) == str(decoded_data):
-                    print("Token match successful")
                     return True
-                else:
-                    print("Token match failed")
-            else:
-                print(f"Non-200 status code received: {response.status_code}")
+            return False
 
-    except (httpx.RequestError, httpx.HTTPError, ValueError) as err:
-        print(f"Unexpected error occurred: {str(err)}")
+    except (httpx.RequestError, httpx.HTTPError, ValueError):
         return False
 
 

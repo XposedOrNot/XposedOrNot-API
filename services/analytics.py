@@ -2,7 +2,6 @@
 
 # Standard library imports
 import json
-import logging
 import os
 from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional, Set
@@ -13,10 +12,6 @@ from google.cloud import datastore
 from google.api_core import exceptions as google_exceptions
 from openai import OpenAI
 from openai import OpenAIError
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 # Initialize OpenAI client
 ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
@@ -346,35 +341,23 @@ def calculate_risk_score(
 
 def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
     """Returns the exposed breaches with details including records, domain, industry, and other metadata."""
-    logger.debug("[GET_BREACHES][1] Starting get_breaches with input: %s", breaches)
     ds_client = datastore.Client()
     breaches_output = {"breaches_details": []}
 
     breaches = breaches.split(";")
-    logger.debug("[GET_BREACHES][2] Split breaches into list: %s", breaches)
 
     for breach in breaches:
         try:
-            logger.debug("[GET_BREACHES][3] Processing breach: %s", breach)
             key = ds_client.key("xon_breaches", breach)
-            logger.debug("[GET_BREACHES][4] Created datastore key: %s", key)
             query_result = ds_client.get(key)
-            logger.debug("[GET_BREACHES][5] Datastore query result: %s", query_result)
 
             if query_result is not None:
                 xposed_records = query_result.get("xposed_records", 0)
                 breach_date = query_result.get("breached_date")
                 breach_year = breach_date.strftime("%Y") if breach_date else ""
-                logger.debug(
-                    "[GET_BREACHES][6] Extracted basic fields - records: %s, date: %s, year: %s",
-                    xposed_records,
-                    breach_date,
-                    breach_year,
-                )
 
                 # Convert searchable to "Yes"/"No" string format
                 searchable = query_result.get("searchable", "")
-                logger.debug("[GET_BREACHES][7] Raw searchable value: %s", searchable)
                 if isinstance(searchable, bool):
                     searchable = "Yes" if searchable else "No"
                 elif isinstance(searchable, str):
@@ -383,13 +366,9 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                         if searchable.lower() in ("true", "t", "yes", "y", "1")
                         else "No"
                     )
-                logger.debug(
-                    "[GET_BREACHES][8] Processed searchable value: %s", searchable
-                )
 
                 # Convert verified to "Yes"/"No" string format
                 verified = query_result.get("verified", "")
-                logger.debug("[GET_BREACHES][9] Raw verified value: %s", verified)
                 if isinstance(verified, bool):
                     verified = "Yes" if verified else "No"
                 elif isinstance(verified, str):
@@ -398,9 +377,6 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                         if verified.lower() in ("true", "t", "yes", "y", "1")
                         else "No"
                     )
-                logger.debug(
-                    "[GET_BREACHES][10] Processed verified value: %s", verified
-                )
 
                 breach_details = {
                     "breach": breach,
@@ -416,40 +392,21 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                     "xposed_date": breach_year,
                     "xposed_records": xposed_records,
                 }
-                logger.debug(
-                    "[GET_BREACHES][11] Created breach details: %s", breach_details
-                )
                 breaches_output["breaches_details"].append(breach_details)
-                logger.debug("[GET_BREACHES][12] Added breach details to output")
             else:
-                logger.error("[GET_BREACHES][ERROR] Breach not found: %s", breach)
                 raise HTTPException(status_code=404, detail="Breach not found")
 
         except Exception as e:
-            logger.error(
-                "[GET_BREACHES][ERROR] Error processing breach %s: %s",
-                breach,
-                str(e),
-                exc_info=True,
-            )
             raise HTTPException(status_code=404, detail=str(e)) from e
 
-    logger.debug(
-        "[GET_BREACHES][13] Completed processing all breaches. Final output: %s",
-        breaches_output,
-    )
     return breaches_output
 
 
 def get_breaches_data(breaches: str) -> dict:
     """Returns a dictionary with the count of various types of exposed data in breaches"""
     try:
-        logger.debug(
-            "[GET_BREACHES_DATA][1] Starting get_breaches_data with input: %s", breaches
-        )
         ds_client = datastore.Client()
         breach_list = breaches.split(";")
-        logger.debug("[GET_BREACHES_DATA][2] Split breaches into list: %s", breach_list)
 
         # Initialize metrics structure
         metrics = {
@@ -512,7 +469,6 @@ def get_breaches_data(breaches: str) -> dict:
                 }
             ],
         }
-        logger.debug("[GET_BREACHES_DATA][3] Initialized metrics structure")
 
         # Process each breach
         exposed_data_types = set()
@@ -561,17 +517,8 @@ def get_breaches_data(breaches: str) -> dict:
                     # Update yearwise details and collect breach dates
                     if breach_date := query_result.get("breached_date"):
                         year = breach_date.year
-                        logger.debug(
-                            "[GET_BREACHES_DATA][11] Processing breach date: %s, year: %s",
-                            breach_date,
-                            year,
-                        )
                         if 2007 <= year <= 2025:
                             metrics["yearwise_details"][0][f"y{year}"] += 1
-                            logger.debug(
-                                "[GET_BREACHES_DATA][12] Updated year count for %s",
-                                year,
-                            )
                         date_list.append(breach_date.date())
 
                     # Collect exposed data types
@@ -580,15 +527,7 @@ def get_breaches_data(breaches: str) -> dict:
                         exposed_data_types.update(data_types)
 
             except Exception as e:
-                logger.error(f"Error processing breach {breach}: {str(e)}")
                 continue
-
-        logger.debug("[GET_BREACHES_DATA][13] Completed processing all breaches")
-        logger.debug("[GET_BREACHES_DATA][14] Date list: %s", date_list)
-        logger.debug(
-            "[GET_BREACHES_DATA][15] Final password risk counters: %s",
-            password_risk_counters,
-        )
 
         # Calculate risk score using new method
         risk_score, risk_label = calculate_risk_score(
@@ -596,11 +535,6 @@ def get_breaches_data(breaches: str) -> dict:
             password_counts=password_risk_counters,
             breach_dates=date_list,
             exposed_data_types=exposed_data_types,
-        )
-        logger.debug(
-            "[GET_BREACHES_DATA][16] Calculated new risk score: %s, label: %s",
-            risk_score,
-            risk_label,
         )
 
         metrics["risk"] = [{"risk_label": risk_label, "risk_score": risk_score}]
@@ -613,31 +547,16 @@ def get_breaches_data(breaches: str) -> dict:
         for breach in breach_list:
             key = ds_client.key("xon_breaches", breach)
             query_result = ds_client.get(key)
-            logger.debug(
-                "[GET_BREACHES_DATA][23] Processing exposed data for breach: %s", breach
-            )
             if query_result and "xposed_data" in query_result:
                 data_list = query_result["xposed_data"].split(";")
-                logger.debug(
-                    "[GET_BREACHES_DATA][24] Raw exposed data list: %s", data_list
-                )
                 for data in data_list:
                     data = data.strip()
                     if data:
                         exposed_data_types[data] = exposed_data_types.get(data, 0) + 1
-        logger.debug(
-            "[GET_BREACHES_DATA][25] Collected exposed data types: %s",
-            exposed_data_types,
-        )
 
         # Map exposed data to categories
         category_dict = {}
         for data_type, count in exposed_data_types.items():
-            logger.debug(
-                "[GET_BREACHES_DATA][26] Mapping data type: %s (count: %s)",
-                data_type,
-                count,
-            )
             if data_type in data_categories:
                 category = data_categories[data_type]["category"]
                 group = data_categories[data_type]["group"]
@@ -667,11 +586,6 @@ def get_breaches_data(breaches: str) -> dict:
         return metrics
 
     except Exception as e:
-        logger.error(
-            "[GET_BREACHES_DATA][ERROR] Error processing data: %s",
-            str(e),
-            exc_info=True,
-        )
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
@@ -686,12 +600,6 @@ async def get_summary_and_metrics(
     Optional[Dict],
 ]:
     """Helper function to fetch the summary and metrics of breaches and pastes."""
-    logger.debug("[SUMMARY-METRICS][1] Starting summary and metrics calculation")
-    logger.debug("[SUMMARY-METRICS][1.1] Input - Breach record: %s", breach_record)
-    logger.debug(
-        "[SUMMARY-METRICS][1.2] Input - Sensitive record: %s", sensitive_record
-    )
-
     breach_summary = None
     paste_summary = None
     exposed_breaches = None
@@ -703,41 +611,21 @@ async def get_summary_and_metrics(
     try:
         # Process regular breaches first
         if breach_record:
-            logger.debug("[SUMMARY-METRICS][2] Processing breach record")
             site_name = str(breach_record.get("site", ""))
-            logger.debug("[SUMMARY-METRICS][2.1] Regular site name: %s", site_name)
 
             # Only proceed if we have regular sites
             if site_name:
                 breach_summary = {"site": site_name}
-                logger.debug("[SUMMARY-METRICS][2.2] Getting regular breach details")
                 exposed_breaches = get_breaches(site_name)
-                logger.debug(
-                    "[SUMMARY-METRICS][2.3] Regular exposed breaches: %s",
-                    exposed_breaches,
-                )
-                logger.debug("[SUMMARY-METRICS][2.4] Getting regular breach metrics")
                 breach_metrics = get_breaches_data(site_name)
-                logger.debug(
-                    "[SUMMARY-METRICS][2.5] Regular breach metrics: %s", breach_metrics
-                )
 
         # Process sensitive sites if token is provided (indicated by sensitive_record being present)
         if sensitive_record is not None and breach_record:
-            logger.debug("[SUMMARY-METRICS][3] Processing sensitive sites")
             # Get sensitive sites from breach record
             sensitive_sites = str(breach_record.get("sensitive_site", ""))
-            logger.debug(
-                "[SUMMARY-METRICS][3.1] Sensitive sites from breach record: %s",
-                sensitive_sites,
-            )
 
             if sensitive_sites:
-                logger.debug("[SUMMARY-METRICS][3.2] Getting sensitive breach details")
                 sensitive_breaches = get_breaches(sensitive_sites)
-                logger.debug(
-                    "[SUMMARY-METRICS][3.3] Sensitive breaches: %s", sensitive_breaches
-                )
 
                 # Add sensitive sites to breach summary but keep breaches separate
                 if breach_summary:
@@ -752,15 +640,6 @@ async def get_summary_and_metrics(
                     breach_metrics = _combine_metrics(breach_metrics, sensitive_metrics)
                 else:
                     breach_metrics = get_breaches_data(sensitive_sites)
-
-        logger.debug("[SUMMARY-METRICS][4] Final results:")
-        logger.debug("- breach_summary: %s", breach_summary)
-        logger.debug("- paste_summary: %s", paste_summary)
-        logger.debug("- exposed_breaches: %s", exposed_breaches)
-        logger.debug("- sensitive_breaches: %s", sensitive_breaches)
-        logger.debug("- exposed_pastes: %s", exposed_pastes)
-        logger.debug("- breach_metrics: %s", breach_metrics)
-        logger.debug("- paste_metrics: %s", paste_metrics)
 
         # If we have sensitive breaches, add them to exposed_breaches under a separate key
         if sensitive_breaches:
@@ -782,9 +661,6 @@ async def get_summary_and_metrics(
             paste_metrics,
         )
     except Exception as e:
-        logger.error(
-            "[SUMMARY-METRICS][ERROR] Error processing data: %s", str(e), exc_info=True
-        )
         raise
 
 
@@ -958,7 +834,6 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error processing analytics: %s", str(e), exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
@@ -982,7 +857,6 @@ async def get_pulse_news() -> List[Dict[str, Any]]:
         return news_items
 
     except Exception as e:
-        logger.error("Error fetching news feed: %s", str(e), exc_info=True)
         detail_msg = "Error fetching news feed: " + str(e)
         raise HTTPException(status_code=404, detail=detail_msg) from e
 
@@ -1033,5 +907,4 @@ async def get_breaches_analytics(site: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error("Error processing analytics: %s", str(e), exc_info=True)
         raise HTTPException(status_code=404, detail=str(e)) from e

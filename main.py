@@ -1,7 +1,6 @@
 """Main XON-API entry point."""
 
 # Standard library imports
-from typing import Dict, Any, Optional
 
 # Third-party imports
 from fastapi import FastAPI, HTTPException, Request
@@ -9,9 +8,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from fastapi.middleware.cors import CORSMiddleware
 
 # Local imports - Config
 from config.middleware import (
@@ -129,7 +126,7 @@ app.include_router(
 
 @app.get("/", include_in_schema=False)
 async def index():
-    """Returns default landing page"""
+    """Returns default landing page."""
     return HTMLResponse(content=open("templates/index.html", encoding="utf-8").read())
 
 
@@ -153,9 +150,12 @@ async def serve_robots_txt(request: Request):  # pylint: disable=unused-argument
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html(request: Request):
     """Custom Swagger UI endpoint with enhanced styling."""
-    swagger_js_url = "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.min.js"
+    swagger_js_url = (
+        "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/"
+        "swagger-ui-bundle.min.js"
+    )
     swagger_css_url = (
-        "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css"
+        "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/" "swagger-ui.min.css"
     )
 
     return templates.TemplateResponse(
@@ -188,6 +188,7 @@ async def unblock_cloudflare(
 ):  # pylint: disable=unused-argument
     """
     Returns status of unblock done at Cloudflare.
+
     Args:
         token: Authentication token for the unblock operation
         request: FastAPI request object (used by rate limiter)
@@ -273,7 +274,8 @@ def custom_openapi():
             "description": (
                 "Retrieves a list of all known data breaches in the system. "
                 "This endpoint provides information about each breach including "
-                "its name, title, breach date, and when it was added to the system."
+                "its name, title, breach date, and when it was added to the "
+                "system."
             ),
             "tags": ["breaches"],
             "parameters": [
@@ -294,14 +296,14 @@ def custom_openapi():
                 {
                     "name": "if-modified-since",
                     "in": "header",
-                    "description": "Return 304 if no changes since this date",
+                    "description": ("Return 304 if no changes since this date"),
                     "required": False,
                     "schema": {"type": "string", "format": "date-time"},
                 },
             ],
             "responses": {
                 "200": {
-                    "description": "Successfully retrieved list of breaches",
+                    "description": ("Successfully retrieved list of breaches"),
                     "content": {
                         "application/json": {
                             "schema": {
@@ -313,62 +315,97 @@ def custom_openapi():
                                     },
                                     "exposedBreaches": {
                                         "type": "array",
-                                        "description": "List of breach objects",
+                                        "description": ("List of breach objects"),
                                         "items": {
                                             "type": "object",
                                             "properties": {
                                                 "breachID": {
                                                     "type": "string",
-                                                    "description": "Unique identifier for the breach",
+                                                    "description": (
+                                                        "Unique identifier for the "
+                                                        "breach"
+                                                    ),
                                                 },
                                                 "breachedDate": {
                                                     "type": "string",
-                                                    "description": "Date when the breach occurred",
+                                                    "description": (
+                                                        "Date when the breach "
+                                                        "occurred"
+                                                    ),
                                                 },
                                                 "domain": {
                                                     "type": "string",
-                                                    "description": "Domain associated with the breach",
+                                                    "description": (
+                                                        "Domain associated with the "
+                                                        "breach"
+                                                    ),
                                                 },
                                                 "industry": {
                                                     "type": "string",
-                                                    "description": "Industry of the breached organization",
+                                                    "description": (
+                                                        "Industry of the breached "
+                                                        "organization"
+                                                    ),
                                                 },
                                                 "logo": {
                                                     "type": "string",
-                                                    "description": "URL to organization logo",
+                                                    "description": (
+                                                        "URL to organization logo"
+                                                    ),
                                                 },
                                                 "passwordRisk": {
                                                     "type": "string",
-                                                    "description": "Password risk level",
+                                                    "description": (
+                                                        "Password risk level"
+                                                    ),
                                                 },
                                                 "searchable": {
                                                     "type": "boolean",
-                                                    "description": "Whether the breach is searchable",
+                                                    "description": (
+                                                        "Whether the breach is "
+                                                        "searchable"
+                                                    ),
                                                 },
                                                 "sensitive": {
                                                     "type": "boolean",
-                                                    "description": "Whether the breach contains sensitive data",
+                                                    "description": (
+                                                        "Whether the breach contains "
+                                                        "sensitive data"
+                                                    ),
                                                 },
                                                 "verified": {
                                                     "type": "boolean",
-                                                    "description": "Whether the breach has been verified",
+                                                    "description": (
+                                                        "Whether the breach has been "
+                                                        "verified"
+                                                    ),
                                                 },
                                                 "exposedData": {
                                                     "type": "array",
                                                     "items": {"type": "string"},
-                                                    "description": "Types of data exposed in the breach",
+                                                    "description": (
+                                                        "Types of data exposed in "
+                                                        "the breach"
+                                                    ),
                                                 },
                                                 "exposedRecords": {
                                                     "type": "integer",
-                                                    "description": "Number of records affected",
+                                                    "description": (
+                                                        "Number of records affected"
+                                                    ),
                                                 },
                                                 "exposureDescription": {
                                                     "type": "string",
-                                                    "description": "Detailed description of the breach",
+                                                    "description": (
+                                                        "Detailed description of the "
+                                                        "breach"
+                                                    ),
                                                 },
                                                 "referenceURL": {
                                                     "type": "string",
-                                                    "description": "URL to breach reference",
+                                                    "description": (
+                                                        "URL to breach reference"
+                                                    ),
                                                 },
                                             },
                                         },
@@ -379,10 +416,14 @@ def custom_openapi():
                     },
                 },
                 "304": {
-                    "description": "Not Modified - No changes since the specified date"
+                    "description": (
+                        "Not Modified - No changes since the specified date"
+                    )
                 },
                 "404": {
-                    "description": "Not Found - No breaches found for the provided criteria"
+                    "description": (
+                        "Not Found - No breaches found for the provided criteria"
+                    )
                 },
             },
         }
@@ -403,7 +444,7 @@ def custom_openapi():
                     "schema": {"type": "string", "format": "email"},
                     "name": "email",
                     "in": "path",
-                    "description": "Email address to check for breaches",
+                    "description": ("Email address to check for breaches"),
                 },
                 {
                     "name": "include_details",
@@ -447,7 +488,7 @@ def custom_openapi():
                     },
                 },
                 "404": {
-                    "description": "Not Found - Email not found or invalid format",
+                    "description": ("Not Found - Email not found or invalid format"),
                     "content": {
                         "application/json": {
                             "schema": {
@@ -479,19 +520,19 @@ def custom_openapi():
                     "schema": {"type": "string", "format": "email"},
                     "name": "email",
                     "in": "query",
-                    "description": "Email address to get analytics for",
+                    "description": ("Email address to get analytics for"),
                 },
                 {
                     "name": "token",
                     "in": "query",
-                    "description": "Token for accessing sensitive data",
+                    "description": ("Token for accessing sensitive data"),
                     "required": False,
                     "schema": {"type": "string"},
                 },
             ],
             "responses": {
                 "200": {
-                    "description": "Successfully retrieved breach analytics",
+                    "description": ("Successfully retrieved breach analytics"),
                     "content": {
                         "application/json": {
                             "schema": {
@@ -499,36 +540,42 @@ def custom_openapi():
                                 "properties": {
                                     "ExposedBreaches": {
                                         "type": "array",
-                                        "description": "List of breaches containing the email",
+                                        "description": (
+                                            "List of breaches containing the email"
+                                        ),
                                         "items": {"type": "object"},
                                     },
                                     "BreachesSummary": {
                                         "type": "object",
-                                        "description": "Summary of breaches",
+                                        "description": ("Summary of breaches"),
                                     },
                                     "BreachMetrics": {
                                         "type": "object",
-                                        "description": "Metrics about breaches",
+                                        "description": ("Metrics about breaches"),
                                     },
                                     "PastesSummary": {
                                         "type": "object",
-                                        "description": "Summary of pastes",
+                                        "description": ("Summary of pastes"),
                                     },
                                     "ExposedPastes": {
                                         "type": "array",
-                                        "description": "List of pastes containing the email",
+                                        "description": (
+                                            "List of pastes containing the email"
+                                        ),
                                         "items": {"type": "object"},
                                     },
                                     "PasteMetrics": {
                                         "type": "object",
-                                        "description": "Metrics about pastes",
+                                        "description": ("Metrics about pastes"),
                                     },
                                 },
                             }
                         }
                     },
                 },
-                "404": {"description": "Not Found - Email not found or invalid format"},
+                "404": {
+                    "description": ("Not Found - Email not found or invalid format")
+                },
             },
         }
     }
@@ -537,8 +584,10 @@ def custom_openapi():
         "post": {
             "summary": "Get Domain Breaches",
             "description": (
-                "Retrieves information about data breaches associated with verified domains for an API key. "
-                "This endpoint provides detailed metrics and statistics about breaches affecting the domains."
+                "Retrieves information about data breaches associated with "
+                "verified domains for an API key. This endpoint provides "
+                "detailed metrics and statistics about breaches affecting the "
+                "domains."
             ),
             "tags": ["domain_breaches"],
             "parameters": [
@@ -547,12 +596,12 @@ def custom_openapi():
                     "schema": {"type": "string"},
                     "name": "x-api-key",
                     "in": "header",
-                    "description": "API key for authentication",
+                    "description": ("API key for authentication"),
                 }
             ],
             "responses": {
                 "200": {
-                    "description": "Successfully retrieved domain breaches",
+                    "description": ("Successfully retrieved domain breaches"),
                     "content": {
                         "application/json": {
                             "schema": {
@@ -560,27 +609,38 @@ def custom_openapi():
                                 "properties": {
                                     "status": {
                                         "type": "string",
-                                        "description": "Response status",
+                                        "description": ("Response status"),
                                     },
                                     "metrics": {
                                         "type": "object",
-                                        "description": "Detailed metrics about domain breaches",
+                                        "description": (
+                                            "Detailed metrics about domain " "breaches"
+                                        ),
                                         "properties": {
                                             "Yearly_Metrics": {
                                                 "type": "object",
-                                                "description": "Breach counts by year",
+                                                "description": (
+                                                    "Breach counts by year"
+                                                ),
                                             },
                                             "Domain_Summary": {
                                                 "type": "object",
-                                                "description": "Summary of breaches by domain",
+                                                "description": (
+                                                    "Summary of breaches by domain"
+                                                ),
                                             },
                                             "Breach_Summary": {
                                                 "type": "object",
-                                                "description": "Summary of all breaches",
+                                                "description": (
+                                                    "Summary of all breaches"
+                                                ),
                                             },
                                             "Breaches_Details": {
                                                 "type": "array",
-                                                "description": "Detailed information about each breach",
+                                                "description": (
+                                                    "Detailed information about "
+                                                    "each breach"
+                                                ),
                                                 "items": {
                                                     "type": "object",
                                                     "properties": {
@@ -592,11 +652,16 @@ def custom_openapi():
                                             },
                                             "Top10_Breaches": {
                                                 "type": "object",
-                                                "description": "Top 10 largest breaches",
+                                                "description": (
+                                                    "Top 10 largest breaches"
+                                                ),
                                             },
                                             "Detailed_Breach_Info": {
                                                 "type": "object",
-                                                "description": "Detailed information about each breach",
+                                                "description": (
+                                                    "Detailed information about "
+                                                    "each breach"
+                                                ),
                                             },
                                         },
                                     },
@@ -605,9 +670,11 @@ def custom_openapi():
                         }
                     },
                 },
-                "401": {"description": "Unauthorized - Invalid or missing API key"},
+                "401": {"description": ("Unauthorized - Invalid or missing API key")},
                 "500": {
-                    "description": "Internal Server Error - An error occurred during processing"
+                    "description": (
+                        "Internal Server Error - An error occurred during " "processing"
+                    )
                 },
             },
         }
@@ -622,5 +689,4 @@ app.openapi = custom_openapi
 if __name__ == "__main__":
     import uvicorn
 
-    print("Connected and ready to serve the world!")
     uvicorn.run(app, host="0.0.0.0", port=1806)  # nosec B104

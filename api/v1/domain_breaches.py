@@ -4,7 +4,6 @@ from datetime import datetime
 from collections import defaultdict
 from typing import Dict, List
 from operator import itemgetter
-import logging
 
 from fastapi import APIRouter, Request, HTTPException, Header, Depends
 from google.cloud import datastore
@@ -13,10 +12,6 @@ from pydantic import BaseModel, Field
 from config.limiter import limiter
 from models.base import BaseResponse
 from utils.validation import validate_url
-
-# Configure logging with more detailed format
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -87,40 +82,27 @@ async def protected(
 ):
     """Retrieves the data breaches and related metrics for an API-key"""
     try:
-        logger.debug(
-            "Starting domain breaches request with API key: %s...", x_api_key[:4]
-        )
-
         if not x_api_key or x_api_key.strip() == "" or not validate_url(request):
-            logger.error(
-                "Invalid API key or URL validation failed. API key: %s...",
-                x_api_key[:4],
-            )
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
         # Instantiate a datastore client
-        logger.debug("Initializing datastore client")
         datastore_client = datastore.Client()
 
         # Create a query against the kind 'xon_api_key'
         query = datastore_client.query(kind="xon_api_key")
         query.add_filter("api_key", "=", x_api_key)
         results = list(query.fetch())
-        logger.debug("API key validation results count: %s", len(results))
 
         if not results:
-            logger.error("No API key found in database")
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
         # If the key is valid, return the associated email
         email = results[0].key.name
-        logger.debug("Found associated email: %s", email)
 
         # Additional operations
         query = datastore_client.query(kind="xon_domains")
         query.add_filter("email", "=", email)
         verified_domains = [entity["domain"] for entity in query.fetch()]
-        logger.debug("Found verified domains: %s", verified_domains)
 
         current_year = datetime.utcnow().year
         yearly_summary = defaultdict(int)
@@ -134,7 +116,6 @@ async def protected(
         breach_details = []
 
         for domain in verified_domains:
-            logger.debug("Processing domain: %s", domain)
             query = datastore_client.query(kind="xon_domains_summary")
             query.add_filter("domain", "=", domain)
             domain_summary[domain] = 0
@@ -189,18 +170,11 @@ async def protected(
             "Detailed_Breach_Info": detailed_breach_info,
         }
 
-        logger.debug("Successfully completed domain breaches request")
         return DomainBreachesResponse(status="success", metrics=metrics)
 
     except HTTPException:
         raise
     except Exception as exception_details:
-        logger.error(
-            "Error processing request to %s: %s",
-            request.url,
-            str(exception_details),
-            exc_info=True,
-        )
         raise HTTPException(
             status_code=500, detail="An error occurred during processing"
         ) from exception_details

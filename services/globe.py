@@ -9,13 +9,9 @@ import json
 import time
 import os
 import hashlib
-import logging
 import httpx
 from typing import Dict, Any, Optional
 from google.cloud import pubsub_v1
-
-# Configure logging
-logger = logging.getLogger(__name__)
 
 # Initialize PubSub constants
 TOPIC_ID = os.environ.get("TOPIC_ID")
@@ -42,16 +38,10 @@ async def get_geolocation(ip: str) -> Optional[Dict[str, Any]]:
                     "lat": data.get("lat", 0.0),
                     "lon": data.get("lon", 0.0),
                 }
-
-            logger.warning("Failed to get geolocation for IP %s: %s", ip, data)
             return None
-    except httpx.HTTPError as e:
-        logger.error("HTTP error in geolocation request for IP %s: %s", ip, str(e))
+    except httpx.HTTPError:
         return None
-    except Exception as e:
-        logger.error(
-            "Unexpected error in geolocation request for IP %s: %s", ip, str(e)
-        )
+    except Exception:
         return None
 
 
@@ -66,7 +56,6 @@ async def publish_to_pubsub(data: Dict[str, Any]) -> None:
     try:
         # Check if PubSub is configured
         if not TOPIC_ID or not PROJECT_ID:
-            logger.warning("PubSub not configured: TOPIC_ID or PROJECT_ID not set")
             return
 
         request_hash = generate_request_hash(data)
@@ -88,10 +77,8 @@ async def publish_to_pubsub(data: Dict[str, Any]) -> None:
         # Store request hash with timestamp
         recent_requests[request_hash] = current_time
 
-        logger.debug("Published location data to PubSub: %s", data)
-
-    except Exception as e:
-        logger.error("Error publishing to Pub/Sub: %s", str(e))
+    except Exception:
+        pass
 
 
 async def process_request_for_globe(client_ip: str) -> None:
@@ -113,5 +100,5 @@ async def process_request_for_globe(client_ip: str) -> None:
 
         await publish_to_pubsub(pubsub_data)
 
-    except Exception as e:
-        logger.error("Error in process_request_for_globe: %s", str(e))
+    except Exception:
+        pass

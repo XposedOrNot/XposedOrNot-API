@@ -10,13 +10,6 @@ from google.cloud import datastore
 from google.api_core import exceptions as api_exceptions
 from fastapi import HTTPException
 
-# Configure logging with more detailed format
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
 
 # Initialize datastore client
 ds_client = datastore.Client()
@@ -87,17 +80,16 @@ async def get_combined_breach_data(email: str) -> Dict[str, Any]:
 
 async def get_exposure(user_email: str) -> Dict[str, Any]:
     """Returns breach data for a given email."""
-    logger.debug("[GET-EXPOSURE] Starting exposure check for email: %s", user_email)
+
     try:
         datastore_client = datastore.Client()
         search_key = datastore_client.key("xon", user_email)
-        logger.debug("[GET-EXPOSURE] Querying datastore with key: %s", search_key)
+
         user_data = datastore_client.get(search_key)
         if user_data is not None:
-            logger.debug("[GET-EXPOSURE] Found user data")
+
             return dict(user_data)
 
-        logger.debug("[GET-EXPOSURE] No user data found in datastore")
         return {}
     except api_exceptions.GoogleAPIError as exception_details:
         logger.error(
@@ -108,15 +100,12 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
         logger.error("[GET-EXPOSURE] Invalid input: %s", str(e), exc_info=True)
         return {}
     except Exception as e:
-        logger.error("[GET-EXPOSURE] Unexpected error: %s", str(e), exc_info=True)
-        return {}
+        logger.error("Error getting exposure data: %s", str(e), exc_info=True)
+        raise
 
 
 async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
     """Get sensitive exposure data for a user."""
-    logger.debug(
-        "[GET-SENSITIVE] Starting sensitive exposure check for email: %s", user_email
-    )
     try:
         datastore_client = datastore.Client()
         search_key = datastore_client.key("xon_sensitive", user_email)
@@ -137,8 +126,8 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
         logger.error("[GET-SENSITIVE] Invalid input: %s", str(e), exc_info=True)
         return {}
     except Exception as e:
-        logger.error("[GET-SENSITIVE] Unexpected error: %s", str(e), exc_info=True)
-        return {}
+        logger.error("Error getting sensitive exposure data: %s", str(e), exc_info=True)
+        raise
 
 
 def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:

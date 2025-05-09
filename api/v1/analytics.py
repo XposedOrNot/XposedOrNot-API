@@ -5,7 +5,7 @@ import datetime
 import html
 import logging
 from collections import defaultdict
-from typing import Optional, Union, Dict, Any
+from typing import Optional, Union, Dict, Any, List
 
 # Third-party imports
 from fastapi import APIRouter, HTTPException, Request, Query
@@ -46,6 +46,7 @@ from utils.request import get_client_ip, get_user_agent_info
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+logger = logging.getLogger(__name__)
 
 
 class ShieldOnException(Exception):
@@ -102,30 +103,22 @@ async def domain_alert(
     Raises:
         HTTPException: If email sending fails
     """
-    logging.info(
-        "[DOMAIN-ALERT] Starting domain alert process for email: %s", user_email
-    )
     try:
         # HTML unescape and normalize email
         user_email = html.unescape(user_email).lower().strip()
-        logging.debug("[DOMAIN-ALERT] Normalized email: %s", user_email)
 
         # Validate inputs
         if not user_email:
-            logging.error("[DOMAIN-ALERT] Empty email provided")
             return DomainAlertErrorResponse(Error="Invalid email", email=user_email)
 
         if not validate_email_with_tld(user_email):
-            logging.error("[DOMAIN-ALERT] Invalid email format: %s", user_email)
             return DomainAlertErrorResponse(
                 Error="Invalid email format", email=user_email
             )
 
         if not validate_url(request):
-            logging.error("[DOMAIN-ALERT] Invalid request URL: %s", request.url)
             return DomainAlertErrorResponse(Error="Invalid request", email=user_email)
 
-        logging.info("[DOMAIN-ALERT] Input validation passed for email: %s", user_email)
         datastore_client = datastore.Client()
 
         # Check if the user exists in xon_domains
@@ -134,18 +127,12 @@ async def domain_alert(
         domain_task = list(query.fetch())
 
         if not domain_task:
-            logging.warning(
-                "[DOMAIN-ALERT] No domain task found for email: %s", user_email
-            )
             # Still return success to avoid email enumeration
             return DomainAlertResponse()
-
-        logging.info("[DOMAIN-ALERT] Found domain task for email: %s", user_email)
 
         # Generate verification token and URL
         verification_token = await generate_confirmation_token(user_email)
         confirmation_url = f"{request.base_url}v1/domain-verify/{verification_token}"
-        logging.debug("[DOMAIN-ALERT] Generated confirmation URL: %s", confirmation_url)
 
         # Store session data
         try:
@@ -159,9 +146,7 @@ async def domain_alert(
                 }
             )
             datastore_client.put(alert_task_data)
-            logging.info("[DOMAIN-ALERT] Stored session data for email: %s", user_email)
         except Exception as e:
-            logging.error("[DOMAIN-ALERT] Failed to store session data: %s", str(e))
             raise
 
         # Get client information
@@ -169,14 +154,6 @@ async def domain_alert(
         preferred_ip = get_preferred_ip_address(client_ip)
         location = fetch_location_by_ip(preferred_ip) if preferred_ip else "Unknown"
         browser_type, client_platform = get_user_agent_info(request)
-
-        logging.debug(
-            "[DOMAIN-ALERT] Client info - IP: %s, Location: %s, Browser: %s, Platform: %s",
-            client_ip,
-            location,
-            browser_type,
-            client_platform,
-        )
 
         # Send confirmation email
         try:
@@ -187,19 +164,12 @@ async def domain_alert(
                 browser_type,
                 client_platform,
             )
-            logging.info(
-                "[DOMAIN-ALERT] Email sent successfully to %s. Response: %s",
-                user_email,
-                email_response,
-            )
         except Exception as e:
-            logging.error("[DOMAIN-ALERT] Failed to send email: %s", str(e))
             raise
 
         return DomainAlertResponse()
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error("[DOMAIN-ALERT] Unexpected error: %s", str(e), exc_info=True)
         return DomainAlertErrorResponse(
             Error=f"Internal error: {str(e)}", email=user_email
         )
@@ -218,10 +188,6 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
     """
     Verify domain alerts using token and return dashboard access.
     """
-    logging.info(
-        "[DOMAIN-VERIFY] Starting verification process for token: %s...",
-        verification_token[:10],
-    )
     try:
         # Validate inputs
         if (
@@ -229,9 +195,6 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
             or not validate_variables([verification_token])
             or not validate_url(request)
         ):
-            logging.error(
-                "[DOMAIN-VERIFY] Invalid token or URL: %s...", verification_token[:10]
-            )
             return HTMLResponse(
                 content=templates.TemplateResponse(
                     "domain_dashboard_error.html", {"request": request}
@@ -241,15 +204,12 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
 
         user_email = await confirm_token(verification_token)
         if not user_email:
-            logging.error("[DOMAIN-VERIFY] Token confirmation failed")
             return HTMLResponse(
                 content=templates.TemplateResponse(
                     "domain_dashboard_error.html", {"request": request}
                 ).body.decode(),
                 status_code=404,
             )
-
-        logging.info("[DOMAIN-VERIFY] Token confirmed for email: %s", user_email)
 
         # Create session data
         try:
@@ -264,11 +224,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
                 }
             )
             client.put(alert_task_data)
-            logging.info(
-                "[DOMAIN-VERIFY] Stored session data for email: %s", user_email
-            )
         except Exception as e:
-            logging.error("[DOMAIN-VERIFY] Failed to store session data: %s", str(e))
             raise
 
         # Generate dashboard link
@@ -286,7 +242,6 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
         )
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error("[DOMAIN-VERIFY] Unexpected error: %s", str(e), exc_info=True)
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "domain_dashboard_error.html", {"request": request}
@@ -313,13 +268,9 @@ async def send_domain_breaches(
     """
     Retrieves and sends the data breaches validated by token and email.
     """
-    logging.info(
-        "[DOMAIN-BREACHES] Starting domain breaches check for email: %s", email
-    )
     try:
         # Check for presence of email and token
         if email is None or token is None:
-            logging.error("[DOMAIN-BREACHES] Missing email or token")
             raise HTTPException(
                 status_code=400,
                 detail=DomainBreachesErrorResponse(
@@ -329,23 +280,18 @@ async def send_domain_breaches(
 
         # Validate email and token
         if not validate_email_with_tld(email):
-            logging.error("[DOMAIN-BREACHES] Invalid email format: %s", email)
             raise HTTPException(
                 status_code=400,
                 detail=DomainBreachesErrorResponse(Error="Invalid email format").dict(),
             )
 
         if not validate_token(token):
-            logging.error(
-                "[DOMAIN-BREACHES] Invalid token format: %s", token[:10] + "..."
-            )
             raise HTTPException(
                 status_code=400,
                 detail=DomainBreachesErrorResponse(Error="Invalid token format").dict(),
             )
 
         if not validate_url(request):
-            logging.error("[DOMAIN-BREACHES] Invalid request URL: %s", request.url)
             raise HTTPException(
                 status_code=400,
                 detail=DomainBreachesErrorResponse(Error="Invalid request URL").dict(),
@@ -356,22 +302,13 @@ async def send_domain_breaches(
         alert_key = client.key("xon_domains_session", email)
         alert_task = client.get(alert_key)
 
-        logging.info("[DOMAIN-BREACHES] Checking session for email: %s", email)
-        logging.debug("[DOMAIN-BREACHES] Session data: %s", alert_task)
-
         if not alert_task:
-            logging.error("[DOMAIN-BREACHES] No session found for email: %s", email)
             raise HTTPException(
                 status_code=401,
                 detail=DomainBreachesErrorResponse(Error="No session found").dict(),
             )
 
         if alert_task.get("domain_magic") != token:
-            logging.error(
-                "[DOMAIN-BREACHES] Token mismatch. Expected: %s, Got: %s",
-                alert_task.get("domain_magic"),
-                token,
-            )
             raise HTTPException(
                 status_code=401,
                 detail=DomainBreachesErrorResponse(Error="Invalid session").dict(),
@@ -380,7 +317,6 @@ async def send_domain_breaches(
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
             tzinfo=None
         ) > datetime.timedelta(hours=24):
-            logging.error("[DOMAIN-BREACHES] Session expired for email: %s", email)
             raise HTTPException(
                 status_code=401,
                 detail=DomainBreachesErrorResponse(Error="Session expired").dict(),
@@ -392,9 +328,6 @@ async def send_domain_breaches(
         verified_domains = [entity["domain"] for entity in query.fetch()]
 
         if not verified_domains:
-            logging.warning(
-                "[DOMAIN-BREACHES] No verified domains found for email: %s", email
-            )
             return DomainBreachesErrorResponse(Error="No verified domains found")
 
         current_year = datetime.datetime.utcnow().year
@@ -543,13 +476,9 @@ async def send_domain_breaches(
             Yearly_Breach_Hierarchy=yearly_breach_hierarchy,
         )
 
-        logging.info(
-            "[DOMAIN-BREACHES] Successfully retrieved breach data for email: %s", email
-        )
         return response
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error("[DOMAIN-BREACHES] Unexpected error: %s", str(e), exc_info=True)
         error_detail = f"Error: {str(e)}"
         return DomainBreachesErrorResponse(Error=error_detail)
 
@@ -570,11 +499,9 @@ async def activate_shield(
     Enable privacy shield for public searches and return status.
 
     """
-    logging.info("[SHIELD-ON] Starting shield activation for email: %s", email)
     try:
         email = email.lower()
         if not email or not validate_email_with_tld(email) or not validate_url(request):
-            logging.error("[SHIELD-ON] Invalid email or URL: %s", email)
             return ShieldActivationErrorResponse(Error="Not found")
 
         datastore_client = datastore.Client()
@@ -584,8 +511,6 @@ async def activate_shield(
         token_shield = await generate_confirmation_token(email)
         base_url = str(request.base_url)
         confirmation_url = f"{base_url}v1/verify-shield/{token_shield}"
-
-        logging.debug("[SHIELD-ON] Generated confirmation URL: %s", confirmation_url)
 
         if alert_task is None or not alert_task.get("shieldOn", False):
             # Create or update alert entity
@@ -610,23 +535,12 @@ async def activate_shield(
                     }
                 )
                 datastore_client.put(alert_entity)
-                logging.info(
-                    "[SHIELD-ON] Created new alert entity for email: %s", email
-                )
 
             # Get client information
             client_ip = get_client_ip(request)
             preferred_ip = get_preferred_ip_address(client_ip)
             location = fetch_location_by_ip(preferred_ip) if preferred_ip else "Unknown"
             browser_type, client_platform = get_user_agent_info(request)
-
-            logging.debug(
-                "[DOMAIN-ALERT] Client info - IP: %s, Location: %s, Browser: %s, Platform: %s",
-                client_ip,
-                location,
-                browser_type,
-                client_platform,
-            )
 
             # Send shield email
             try:
@@ -637,22 +551,17 @@ async def activate_shield(
                     browser_type,
                     client_platform,
                 )
-                logging.info("[SHIELD-ON] Shield email sent successfully to: %s", email)
             except Exception as e:
-                logging.error("[SHIELD-ON] Failed to send shield email: %s", str(e))
                 raise
 
             return ShieldActivationResponse(Success="ShieldAdded")
 
         if alert_task.get("shieldOn", False):
-            logging.info("[SHIELD-ON] Shield already active for email: %s", email)
             return ShieldActivationResponse(Success="AlreadyOn")
 
-        logging.error("[SHIELD-ON] Unexpected state for email: %s", email)
         return ShieldActivationErrorResponse(Error="Unexpected state")
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error("[SHIELD-ON] Unexpected error: %s", str(e), exc_info=True)
         return ShieldActivationErrorResponse(
             Error=f"Internal error: {str(e)}", email=email
         )
@@ -672,19 +581,12 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
     Verify privacy shield for public searches and return status.
 
     """
-    logging.info(
-        "[SHIELD-VERIFY] Starting shield verification for token: %s...",
-        token_shield[:10],
-    )
     try:
         if (
             not token_shield
             or not validate_variables([token_shield])
             or not validate_url(request)
         ):
-            logging.error(
-                "[SHIELD-VERIFY] Invalid token or URL: %s...", token_shield[:10]
-            )
             return HTMLResponse(
                 content=templates.TemplateResponse(
                     "email_shield_error.html", {"request": request}
@@ -694,15 +596,12 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
 
         email = await confirm_token(token_shield)
         if not email:
-            logging.error("[SHIELD-VERIFY] Token confirmation failed")
             return HTMLResponse(
                 content=templates.TemplateResponse(
                     "email_shield_error.html", {"request": request}
                 ).body.decode(),
                 status_code=404,
             )
-
-        logging.info("[SHIELD-VERIFY] Token confirmed for email: %s", email)
 
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", email)
@@ -712,7 +611,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
             alert_task["shield_timestamp"] = datetime.datetime.now()
             alert_task["shieldOn"] = True
             datastore_client.put(alert_task)
-            logging.info("[SHIELD-VERIFY] Updated existing alert for email: %s", email)
+
         else:
             alert_task = datastore.Entity(key=alert_key)
             alert_task.update(
@@ -723,7 +622,6 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
                 }
             )
             datastore_client.put(alert_task)
-            logging.info("[SHIELD-VERIFY] Created new alert for email: %s", email)
 
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -733,9 +631,6 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
         )
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error(
-            "[SHIELD-VERIFY] Error processing request: %s", str(e), exc_info=True
-        )
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "email_shield_error.html", {"request": request}
@@ -838,9 +733,6 @@ async def get_breach_hierarchy_analytics(
 
         return get_details
     except Exception as e:
-        logging.error(
-            "[BREACH-HIERARCHY] Error processing breaches: %s", str(e), exc_info=True
-        )
         raise HTTPException(
             status_code=404, detail="Error processing breach data"
         ) from e
@@ -881,5 +773,4 @@ async def get_analytics(
         return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        logging.error("[ANALYTICS] Unexpected error: %s", str(e), exc_info=True)
         return JSONResponse(status_code=404, content={"Error": f"Error: {str(e)}"})

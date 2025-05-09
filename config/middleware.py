@@ -2,7 +2,6 @@
 
 # Standard library imports
 import asyncio
-import logging
 
 # Third-party imports
 from fastapi import FastAPI, Request
@@ -13,9 +12,6 @@ from slowapi.middleware import SlowAPIMiddleware
 from services.globe import process_request_for_globe
 from utils.request import get_client_ip
 from config.limiter import limiter
-
-# Configure logging
-logger = logging.getLogger(__name__)
 
 
 def setup_middleware(app: FastAPI) -> None:
@@ -76,9 +72,9 @@ async def process_globe_request_background(client_ip: str) -> None:
     try:
         await process_request_for_globe(client_ip)
     except (ValueError, KeyError) as e:
-        logger.error("Error in globe background task (value/key error): %s", str(e))
+        pass
     except Exception as e:
-        logger.error("Unexpected error in globe background task: %s", str(e))
+        pass
 
 
 def setup_globe_middleware(app: FastAPI) -> None:
@@ -88,16 +84,13 @@ def setup_globe_middleware(app: FastAPI) -> None:
     async def globe_request_middleware(request: Request, call_next):
         """Process request for globe visualization before processing the request."""
         try:
-
             client_ip = get_client_ip(request)
 
             asyncio.create_task(process_globe_request_background(client_ip))
         except (ValueError, KeyError) as e:
-
-            logger.error("Error extracting client IP: %s", str(e))
+            pass
         except Exception as e:
-            # Log the error but don't block the request
-            logger.error("Unexpected error in globe middleware: %s", str(e))
+            pass
 
         response = await call_next(request)
         return response

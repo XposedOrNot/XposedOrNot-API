@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta
 from typing import Tuple, Optional, Dict
-import logging
 
 from slowapi import Limiter
 from slowapi.middleware import SlowAPIMiddleware
@@ -14,9 +13,6 @@ from slowapi.util import get_remote_address
 # Local imports
 from utils.helpers import get_client_ip
 from config.settings import REDIS_URL
-
-# Configure logging
-logger = logging.getLogger(__name__)
 
 
 def get_key_func(request: Request) -> str:
@@ -63,7 +59,6 @@ def _parse_rate_limit(limit_str: str) -> Tuple[int, str]:
         limit, _, period = limit_str.strip().split()
         return int(limit), period
     except ValueError:
-        logger.error(f"Invalid rate limit format: {limit_str}")
         return 2, "second"  # Default fallback
 
 
@@ -91,10 +86,6 @@ def rate_limit_exceeded_handler(
     """
     client_ip = get_remote_address(request)  # Use slowapi's built-in IP detection
     endpoint = request.url.path
-
-    logger.debug(
-        "[RATE-LIMIT] Rate limit exceeded for IP: %s, Endpoint: %s", client_ip, endpoint
-    )
 
     # Calculate retry after time based on the rate limit that was exceeded
     retry_after = 1  # Default to 1 second
@@ -131,5 +122,3 @@ def setup_limiter(app: FastAPI) -> None:
 
     # Add custom rate limit exceeded handler
     app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
-
-    logger.info("[RATE-LIMIT] Rate limiter setup completed successfully")

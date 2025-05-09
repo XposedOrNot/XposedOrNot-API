@@ -5,11 +5,17 @@
 
 import os
 import time
-import logging
 import socket
+import requests
 from typing import Dict, Any, Optional
 import httpx
 from fastapi import HTTPException
+
+# Mailjet configuration
+MAILJET_API_KEY = os.environ.get("MAILJET_API_KEY")
+MAILJET_API_SECRET = os.environ.get("MAILJET_API_SECRET")
+MAILJET_SENDER_EMAIL = os.environ.get("MAILJET_SENDER_EMAIL")
+MAILJET_SENDER_NAME = os.environ.get("MAILJET_SENDER_NAME")
 
 API_KEY = os.environ["MJ_API_KEY"]
 API_SECRET = os.environ["MJ_API_SECRET"]
@@ -108,7 +114,7 @@ async def send_alert_confirmation(
                 # Log connectivity information for debugging
                 try:
                     ip_address = socket.gethostbyname("api.mailjet.com")
-                    logging.info("Resolved api.mailjet.com to %s", ip_address)
+
                 except socket.gaierror as e:
                     logging.error("Could not resolve api.mailjet.com: %s", str(e))
 

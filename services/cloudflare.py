@@ -103,10 +103,8 @@ async def get_isp_from_ip(ip_address: str) -> Optional[str]:
                 },
             )
     except httpx.HTTPError as e:
-        print(f"Error fetching ISP for IP {ip_address}: {e}")
         return None
     except Exception as e:
-        print(f"Unexpected error fetching ISP for IP {ip_address}: {e}")
         return None
 
 
@@ -248,9 +246,6 @@ async def unblock() -> CloudflareResponse:
                     response = await client.delete(url, headers=headers, timeout=20)
 
                     if response.status_code != 200:
-                        print(
-                            f"Failed to delete rule {firewall_rule_id}: {response.text}"
-                        )
                         continue
 
                     entity.update(

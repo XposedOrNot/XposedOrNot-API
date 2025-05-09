@@ -2,7 +2,6 @@
 
 # Standard library imports
 import json
-import logging
 import sys
 from datetime import datetime
 from typing import Optional, Union, List, Dict
@@ -46,18 +45,6 @@ from utils.helpers import (
     get_client_ip,
 )
 from utils.validation import validate_variables
-
-# Configure logging with more detailed format and ensure DEBUG level
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # Explicitly set DEBUG level
-
-# Add a test log to verify logging is working
-logger.debug("=== BREACH API DEBUG LOGGING ENABLED ===")
 
 router = APIRouter()
 
@@ -180,7 +167,6 @@ async def search_data_breaches_v2(
 
         # Handle sensitive data if available
         if breach_data and sensitive_data and token:
-            logger.debug("[BREACH-ANALYTICS] Processing sensitive data")
             # Get existing sites from breach record
             existing_sites = (
                 set(breach_data["site"].split(";"))
@@ -232,95 +218,42 @@ async def search_data_breaches(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsResponse:
     """Returns summary and details of data breaches for a given email."""
-    logger.debug("[BREACH-ANALYTICS] Starting breach search for email: %s", email)
-
     if (
         not email
         or not validate_email_with_tld(email)
         or not validate_url(request)
         or len(email) > MAX_EMAIL_LENGTH
     ):
-        logger.debug("[BREACH-ANALYTICS] Input validation failed")
-        logger.debug(
-            "[BREACH-ANALYTICS] Email valid: %s",
-            bool(email and validate_email_with_tld(email)),
-        )
-        logger.debug("[BREACH-ANALYTICS] URL valid: %s", bool(validate_url(request)))
-        logger.debug(
-            "[BREACH-ANALYTICS] Length valid: %s",
-            bool(email and len(email) <= MAX_EMAIL_LENGTH),
-        )
         raise HTTPException(status_code=404, detail="Not found")
 
     try:
         email = email.lower()
-        logger.debug("\n" + "=" * 50)
-        logger.debug("[BREACH-ANALYTICS][1] Starting breach search")
-        logger.debug("-" * 50)
-        logger.debug(
-            "[BREACH-ANALYTICS][1.1] Email: %s, Token provided: %s", email, bool(token)
-        )
 
         # Check shield status first
-        logger.debug("\n[BREACH-ANALYTICS][2] Checking shield status")
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", email)
         alert_record = datastore_client.get(alert_key)
-        logger.debug(
-            "[BREACH-ANALYTICS][2.1] Alert record found: %s, Shield status: %s",
-            bool(alert_record),
-            alert_record.get("shieldOn", False) if alert_record else False,
-        )
 
         if alert_record and alert_record.get("shieldOn", False):
-            logger.debug("[BREACH-ANALYTICS][2.2] Shield is on for this email")
             raise HTTPException(status_code=404, detail="Not found")
 
         # Validate token if provided
         if token:
-            logger.debug("\n[BREACH-ANALYTICS][3] Validating token")
             stored_token = alert_record.get("token") if alert_record else None
             token_valid = bool(alert_record and alert_record.get("token") == token)
-            logger.debug(
-                "[BREACH-ANALYTICS][3.1] Token validation - Stored: %s, Provided: %s, Valid: %s",
-                stored_token,
-                token,
-                token_valid,
-            )
 
             if not token_valid:
-                logger.debug("[BREACH-ANALYTICS][3.2] Invalid token provided")
                 raise HTTPException(status_code=403, detail="Invalid token")
-            logger.debug("[BREACH-ANALYTICS][3.3] Token validation successful")
 
         # Get breach and sensitive data
-        logger.debug("\n[BREACH-ANALYTICS][4] Fetching data")
         breach_data = await get_exposure(email)
-        logger.debug(
-            "[BREACH-ANALYTICS][4.1] Breach data: %s",
-            _format_log_data(breach_data) if breach_data else "No breach data",
-        )
 
         sensitive_data = None
         if token:
-            logger.debug("[BREACH-ANALYTICS][4.2] Fetching sensitive data...")
             sensitive_data = await get_sensitive_exposure(email)
-            logger.debug(
-                "[BREACH-ANALYTICS][4.3] Sensitive data: %s",
-                (
-                    _format_log_data(sensitive_data)
-                    if sensitive_data
-                    else "No sensitive data"
-                ),
-            )
-        else:
-            logger.debug(
-                "[BREACH-ANALYTICS][4.4] No token, skipping sensitive data fetch"
-            )
 
         # Return empty response if no data found
         if not breach_data and not sensitive_data:
-            logger.debug("\n[BREACH-ANALYTICS][5] No data found")
             return BreachAnalyticsResponse(
                 BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
                 PastesSummary={"cnt": 0, "domain": "", "tmpstmp": ""},
@@ -332,7 +265,6 @@ async def search_data_breaches(
 
         # Combine breach and sensitive data sites if token is valid
         if breach_data and sensitive_data and token:
-            logger.debug("\n[BREACH-ANALYTICS][6] Processing sensitive data")
             # Get existing sites from breach record
             existing_sites = (
                 set(breach_data["site"].split(";"))
@@ -345,30 +277,12 @@ async def search_data_breaches(
                 if "site" in sensitive_data and sensitive_data["site"]
                 else set()
             )
-            logger.debug(
-                "[BREACH-ANALYTICS][6.1] Sites - Existing: %s, Sensitive: %s",
-                list(existing_sites),
-                list(sensitive_sites),
-            )
 
             # Combine sites
             unique_sites = existing_sites.union(sensitive_sites)
             breach_data["site"] = ";".join(unique_sites)
-            logger.debug(
-                "[BREACH-ANALYTICS][6.2] Combined sites: %s", list(unique_sites)
-            )
 
         # Get summary and metrics
-        logger.debug("\n[BREACH-ANALYTICS][7] Getting summary and metrics")
-        logger.debug(
-            "[BREACH-ANALYTICS][7.1] Input - Breach data: %s",
-            _format_log_data(breach_data),
-        )
-        logger.debug(
-            "[BREACH-ANALYTICS][7.2] Input - Sensitive data: %s",
-            _format_log_data(sensitive_data),
-        )
-
         summary_result = await get_summary_and_metrics(breach_data, sensitive_data)
         (
             breach_summary,
@@ -379,33 +293,8 @@ async def search_data_breaches(
             paste_metrics,
         ) = summary_result
 
-        logger.debug("\n[BREACH-ANALYTICS][8] Summary results:")
-        logger.debug(
-            "[BREACH-ANALYTICS][8.1] Breach summary: %s",
-            _format_log_data(breach_summary),
-        )
-        logger.debug(
-            "[BREACH-ANALYTICS][8.2] Paste summary: %s", _format_log_data(paste_summary)
-        )
-        logger.debug(
-            "[BREACH-ANALYTICS][8.3] Exposed breaches: %s",
-            _format_log_data(exposed_breaches),
-        )
-        logger.debug(
-            "[BREACH-ANALYTICS][8.4] Exposed pastes: %s",
-            _format_log_data(exposed_pastes),
-        )
-        logger.debug(
-            "[BREACH-ANALYTICS][8.5] Breach metrics: %s",
-            _format_log_data(breach_metrics),
-        )
-        logger.debug(
-            "[BREACH-ANALYTICS][8.6] Paste metrics: %s", _format_log_data(paste_metrics)
-        )
-
         # Return appropriate response based on data availability
         if breach_summary or paste_summary:
-            logger.debug("\n[BREACH-ANALYTICS][9] Returning full response")
             return BreachAnalyticsResponse(
                 ExposedBreaches=exposed_breaches,
                 BreachesSummary=breach_summary
@@ -416,7 +305,6 @@ async def search_data_breaches(
                 PasteMetrics=paste_metrics,
             )
 
-        logger.debug("\n[BREACH-ANALYTICS][9] No summary data found")
         return BreachAnalyticsResponse(
             BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
             PastesSummary={"cnt": 0, "domain": "", "tmpstmp": ""},
@@ -427,9 +315,6 @@ async def search_data_breaches(
         )
 
     except Exception as e:
-        logger.error(
-            "[BREACH-ANALYTICS] Error processing request: %s", str(e), exc_info=True
-        )
         raise HTTPException(status_code=404, detail="Not found") from e
 
 
@@ -479,33 +364,26 @@ async def search_email(
 ) -> Union[EmailBreachResponse, EmailBreachErrorResponse]:
     """Check if an email address appears in any known data breaches."""
     try:
-        # Log the request
+
         client_ip = get_client_ip(request)
-        logger.debug("[RATE-LIMIT] Request from IP: %s", client_ip)
 
         if not email or not validate_email_with_tld(email) or not validate_url(request):
-            logger.debug("[RATE-LIMIT] Email validation failed")
             return EmailBreachErrorResponse(Error="Not found")
 
         email = email.lower()
-        logger.debug("[RATE-LIMIT] Getting exposure data for email: %s", email)
         breach_data = await get_exposure(email)
 
         if not breach_data:
-            logger.debug("[RATE-LIMIT] No breach data found for email: %s", email)
             return EmailBreachErrorResponse(Error="Not found")
 
         # Initialize datastore client
-        logger.debug("[RATE-LIMIT] Initializing datastore client")
         data_store = datastore.Client()
 
         # Check if email is protected by shield
-        logger.debug("[RATE-LIMIT] Checking shield status")
         alert_key = data_store.key("xon_alert", email)
         alert_record = data_store.get(alert_key)
 
         if alert_record and alert_record.get("shieldOn", False):
-            logger.debug("[RATE-LIMIT] Shield is on for email: %s", email)
             return JSONResponse(
                 status_code=404,
                 content={
@@ -516,19 +394,14 @@ async def search_email(
             )
 
         # Get breach data
-        logger.debug("[RATE-LIMIT] Getting xon record")
         xon_key = data_store.key("xon", email)
         xon_record = data_store.get(xon_key)
 
         if xon_record and "site" in xon_record:
-            logger.debug("[RATE-LIMIT] Processing xon record")
             domains = xon_record["site"].split(";")
             filtered_domains = [domain.strip() for domain in domains if domain.strip()]
 
             if filtered_domains:
-                logger.debug(
-                    "[RATE-LIMIT] Found %d filtered domains", len(filtered_domains)
-                )
                 response_content = {
                     "breaches": [filtered_domains],
                     "email": email,
@@ -537,7 +410,6 @@ async def search_email(
 
                 # Include detailed breach information if requested
                 if details:
-                    logger.debug("[RATE-LIMIT] Getting detailed breach information")
                     raw_breaches = get_breaches(xon_record["site"])
                     formatted_breaches = []
 
@@ -566,20 +438,15 @@ async def search_email(
                         formatted_breaches.append(formatted_breach)
 
                     response_content["breach_details"] = formatted_breaches
-                    logger.debug(
-                        "[RATE-LIMIT] Added %d breach details", len(formatted_breaches)
-                    )
 
                 return JSONResponse(status_code=200, content=response_content)
 
-        logger.debug("[RATE-LIMIT] No breaches found for email: %s", email)
         return JSONResponse(
             status_code=404,
             content={"Error": "No breaches found", "email": email, "status": "failed"},
         )
 
     except Exception as e:
-        logger.error("[RATE-LIMIT] Error in search_email: %s", str(e), exc_info=True)
         return JSONResponse(
             status_code=404,
             content={"Error": "Not found", "email": email, "status": "failed"},
@@ -602,116 +469,78 @@ async def get_domain_breach_summary(
     Returns:
         DomainBreachSummaryResponse containing breach summary for the domain
     """
-    logger.debug(
-        "[DOMAIN-BREACH-SUMMARY] Starting domain breach search for domain: %s", d
-    )
+    if not d or not validate_domain(d) or not validate_url(request):
+        raise HTTPException(status_code=404, detail="Not found")
 
-    try:
-        if not d or not validate_domain(d) or not validate_url(request):
-            logger.debug("[DOMAIN-BREACH-SUMMARY] Input validation failed")
-            logger.debug(
-                "[DOMAIN-BREACH-SUMMARY] Domain valid: %s",
-                bool(d and validate_domain(d)),
-            )
-            logger.debug(
-                "[DOMAIN-BREACH-SUMMARY] URL valid: %s", bool(validate_url(request))
-            )
-            raise HTTPException(status_code=404, detail="Not found")
+    domain = d.lower().strip()
 
-        domain = d.lower().strip()
+    # Initialize datastores
+    ds_xon = datastore.Client()
 
-        # Initialize datastores
-        ds_xon = datastore.Client()
+    # Query xon records for domain
+    xon_rec = ds_xon.query(kind="xon")
+    xon_rec.add_filter("domain", "=", domain)
+    query_xon = xon_rec.fetch(limit=1000)
 
-        # Query xon records for domain
-        logger.debug(
-            "[DOMAIN-BREACH-SUMMARY] Querying xon records for domain: %s", domain
-        )
-        xon_rec = ds_xon.query(kind="xon")
-        xon_rec.add_filter("domain", "=", domain)
-        query_xon = xon_rec.fetch(limit=1000)
+    unique_emails = set()
+    unique_sites = set()
+    total_records = 0
 
-        unique_emails = set()
-        unique_sites = set()
-        total_records = 0
+    # Process xon records
+    for entity_xon in query_xon:
+        email = entity_xon.key.name
+        if len(unique_emails) <= 1000:
+            unique_emails.add(email)
+        if "site" in entity_xon:
+            sites = entity_xon["site"].split(";")
+            unique_sites.update(sites)
+            total_records += len(sites)
 
-        # Process xon records
-        for entity_xon in query_xon:
-            email = entity_xon.key.name
-            if len(unique_emails) <= 1000:
-                unique_emails.add(email)
-            if "site" in entity_xon:
-                sites = entity_xon["site"].split(";")
-                unique_sites.update(sites)
-                total_records += len(sites)
+    unique_sites.discard("")
 
-        unique_sites.discard("")
+    breach_count = len(unique_sites)
+    emails_count = len(unique_emails)
 
-        breach_count = len(unique_sites)
-        emails_count = len(unique_emails)
+    # Query paste records
+    ds_paste = datastore.Client()
+    paste_rec = ds_paste.query(kind="xon_paste")
+    paste_rec.add_filter("domain", "=", domain)
+    query_paste = paste_rec.fetch(limit=50)
 
-        logger.debug(
-            "[DOMAIN-BREACH-SUMMARY] Found %s unique emails and %s unique breaches",
-            emails_count,
-            breach_count,
-        )
+    pastes_count = sum(1 for _ in query_paste)
 
-        # Query paste records
-        logger.debug(
-            "[DOMAIN-BREACH-SUMMARY] Querying paste records for domain: %s", domain
-        )
-        ds_paste = datastore.Client()
-        paste_rec = ds_paste.query(kind="xon_paste")
-        paste_rec.add_filter("domain", "=", domain)
-        query_paste = paste_rec.fetch(limit=50)
-
-        pastes_count = sum(1 for _ in query_paste)
-        logger.debug("[DOMAIN-BREACH-SUMMARY] Found %s pastes", pastes_count)
-
-        # Get latest breach date
-        breach_last_seen = None
-        if unique_sites:
-            breach_dates = []
-            ds_breaches = datastore.Client()
-            for site in unique_sites:
-                breach_rec = ds_breaches.query(kind="xon_breaches")
-                breach_rec.add_filter(
-                    "__key__", "=", ds_breaches.key("xon_breaches", site)
-                )
-                breach_rec.order = ["-breached_date"]
-                query_breaches = list(breach_rec.fetch(limit=1))
-                if query_breaches:
-                    breach_dates.append(query_breaches[0]["breached_date"])
+    # Get latest breach date
+    breach_last_seen = None
+    if unique_sites:
+        breach_dates = []
+        ds_breaches = datastore.Client()
+        for site in unique_sites:
+            breach_rec = ds_breaches.query(kind="xon_breaches")
+            breach_rec.add_filter("__key__", "=", ds_breaches.key("xon_breaches", site))
+            breach_rec.order = ["-breached_date"]
+            query_breaches = list(breach_rec.fetch(limit=1))
+            if query_breaches:
+                breach_dates.append(query_breaches[0]["breached_date"])
 
             if breach_dates:
                 breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
-                logger.debug(
-                    "[DOMAIN-BREACH-SUMMARY] Latest breach date: %s", breach_last_seen
-                )
 
-        breaches_dict = {
-            "breaches_details": [
-                {
-                    "domain": domain,
-                    "breach_pastes": pastes_count,
-                    "breach_emails": emails_count,
-                    "breach_total": total_records,
-                    "breach_count": breach_count,
-                    "breach_last_seen": breach_last_seen,
-                }
-            ]
-        }
+    breaches_dict = {
+        "breaches_details": [
+            {
+                "domain": domain,
+                "breach_pastes": pastes_count,
+                "breach_emails": emails_count,
+                "breach_total": total_records,
+                "breach_count": breach_count,
+                "breach_last_seen": breach_last_seen,
+            }
+        ]
+    }
 
-        return DomainBreachSummaryResponse(
-            sendDomains=breaches_dict, SearchStatus="Success"
-        )
-    except Exception as e:
-        logger.error(
-            "[DOMAIN-BREACH-SUMMARY] Error processing request: %s",
-            str(e),
-            exc_info=True,
-        )
-        raise HTTPException(status_code=404, detail=str(e)) from e
+    return DomainBreachSummaryResponse(
+        sendDomains=breaches_dict, SearchStatus="Success"
+    )
 
 
 def _prepare_for_logging(data):
