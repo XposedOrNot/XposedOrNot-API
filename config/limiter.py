@@ -43,6 +43,35 @@ RATE_LIMIT_ANALYTICS = (
 RATE_LIMIT_DOMAIN = (
     "2 per second;10 per hour;50 per day"  # For domain-related endpoints
 )
+RATE_LIMIT_INVALID_ROUTE = (
+    "5 per minute;20 per hour"  # Stricter limit for invalid routes
+)
+
+# Initialize a set to store valid routes
+_valid_routes = set()
+
+
+def register_route(route: str) -> None:
+    """
+    Register a valid route in the application.
+
+    Args:
+        route: The route path to register
+    """
+    _valid_routes.add(route)
+
+
+def is_valid_route(route: str) -> bool:
+    """
+    Check if a route exists in the application.
+
+    Args:
+        route: The route path to check
+
+    Returns:
+        bool: True if the route exists, False otherwise
+    """
+    return route in _valid_routes
 
 
 def _parse_rate_limit(limit_str: str) -> Tuple[int, str]:
