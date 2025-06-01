@@ -6,10 +6,11 @@ services:
     ports:
       - 8000:8000
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://datastore:8000"]
+      test: [ "CMD", "curl", "-f", "http://datastore:8000" ]
       interval: 10s
       timeout: 5s
       retries: 5
+
   app:
     build: .
     volumes:

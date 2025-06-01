@@ -8,6 +8,14 @@ ENV PORT=8080
 
 WORKDIR ${APP_HOME}
 
+# Install system dependencies for ssdeep and tlsh
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libfuzzy-dev \
+    ssdeep \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy only essential files first to leverage Docker's caching
 COPY requirements.txt ./
 

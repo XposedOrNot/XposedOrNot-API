@@ -1,10 +1,11 @@
 """Middleware for handling invalid routes with stricter rate limiting."""
 
-from typing import Callable
+from typing import Callable, Optional, Any, Dict
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from config.limiter import (
     limiter,
@@ -14,60 +15,88 @@ from config.limiter import (
 )
 
 
+def normalize_path(path: str) -> str:
+    """
+    Normalize a path by replacing path parameters with their pattern.
+
+    Args:
+        path: The path to normalize
+
+    Returns:
+        str: The normalized path
+    """
+
+    parts = path.split("/")
+    normalized_parts = []
+
+    for part in parts:
+
+        if "." in part and not any(c in part for c in ["{", "}"]):
+            normalized_parts.append("{domain}")
+
+        elif len(part) > 20 and not any(c in part for c in ["{", "}"]):
+            normalized_parts.append("{token}")
+        else:
+            normalized_parts.append(part)
+
+    return "/".join(normalized_parts)
+
+
 class InvalidRouteMiddleware:
     """Middleware to handle invalid routes with stricter rate limiting."""
 
-    def __init__(self, app: FastAPI):
+    def __init__(self, app: ASGIApp):
         """Initialize the middleware with the FastAPI app."""
         self.app = app
-        # Create a separate limiter for invalid routes
-        self.invalid_route_limiter = Limiter(
-            key_func=get_key_func,
-            default_limits=[RATE_LIMIT_INVALID_ROUTE],
-            storage_uri=app.state.limiter.storage_uri,
-            strategy="fixed-window",
-        )
+        self._invalid_route_limiter: Optional[Limiter] = None
 
-    async def __call__(self, request: Request, call_next: Callable) -> Response:
+    @property
+    def invalid_route_limiter(self) -> Limiter:
+        """Lazily initialize and return the invalid route limiter."""
+        if self._invalid_route_limiter is None:
+
+            app = self.app.app if hasattr(self.app, "app") else self.app
+            if not hasattr(app, "state") or not hasattr(app.state, "limiter"):
+                raise RuntimeError("FastAPI app state or limiter not initialized")
+
+            self._invalid_route_limiter = Limiter(
+                key_func=get_key_func,
+                default_limits=[RATE_LIMIT_INVALID_ROUTE],
+                storage_uri=app.state.limiter.storage_uri,
+                strategy="fixed-window",
+            )
+        return self._invalid_route_limiter
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         """
         Process the request and apply rate limiting for invalid routes.
 
         Args:
-            request: The incoming request
-            call_next: The next middleware/route handler
-
-        Returns:
-            Response: The response to send back
+            scope: The ASGI scope
+            receive: The ASGI receive callable
+            send: The ASGI send callable
         """
-        # Get the route path
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope)
         route_path = request.url.path
 
-        # Check if it's a valid route
-        if is_valid_route(route_path):
-            # Let the normal rate limiting and routing take over
-            return await call_next(request)
+        normalized_path = normalize_path(route_path)
 
-        # For invalid routes, apply stricter rate limiting
-        try:
-            # Use the invalid route limiter
-            await self.invalid_route_limiter.check(request)
+        is_valid = is_valid_route(route_path) or is_valid_route(normalized_path)
 
-            # If rate limit not exceeded, return a generic 404
-            return JSONResponse(
-                status_code=404,
-                content={"detail": "Not found"},
-            )
+        if is_valid:
 
-        except Exception as e:
-            # If rate limit exceeded, return a 429 with a generic message
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "detail": "Too many requests",
-                    "error": "rate_limit_exceeded",
-                },
-                headers={"Retry-After": "60"},
-            )
+            await self.app(scope, receive, send)
+            return
+
+        response = JSONResponse(
+            status_code=404,
+            content={"detail": "Not found"},
+        )
+        await response(scope, receive, send)
 
 
 def setup_invalid_route_middleware(app: FastAPI) -> None:

@@ -22,6 +22,7 @@ pydantic>=1.8.0
 python-dateutil
 python-multipart>=0.0.5
 python-whois
+redis>=4.5.0
 requests
 simplejson
 slowapi
@@ -40,3 +41,12 @@ ipaddress
 python-jose
 validate-email
 aiohttp
+dnstwist
+py-tlsh
+ssdeep
+geoip2>=4.0.0
+dnspython>=1.16.0
+ppdeep>=20200505
+py-tlsh>=4.5.0
+tld>=0.9.1
+idna>=2.8
