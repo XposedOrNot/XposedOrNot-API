@@ -126,6 +126,23 @@ async def verify_user_access(email: str, token: str) -> bool:
         return False
 
 
+async def is_domain_verified_for_user(email: str, domain: str) -> bool:
+    """Check if a domain is verified for a specific user."""
+    try:
+        datastore_client = datastore.Client()
+        # Query for the domain record
+        query = datastore_client.query(kind="xon_domains")
+        query.add_filter("email", "=", email.lower())
+        query.add_filter("domain", "=", domain.lower())
+        query.add_filter("verified", "=", True)
+
+        # Get the first matching result
+        results = list(query.fetch(limit=1))
+        return len(results) > 0
+    except Exception:
+        return False
+
+
 @router.get(
     "/domain-phishing/{domain}",
     response_model=None,
@@ -161,9 +178,18 @@ async def check_domain_phishing(
         is_authenticated = False
         if email and token:
             is_authenticated = await verify_user_access(email, token)
+            if is_authenticated:
+                # For authenticated requests, verify domain ownership
+                is_domain_verified = await is_domain_verified_for_user(email, domain)
+                if not is_domain_verified:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Domain not verified for this user. Please verify domain ownership first.",
+                    )
+
         cached_result = get_cached_result(domain)
         if cached_result:
-            # Recalculate unique_fuzzers if missing or 0 and raw_results is present
+
             if (not cached_result.get("unique_fuzzers")) and cached_result.get(
                 "raw_results"
             ):
