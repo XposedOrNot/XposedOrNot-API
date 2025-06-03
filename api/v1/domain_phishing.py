@@ -71,12 +71,14 @@ class DomainPhishingRequest(BaseModel):
 class DomainPhishingSummaryResponse(BaseResponse):
     total_scanned: int
     total_live: int = 0
+    unique_fuzzers: int = 0
     last_checked: Optional[str] = None
 
 
 class DomainPhishingResponse(BaseResponse):
     total_scanned: int
     total_live: int = 0
+    unique_fuzzers: int = 0
     live_domains: List[str] = []
     raw_results: List[Dict[str, Any]]
     last_checked: Optional[str] = None
@@ -161,6 +163,17 @@ async def check_domain_phishing(
             is_authenticated = await verify_user_access(email, token)
         cached_result = get_cached_result(domain)
         if cached_result:
+            # Recalculate unique_fuzzers if missing or 0 and raw_results is present
+            if (not cached_result.get("unique_fuzzers")) and cached_result.get(
+                "raw_results"
+            ):
+                cached_result["unique_fuzzers"] = len(
+                    set(
+                        r.get("fuzzer", "")
+                        for r in cached_result["raw_results"]
+                        if "fuzzer" in r and r.get("fuzzer")
+                    )
+                )
             if is_authenticated:
                 response = DomainPhishingResponse(**cached_result)
                 return response
@@ -168,6 +181,7 @@ async def check_domain_phishing(
                 status="success",
                 total_scanned=cached_result["total_scanned"],
                 total_live=cached_result["total_live"],
+                unique_fuzzers=cached_result.get("unique_fuzzers", 0),
                 last_checked=cached_result["last_checked"],
             )
             return response
@@ -194,10 +208,18 @@ async def check_domain_phishing(
                 domain_to_check = result.get("domain-name") or result.get("domain")
                 if domain_to_check and is_domain_live(domain_to_check):
                     live_domains.append(domain_to_check)
+            unique_fuzzers = len(
+                set(
+                    r.get("fuzzer", "")
+                    for r in twist_results
+                    if "fuzzer" in r and r.get("fuzzer")
+                )
+            )
             response_data = {
                 "status": "success",
                 "total_scanned": len(twist_results),
                 "total_live": len(live_domains),
+                "unique_fuzzers": unique_fuzzers,
                 "live_domains": live_domains,
                 "raw_results": twist_results,
                 "last_checked": datetime.utcnow().isoformat(),
@@ -210,6 +232,7 @@ async def check_domain_phishing(
                 status="success",
                 total_scanned=response_data["total_scanned"],
                 total_live=response_data["total_live"],
+                unique_fuzzers=response_data["unique_fuzzers"],
                 last_checked=response_data["last_checked"],
             )
             return response
