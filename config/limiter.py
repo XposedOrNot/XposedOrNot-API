@@ -24,54 +24,19 @@ def get_key_func(request: Request) -> str:
     return f"{client_ip}:{endpoint}"
 
 
-# Initialize the rate limiter with enhanced key function and Redis storage
-limiter = Limiter(
-    key_func=get_key_func,  # Use our enhanced key function
-    default_limits=["2 per second;5 per hour;100 per day"],
-    storage_uri=REDIS_URL,  # Use Redis URL from settings
-    strategy="fixed-window",  # Use fixed window strategy for more predictable rate limiting
-)
-
-# Define specific rate limits for different types of routes
-RATE_LIMIT_HELP = "50 per day;10 per hour"  # For help/documentation routes
-RATE_LIMIT_UNBLOCK = "24 per day;2 per hour;2 per second"  # For unblock operations
-RATE_LIMIT_BREACHES = "2 per second;5 per hour;100 per day"  # For breach listing
-RATE_LIMIT_CHECK_EMAIL = "2 per second;5 per hour;100 per day"  # For email checks
-RATE_LIMIT_ANALYTICS = (
-    "5 per minute;100 per hour;500 per day"  # For analytics endpoints
-)
-RATE_LIMIT_DOMAIN = (
-    "2 per second;10 per hour;50 per day"  # For domain-related endpoints
-)
-RATE_LIMIT_INVALID_ROUTE = (
-    "5 per minute;20 per hour"  # Stricter limit for invalid routes
-)
-
-# Initialize a set to store valid routes
-_valid_routes = set()
-
-
-def register_route(route: str) -> None:
+def get_rate_limit_key(request: Request) -> str:
     """
-    Register a valid route in the application.
+    Get a unique key for rate limiting based on the request.
 
     Args:
-        route: The route path to register
-    """
-    _valid_routes.add(route)
-
-
-def is_valid_route(route: str) -> bool:
-    """
-    Check if a route exists in the application.
-
-    Args:
-        route: The route path to check
+        request: FastAPI request object
 
     Returns:
-        bool: True if the route exists, False otherwise
+        String key for rate limiting
     """
-    return route in _valid_routes
+    client_ip = get_remote_address(request)  # Use slowapi's built-in IP detection
+    endpoint = request.url.path
+    return f"{client_ip}:{endpoint}"
 
 
 def _parse_rate_limit(limit_str: str) -> Tuple[int, str]:
@@ -91,19 +56,42 @@ def _parse_rate_limit(limit_str: str) -> Tuple[int, str]:
         return 2, "second"  # Default fallback
 
 
-def get_rate_limit_key(request: Request) -> str:
+# Initialize the rate limiter with enhanced key function and Redis storage
+limiter = Limiter(
+    key_func=get_key_func,  # Use our enhanced key function
+    default_limits=["2 per second;5 per hour;100 per day"],
+    storage_uri=REDIS_URL,  # Use Redis URL from settings
+    strategy="fixed-window",  # Use fixed window strategy for more predictable rate limiting
+)
+
+# Define specific rate limits for different types of routes
+RATE_LIMIT_HELP = "50 per day;10 per hour"  # For help/documentation routes
+RATE_LIMIT_UNBLOCK = "24 per day;2 per hour;2 per second"  # For unblock operations
+RATE_LIMIT_BREACHES = "2 per second;5 per hour;100 per day"  # For breach listing
+RATE_LIMIT_CHECK_EMAIL = "2 per second;5 per hour;100 per day"  # For email checks
+RATE_LIMIT_ANALYTICS = (
+    "5 per minute;100 per hour;500 per day"  # For analytics endpoints
+)
+RATE_LIMIT_DOMAIN = (
+    "2 per second;10 per hour;50 per day"  # For domain-related endpoints
+)
+
+
+def setup_limiter(app: FastAPI) -> None:
     """
-    Get a unique key for rate limiting based on the request.
+    Set up rate limiting for the FastAPI application.
 
     Args:
-        request: FastAPI request object
-
-    Returns:
-        String key for rate limiting
+        app: FastAPI application instance
     """
-    client_ip = get_remote_address(request)  # Use slowapi's built-in IP detection
-    endpoint = request.url.path
-    return f"{client_ip}:{endpoint}"
+    # Add the limiter to the app state
+    app.state.limiter = limiter
+
+    # Add the SlowAPI middleware
+    app.add_middleware(SlowAPIMiddleware)
+
+    # Add custom rate limit exceeded handler
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 
 def rate_limit_exceeded_handler(
@@ -129,20 +117,3 @@ def rate_limit_exceeded_handler(
         },
         headers={"Retry-After": str(retry_after)},
     )
-
-
-def setup_limiter(app: FastAPI) -> None:
-    """
-    Set up rate limiting for the FastAPI application.
-
-    Args:
-        app: FastAPI application instance
-    """
-    # Add the limiter to the app state
-    app.state.limiter = limiter
-
-    # Add the SlowAPI middleware
-    app.add_middleware(SlowAPIMiddleware)
-
-    # Add custom rate limit exceeded handler
-    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
