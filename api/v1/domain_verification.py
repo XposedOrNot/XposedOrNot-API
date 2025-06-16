@@ -16,7 +16,7 @@ from google.api_core import exceptions as google_exceptions
 from pydantic import EmailStr
 
 # Local imports
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 from config.settings import XMLAPI_KEY
 from models.base import BaseResponse
 from services.send_email import (
@@ -363,7 +363,7 @@ async def check_file(domain: str, prefix: str, code: str) -> bool:
 
 
 @router.get("/domain_verification", response_model=DomainVerificationResponse)
-@limiter.limit("2 per second;20 per hour;50 per day")
+@custom_rate_limiter("2 per second;20 per hour;50 per day")
 async def domain_verification(
     request: Request,
     z: str = Query(..., description="Command type"),

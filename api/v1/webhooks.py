@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Request
 
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 from models.requests import WebhookSetupRequest
 from models.responses import WebhookConfigResponse, WebhookSetupResponse
 from services.webhook import (
@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.post("/webhook/setup", response_model=WebhookSetupResponse)
-@limiter.limit("5 per minute;50 per hour;100 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def setup_webhook_endpoint(
     request: Request, webhook_data: WebhookSetupRequest
 ) -> WebhookSetupResponse:
@@ -69,7 +69,7 @@ async def setup_webhook_endpoint(
 
 
 @router.get("/webhook/config/{domain}", response_model=WebhookConfigResponse)
-@limiter.limit("5 per minute;50 per hour;100 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def get_webhook_config_endpoint(
     request: Request, domain: str, token: str
 ) -> WebhookConfigResponse:

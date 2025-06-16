@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from google.cloud import datastore
 
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 from models.base import BaseResponse
 from utils.validation import validate_variables, validate_url
 
@@ -21,7 +21,7 @@ class APIKeyResponse(BaseResponse):
 
 
 @router.get("/create-api-key/{token}", response_model=APIKeyResponse)
-@limiter.limit("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;10 per hour;50 per day")
 async def create_api_key(token: str, request: Request):
     """Generates or renews an API key for a user identified by a provided token."""
     try:
@@ -70,7 +70,7 @@ async def create_api_key(token: str, request: Request):
 
 
 @router.get("/get-api-key/{token}", response_model=APIKeyResponse)
-@limiter.limit("2 per second;50 per hour;100 per day")
+@custom_rate_limiter("2 per second;50 per hour;100 per day")
 async def get_api_key(token: str, request: Request):
     """Retrieves the existing API key for a user identified by a provided token."""
     try:

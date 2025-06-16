@@ -7,7 +7,7 @@ from google.cloud import datastore
 from pydantic import BaseModel
 from feedgen.feed import FeedGenerator
 from models.base import BaseResponse
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 
 router = APIRouter()
 
@@ -28,7 +28,7 @@ class PulseNewsResponse(BaseResponse):
 
 
 @router.get("/xon-pulse", response_model=PulseNewsResponse)
-@limiter.limit("2 per second;100 per hour;1000 per day")
+@custom_rate_limiter("2 per second;50 per hour;100 per day")
 async def get_pulse_data(request: Request):
     """Generate news feed for presenting all data breaches news."""
     try:
@@ -55,7 +55,7 @@ async def get_pulse_data(request: Request):
 
 
 @router.get("/rss")
-@limiter.limit("2 per second;50 per hour;100 per day")
+@custom_rate_limiter("2 per second;50 per hour;100 per day")
 async def rss_feed(request: Request):
     """Generate RSS feed for presenting all data breaches in XoN."""
     try:

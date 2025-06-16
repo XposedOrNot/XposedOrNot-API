@@ -8,16 +8,16 @@ from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
 
 import dnstwist
-from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Header
 from pydantic import BaseModel, Field, validator, EmailStr
 from redis import Redis
 
-from config.limiter import limiter, RATE_LIMIT_HELP
 from config.settings import REDIS_HOST, REDIS_PORT, REDIS_DB
 from models.responses import BaseResponse
 from utils.validation import validate_email_with_tld, validate_variables
 from utils.token import confirm_token
 from google.cloud import datastore
+from utils.custom_limiter import custom_rate_limiter
 
 router = APIRouter()
 
@@ -165,7 +165,7 @@ async def is_domain_verified_for_user(email: str, domain: str) -> bool:
     },
     include_in_schema=True,
 )
-@limiter.limit("10/minute")
+@custom_rate_limiter("10 per minute")
 async def check_domain_phishing(
     domain: str,
     request: Request,

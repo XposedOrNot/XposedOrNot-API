@@ -9,9 +9,12 @@ from fastapi import APIRouter, Request, HTTPException, Header, Depends
 from google.cloud import datastore
 from pydantic import BaseModel, Field
 
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
+from models.responses import DomainBreachesResponse, DomainBreachesErrorResponse
+
+# from services.analytics import get_domain_breach_analytics
+from utils.validation import validate_url  # , validate_api_key
 from models.base import BaseResponse
-from utils.validation import validate_url
 
 router = APIRouter()
 
@@ -66,16 +69,11 @@ class DomainBreachesResponse(BaseResponse):
 
 
 @router.post(
-    "/domain-breaches",
-    response_model=DomainBreachesResponse,
-    dependencies=[Depends(csrf_exempt)],
-)
-@router.post(
     "/domain-breaches/",
     response_model=DomainBreachesResponse,
     dependencies=[Depends(csrf_exempt)],
 )
-@limiter.limit("500 per day;100 per hour;2 per second")
+@custom_rate_limiter("2 per second;10 per hour;50 per day")
 async def protected(
     request: Request,
     x_api_key: str = Header(..., description="API key for authentication"),

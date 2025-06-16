@@ -15,7 +15,7 @@ from google.cloud import datastore
 from google.api_core import exceptions as google_exceptions
 
 # Local imports
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 from models.responses import (
     DetailedMetricsResponse,
     PulseNewsResponse,
@@ -56,7 +56,7 @@ class ShieldOnException(Exception):
 
 
 @router.get("/analytics/metrics", response_model=DetailedMetricsResponse)
-@limiter.limit("5 per minute;100 per hour;500 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def get_metrics(request: Request) -> DetailedMetricsResponse:
     """Returns detailed metrics about breaches."""
     try:
@@ -67,7 +67,7 @@ async def get_metrics(request: Request) -> DetailedMetricsResponse:
 
 
 @router.get("/analytics/pulse", response_model=PulseNewsResponse)
-@limiter.limit("5 per minute;100 per hour;500 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def get_news_feed(request: Request) -> PulseNewsResponse:
     """Returns news feed for data breaches."""
     try:
@@ -85,7 +85,7 @@ async def get_news_feed(request: Request) -> PulseNewsResponse:
         404: {"model": DomainAlertErrorResponse},
     },
 )
-@limiter.limit("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;10 per hour;50 per day")
 async def domain_alert(
     request: Request, user_email: str
 ) -> Union[DomainAlertResponse, DomainAlertErrorResponse]:
@@ -183,7 +183,7 @@ async def domain_alert(
         404: {"content": {"text/html": {}}},
     },
 )
-@limiter.limit("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;10 per hour;50 per day")
 async def domain_verify(request: Request, verification_token: str) -> HTMLResponse:
     """
     Verify domain alerts using token and return dashboard access.
@@ -259,7 +259,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
         404: {"model": DomainBreachesErrorResponse},
     },
 )
-@limiter.limit("500 per day;100 per hour;2 per second")
+@custom_rate_limiter("100 per day;50 per hour;2 per second")
 async def send_domain_breaches(
     request: Request,
     email: Optional[str] = Query(None),
@@ -491,7 +491,7 @@ async def send_domain_breaches(
         404: {"model": ShieldActivationErrorResponse},
     },
 )
-@limiter.limit("50 per day;10 per hour;2 per second")
+@custom_rate_limiter("50 per day;10 per hour;2 per second")
 async def activate_shield(
     request: Request, email: str
 ) -> Union[ShieldActivationResponse, ShieldActivationErrorResponse]:
@@ -575,7 +575,7 @@ async def activate_shield(
         404: {"content": {"text/html": {}}},
     },
 )
-@limiter.limit("50 per day;10 per hour;2 per second")
+@custom_rate_limiter("50 per day;10 per hour;2 per second")
 async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
     """
     Verify privacy shield for public searches and return status.
@@ -739,7 +739,7 @@ async def get_breach_hierarchy_analytics(
 
 
 @router.get("/analytics/{user_email}", response_model=BreachHierarchyResponse)
-@limiter.limit("500 per day;100 per hour;2 per second")
+@custom_rate_limiter("100 per day;50 per hour;2 per second")
 async def get_analytics(
     request: Request, user_email: str
 ) -> Union[JSONResponse, BreachHierarchyResponse]:

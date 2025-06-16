@@ -14,7 +14,7 @@ from google.api_core import exceptions as google_exceptions
 from user_agents import parse
 
 # Local imports
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 from models.responses import (
     AlertResponse,
     UnsubscribeResponse,
@@ -32,7 +32,7 @@ templates = Jinja2Templates(directory="templates")
 
 
 @router.get("/alertme/{user_email}", response_model=AlertResponse)
-@limiter.limit("50 per day;5 per hour;2 per second")
+@custom_rate_limiter("50 per day;5 per hour;2 per second")
 async def subscribe_to_alert_me(
     user_email: str,
     request: Request,
@@ -124,7 +124,7 @@ async def subscribe_to_alert_me(
 
 
 @router.get("/verifyme/{verification_token}")
-@limiter.limit("50 per day;5 per hour;2 per second")
+@custom_rate_limiter("50 per day;5 per hour;2 per second")
 async def alert_me_verification(verification_token: str, request: Request):
     """Verify alert-me subscription and send initial leaks if any."""
     try:
@@ -211,7 +211,7 @@ async def alert_me_verification(verification_token: str, request: Request):
 
 
 @router.get("/send_verification", response_model=VerificationResponse)
-@limiter.limit("50 per day;10 per hour;2 per second")
+@custom_rate_limiter("50 per day;10 per hour;2 per second")
 async def send_verification(
     token: str = "None", email: str = None, request: Request = None
 ):
@@ -260,8 +260,9 @@ async def send_verification(
 
                     return VerificationResponse(
                         status="Success",
-                        sensitive_breach_details=sensitive_site_breaches,
-                        BreachMetrics=breach_metrics,
+                        breaches=site,
+                        breaches_details=sensitive_site_breaches,
+                        breach_metrics=breach_metrics,
                     )
 
             return VerificationResponse(status="Failed")
@@ -276,110 +277,86 @@ async def send_verification(
 
 
 @router.get("/unsubscribe-on/{user_email}", response_model=UnsubscribeResponse)
-@limiter.limit("20 per day;5 per hour;2 per second")
+@custom_rate_limiter("20 per day;5 per hour;2 per second")
 async def unsubscribe(user_email: str, request: Request):
-    """Unsubscribe from alerts and return status."""
+    """Initiates the unsubscription process for a user."""
     try:
         user_email = user_email.lower()
-
         # Validation checks
-        email_valid = validate_email_with_tld(user_email)
-        url_valid = validate_url(request)
-
-        if not user_email or not email_valid or not url_valid:
-            return UnsubscribeResponse(status="Error", message="Not found")
+        if (
+            not user_email
+            or not validate_email_with_tld(user_email)
+            or not validate_url(request)
+        ):
+            raise HTTPException(status_code=404, detail="Not found")
 
         # Datastore operations
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
-        if alert_task is None or not alert_task.get("unSubscribeOn", False):
-            task_entity = datastore.Entity(
-                datastore_client.key("xon_alert", user_email),
-                exclude_from_indexes=[
-                    "insert_timestamp",
-                    "verify_timestamp",
-                    "verified",
-                    "unSubscribeOn",
-                    "shieldOn",
-                ],
-            )
-            if alert_task is None:
-                task_entity.update({"unSubscribeOn": False})
-                datastore_client.put(task_entity)
-
-            # Generate unsubscribe token and URL
+        if alert_task and alert_task.get("verified", True):
+            # Generate unsubscribe token
             unsubscribe_token = await generate_confirmation_token(user_email)
             base_url = str(request.base_url)
-            confirm_url = f"{base_url}v1/verify_unsub/{unsubscribe_token}"
+            unsub_url = f"{base_url}v1/verify_unsub/{unsubscribe_token}"
+
+            alert_task["unSubscribeOn"] = True
+            alert_task["unsub_token"] = unsubscribe_token
+            datastore_client.put(alert_task)
 
             # Send unsubscribe email
-            await send_unsub_email(user_email, confirm_url)
+            await send_unsub_email(user_email, unsub_url)
 
-            return UnsubscribeResponse(status="Success", message="UnSubscribed")
-
-        if alert_task.get("unSubscribeOn", False):
-            return UnsubscribeResponse(status="Success", message="AlreadyUnSubscribed")
-
-        return UnsubscribeResponse(status="Error", message="Not found")
+        return UnsubscribeResponse(status="Success")
 
     except (
         ValueError,
         HTTPException,
         google_exceptions.GoogleAPIError,
     ) as exception_details:
-        return UnsubscribeResponse(status="Error", message="Not found")
+        raise HTTPException(status_code=404, detail="Not found") from exception_details
 
 
 @router.get("/verify_unsub/{unsubscribe_token}")
-@limiter.limit("20 per day;5 per hour;2 per second")
+@custom_rate_limiter("20 per day;5 per hour;2 per second")
 async def verify_unsubscribe(unsubscribe_token: str, request: Request):
-    """Returns response based on verification for unsubscribe token."""
+    """Verify user's request to unsubscribe."""
     try:
-        token_valid = validate_variables([unsubscribe_token])
-        url_valid = validate_url(request)
+        if (
+            not unsubscribe_token
+            or not validate_variables([unsubscribe_token])
+            or not validate_url(request)
+        ):
+            raise HTTPException(status_code=404, detail="Not found")
 
-        if not unsubscribe_token or not token_valid or not url_valid:
-            raise HTTPException(status_code=404)
-
-        # Token confirmation and datastore update
+        # Confirm token
         user_email = await confirm_token(unsubscribe_token)
         if not user_email:
-            return templates.TemplateResponse(
-                "email_unsub_error.html", {"request": request}
-            )
+            raise HTTPException(status_code=404, detail="Not found")
 
+        # Datastore operations
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
-        if alert_task and alert_task.get("unSubscribeOn", False):
+        if (
+            alert_task
+            and alert_task.get("unSubscribeOn", False)
+            and alert_task.get("unsub_token") == unsubscribe_token
+        ):
+            # Delete user record from datastore
+            datastore_client.delete(alert_key)
+
             return templates.TemplateResponse(
-                "email_unsub_error.html", {"request": request}
+                "unsubscribe_success.html", {"request": request}
             )
 
-        max_retries = 5
-        retry_count = 0
-        while retry_count < max_retries:
-            try:
-                with datastore_client.transaction():
-                    alert_task["unSubscribe_timestamp"] = datetime.now()
-                    alert_task["unSubscribeOn"] = True
-                    datastore_client.put(alert_task)
-                break  # Break the loop if successful
-            except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
-                retry_count += 1
-                if retry_count >= max_retries:
-                    raise
-                wait_time = 2**retry_count * 0.1  # Exponential backoff
-                time.sleep(wait_time)
-
-        return templates.TemplateResponse("verified_unsub.html", {"request": request})
+        raise HTTPException(status_code=404, detail="Not found")
 
     except (
         ValueError,
         HTTPException,
         google_exceptions.GoogleAPIError,
     ) as exception_details:
-        raise HTTPException(status_code=404) from exception_details
+        raise HTTPException(status_code=404, detail="Not found") from exception_details

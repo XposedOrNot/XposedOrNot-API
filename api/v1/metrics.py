@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 from models.responses import MetricsResponse, DetailedMetricsResponse
 from services.analytics import get_detailed_metrics
 from utils.helpers import validate_url
@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 @router.get("/metrics", response_model=MetricsResponse)
-@limiter.limit("5 per minute;50 per hour;100 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def get_metrics_endpoint(request: Request) -> MetricsResponse:
     """Returns basic metrics about breaches."""
     try:
@@ -34,7 +34,7 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
 
 
 @router.get("/metrics/detailed", response_model=DetailedMetricsResponse)
-@limiter.limit("500 per day;100 per hour")
+@custom_rate_limiter("500 per day;100 per hour")
 async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResponse:
     """Returns detailed summary of data breaches including yearly count, top breaches, and recent breaches."""
     try:
@@ -92,7 +92,7 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
 
 
 @router.get("/metrics/domain/{domain}", include_in_schema=False)
-@limiter.limit("5 per minute;50 per hour;100 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
     """Returns metrics for a specific domain."""
     try:

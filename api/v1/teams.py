@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Request
 
-from config.limiter import limiter
+from utils.custom_limiter import custom_rate_limiter
 from models.requests import ChannelSetupRequest
 from models.responses import ChannelConfigResponse, ChannelSetupResponse
 from services.teams import (
@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 @router.post("/teams/setup", response_model=ChannelSetupResponse)
-@limiter.limit("5 per minute;50 per hour;100 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def setup_teams_channel_endpoint(
     request: Request, channel_data: ChannelSetupRequest
 ) -> ChannelSetupResponse:
@@ -67,7 +67,7 @@ async def setup_teams_channel_endpoint(
 
 
 @router.get("/teams/config/{domain}", response_model=ChannelConfigResponse)
-@limiter.limit("5 per minute;50 per hour;100 per day")
+@custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def get_teams_channel_config_endpoint(
     request: Request, domain: str, token: str
 ) -> ChannelConfigResponse:

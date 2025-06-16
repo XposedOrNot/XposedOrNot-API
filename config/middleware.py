@@ -11,13 +11,11 @@ from slowapi.middleware import SlowAPIMiddleware
 # Local imports
 from services.globe import process_request_for_globe
 from utils.request import get_client_ip
-from config.limiter import limiter
 
 
 def setup_middleware(app: FastAPI) -> None:
     """Configure middleware for the FastAPI application."""
 
-    # Add CORS middleware first
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -27,10 +25,6 @@ def setup_middleware(app: FastAPI) -> None:
         expose_headers=["*"],
         max_age=600,
     )
-
-    # Add rate limiting middleware after CORS
-    app.state.limiter = limiter
-    app.add_middleware(SlowAPIMiddleware)
 
 
 def setup_security_headers(app: FastAPI) -> None:

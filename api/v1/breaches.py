@@ -13,15 +13,7 @@ from google.cloud import datastore
 
 # Local imports
 from config.settings import MAX_EMAIL_LENGTH
-from config.limiter import (
-    limiter,
-    RATE_LIMIT_BREACHES,
-    RATE_LIMIT_CHECK_EMAIL,
-    RATE_LIMIT_ANALYTICS,
-    RATE_LIMIT_DOMAIN,
-    get_rate_limit_key,
-    _parse_rate_limit,
-)
+from utils.custom_limiter import custom_rate_limiter
 from models.responses import (
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
@@ -50,7 +42,7 @@ router = APIRouter()
 
 
 @router.get("/breaches", response_model=BreachListResponse)
-@limiter.limit(RATE_LIMIT_BREACHES)
+@custom_rate_limiter("2 per second;5 per hour;100 per day")
 async def get_xposed_breaches(
     request: Request,
     domain: Optional[str] = None,
@@ -144,7 +136,7 @@ async def get_xposed_breaches(
 
 
 @router.get("/v2/breach-analytics", response_model=BreachAnalyticsV2Response)
-@limiter.limit(RATE_LIMIT_ANALYTICS)
+@custom_rate_limiter("5 per minute;100 per hour;500 per day")
 async def search_data_breaches_v2(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsV2Response:
@@ -211,7 +203,7 @@ async def search_data_breaches_v2(
 
 
 @router.get("/breach-analytics", response_model=BreachAnalyticsResponse)
-@limiter.limit(RATE_LIMIT_ANALYTICS)
+@custom_rate_limiter("5 per minute;100 per hour;500 per day")
 async def search_data_breaches(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsResponse:
@@ -330,7 +322,7 @@ async def search_data_breaches(
     tags=["breaches"],
     operation_id="check_email_breaches",
 )
-@limiter.limit(RATE_LIMIT_CHECK_EMAIL)
+@custom_rate_limiter("2 per second;5 per hour;100 per day")
 async def search_email(
     request: Request,
     email: str = Path(
@@ -432,7 +424,7 @@ async def search_email(
 
 
 @router.get("/domain-breach-summary", response_model=DomainBreachSummaryResponse)
-@limiter.limit(RATE_LIMIT_DOMAIN)
+@custom_rate_limiter("2 per second;10 per hour;50 per day")
 async def get_domain_breach_summary(
     request: Request,
     d: Optional[str] = Query(None, description="Domain to search for breaches"),

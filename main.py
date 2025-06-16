@@ -1,14 +1,11 @@
 """Main XON-API entry point."""
 
-# Standard library imports
-
 # Third-party imports
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from slowapi.errors import RateLimitExceeded
 
 # Local imports - Config
 from config.middleware import (
@@ -22,11 +19,8 @@ from config.settings import (
     CF_UNBLOCK_MAGIC,
 )
 from config.limiter import (
-    limiter,
     RATE_LIMIT_HELP,
     RATE_LIMIT_UNBLOCK,
-    rate_limit_exceeded_handler,
-    setup_limiter,
 )
 
 # Local imports - API Routers
@@ -36,6 +30,7 @@ from api.v1 import (
     api_keys,
     breaches,
     domain_breaches,
+    domain_phishing,
     domain_verification,
     feeds,
     metrics,
@@ -49,6 +44,9 @@ from services.cloudflare import unblock
 
 # Local imports - Models
 from models.responses import AlertResponse
+
+# Local imports - Utils
+from utils.custom_limiter import custom_rate_limiter
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -72,11 +70,6 @@ app = FastAPI(
 setup_middleware(app)
 setup_security_headers(app)
 
-# Setup rate limiter
-setup_limiter(app)
-
-# Add rate limit exceeded handler
-app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -122,6 +115,12 @@ app.include_router(
     tags=["domain_breaches"],
     include_in_schema=False,
 )
+app.include_router(
+    domain_phishing.router,
+    prefix="/v1",
+    tags=["domain_phishing"],
+    include_in_schema=True,
+)
 
 
 @app.get("/", include_in_schema=False)
@@ -131,7 +130,7 @@ async def index():
 
 
 @app.get("/v1/help/", include_in_schema=False)
-@limiter.limit(RATE_LIMIT_HELP)
+@custom_rate_limiter(RATE_LIMIT_HELP)
 async def helper(request: Request):  # pylint: disable=unused-argument
     """
     Provides basic guidance to the API documentation page.
@@ -141,7 +140,6 @@ async def helper(request: Request):  # pylint: disable=unused-argument
 
 
 @app.get("/robots.txt", include_in_schema=False)
-@limiter.limit(RATE_LIMIT_HELP)
 async def serve_robots_txt(request: Request):  # pylint: disable=unused-argument
     """Returns robots.txt file content."""
     return HTMLResponse(content=open("static/robots.txt", encoding="utf-8").read())
@@ -182,7 +180,7 @@ async def get_openapi_json():
 
 
 @app.get("/v1/unblock_cf/{token}", include_in_schema=False)
-@limiter.limit(RATE_LIMIT_UNBLOCK)
+@custom_rate_limiter(RATE_LIMIT_UNBLOCK)
 async def unblock_cloudflare(
     token: str, request: Request
 ):  # pylint: disable=unused-argument
@@ -223,12 +221,11 @@ def custom_openapi():
 
     openapi_schema["openapi"] = "3.0.0"
 
-    # Remove the components/schemas section
     if "components" in openapi_schema:
         del openapi_schema["components"]
 
     if "paths" in openapi_schema:
-        # Filter out utility routes
+
         paths_to_keep = {
             path: methods
             for path, methods in openapi_schema["paths"].items()
@@ -258,7 +255,7 @@ def custom_openapi():
                             and "$ref" in param["schema"]
                         )
                     ]
-                # Remove operationId and function name from all methods
+
                 if "operationId" in method:
                     del method["operationId"]
                 if "x-function-name" in method:
@@ -267,7 +264,6 @@ def custom_openapi():
     if "paths" not in openapi_schema:
         openapi_schema["paths"] = {}
 
-    # Add the paths with actual supported features
     openapi_schema["paths"]["/v1/breaches"] = {
         "get": {
             "summary": "Get List Of Breaches",

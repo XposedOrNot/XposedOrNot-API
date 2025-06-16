@@ -42,7 +42,7 @@ def validate_token(token: str) -> bool:
         bool: True if token contains only allowed characters, False otherwise
     """
     try:
-        # Pattern allows alphanumeric, dots, underscores, hyphens, and base64 characters
+
         pattern = r"^[a-zA-Z0-9._\-=]+$"
         return bool(re.match(pattern, token))
     except Exception:
