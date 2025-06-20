@@ -90,7 +90,7 @@ async def get_xposed_breaches(
 
         breach_details = []
         for entity in entities:
-            # Convert exposed data string to list
+
             exposed_data = (
                 entity.get("xposed_data", "").split(";")
                 if entity.get("xposed_data")
@@ -136,7 +136,7 @@ async def get_xposed_breaches(
 
 
 @router.get("/v2/breach-analytics", response_model=BreachAnalyticsV2Response)
-@custom_rate_limiter("5 per minute;100 per hour;500 per day")
+@custom_rate_limiter("2 per second;25 per hour;100 per day")
 async def search_data_breaches_v2(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsV2Response:
@@ -203,7 +203,7 @@ async def search_data_breaches_v2(
 
 
 @router.get("/breach-analytics", response_model=BreachAnalyticsResponse)
-@custom_rate_limiter("5 per minute;100 per hour;500 per day")
+@custom_rate_limiter("2 per second;25 per hour;100 per day")
 async def search_data_breaches(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> BreachAnalyticsResponse:
@@ -317,12 +317,12 @@ async def search_data_breaches(
     - Types of exposed data
     - Detailed breach information (optional)
     
-    Rate Limit: 2 requests/second, 50/hour, 100/day
+    Rate Limit: 2 requests/second, 25/hour, 100/day
     """,
     tags=["breaches"],
     operation_id="check_email_breaches",
 )
-@custom_rate_limiter("2 per second;5 per hour;100 per day")
+@custom_rate_limiter("2 per second;25 per hour;100 per day")
 async def search_email(
     request: Request,
     email: str = Path(
@@ -539,9 +539,9 @@ def _format_log_data(data):
     if not data:
         return data
     try:
-        # Convert data to be JSON serializable
+
         prepared_data = _prepare_for_logging(data)
-        # Format with compact separators and no extra whitespace
+
         return json.dumps(prepared_data, separators=(",", ":"))
 
     except (ValueError, TypeError, KeyError) as e:

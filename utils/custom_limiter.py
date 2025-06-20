@@ -1,5 +1,6 @@
 import time
 import redis.asyncio as redis
+import random
 from functools import wraps
 from typing import Callable, Dict, List, Tuple
 from fastapi import Request, HTTPException
@@ -86,9 +87,52 @@ async def is_rate_limited(
     return False, 0
 
 
+async def get_violation_count(client_ip: str, redis_conn: redis.Redis) -> int:
+    """
+    Get the number of rate limit violations for a client IP in the last hour.
+    """
+    violation_key = f"violations:{client_ip}"
+    now = time.time()
+
+    # Remove violations older than 1 hour
+    await redis_conn.zremrangebyscore(violation_key, 0, now - 3600)
+
+    # Count violations in the last hour
+    count = await redis_conn.zcard(violation_key)
+    return count
+
+
+async def increment_violation(client_ip: str, redis_conn: redis.Redis):
+    """
+    Increment the violation count for a client IP.
+    """
+    violation_key = f"violations:{client_ip}"
+    now = time.time()
+
+    # Add current violation timestamp
+    await redis_conn.zadd(violation_key, {str(now): now})
+
+    # Set expiry to 2 hours (1 hour for tracking + 1 hour buffer)
+    await redis_conn.expire(violation_key, 7200)
+
+
+def get_drop_percentage(violation_count: int) -> float:
+    """
+    Determine the percentage of requests to drop based on violation count.
+    """
+    if violation_count <= 3:
+        return 0.0  # No dropping
+    elif violation_count <= 6:
+        return 0.5  # Drop 50%
+    elif violation_count <= 10:
+        return 0.8  # Drop 80%
+    else:
+        return 0.95  # Drop 95%
+
+
 def custom_rate_limiter(rate_limit_str: str):
     """
-    A decorator for FastAPI routes to enforce custom rate limiting.
+    A decorator for FastAPI routes to enforce custom rate limiting with request dropping.
 
     Args:
         rate_limit_str: A string defining the limits, e.g.,
@@ -117,8 +161,34 @@ def custom_rate_limiter(rate_limit_str: str):
             )
             key = f"rate-limit:{endpoint}:{client_ip}"
 
+            # Check violation count and determine drop percentage
+            violation_count = await get_violation_count(client_ip, redis_pool)
+            drop_percentage = get_drop_percentage(violation_count)
+
+            # Random drop decision
+            if random.random() < drop_percentage:
+
+                raise HTTPException(
+                    status_code=HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "error": "Request dropped due to violation history",
+                        "violation_count": violation_count,
+                        "drop_percentage": f"{drop_percentage * 100:.0f}%",
+                        "detail": f"Request dropped due to {violation_count} previous violations. Please reduce your request rate.",
+                    },
+                    headers={
+                        "X-Dropped": "true",
+                        "X-Violation-Count": str(violation_count),
+                        "X-Drop-Percentage": f"{drop_percentage * 100:.0f}%",
+                    },
+                )
+
+            # Continue with normal rate limiting
             limited, retry_after = await is_rate_limited(key, rate_limits, redis_pool)
             if limited:
+                # Increment violation count when rate limit is exceeded
+                await increment_violation(client_ip, redis_pool)
+
                 reset_time = datetime.now() + timedelta(seconds=retry_after)
                 raise HTTPException(
                     status_code=HTTP_429_TOO_MANY_REQUESTS,
