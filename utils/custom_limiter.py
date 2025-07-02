@@ -10,8 +10,60 @@ from datetime import datetime, timedelta
 from config.settings import REDIS_URL
 from utils.helpers import get_client_ip
 
+redis_pool = redis.from_url(
+    REDIS_URL,
+    encoding="utf-8",
+    decode_responses=True,
+    socket_keepalive=True,
+    socket_keepalive_options={},
+    retry_on_timeout=True,
+    health_check_interval=30,
+    max_connections=20,
+    retry_on_error=[redis.ConnectionError, redis.TimeoutError],
+)
 
-redis_pool = redis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+
+async def get_healthy_redis_connection():
+    """
+    Get a healthy Redis connection with automatic reconnection.
+    """
+    global redis_pool
+    max_retries = 3
+    retry_delay = 0.1
+
+    for attempt in range(max_retries):
+        try:
+            await redis_pool.ping()
+            return redis_pool
+        except Exception as e:
+            if attempt < max_retries - 1:
+                try:
+                    await redis_pool.close()
+                    redis_pool = redis.from_url(
+                        REDIS_URL,
+                        encoding="utf-8",
+                        decode_responses=True,
+                        socket_keepalive=True,
+                        socket_keepalive_options={},
+                        retry_on_timeout=True,
+                        health_check_interval=30,
+                        max_connections=20,
+                        retry_on_error=[redis.ConnectionError, redis.TimeoutError],
+                    )
+                    await redis_pool.ping()
+                    return redis_pool
+                except Exception as reconnect_error:
+                    if attempt < max_retries - 1:
+                        import asyncio
+
+                        try:
+                            await asyncio.sleep(retry_delay)
+                        except asyncio.CancelledError:
+                            break
+                        retry_delay *= 2
+                    continue
+
+    return redis_pool
 
 
 def parse_rate_limit(rate_limit_str: str) -> List[Tuple[int, int]]:
@@ -48,72 +100,86 @@ def parse_rate_limit(rate_limit_str: str) -> List[Tuple[int, int]]:
 
 
 async def is_rate_limited(
-    key: str, rate_limits: List[Tuple[int, int]], redis_conn: redis.Redis
+    key: str, rate_limits: List[Tuple[int, int]], redis_conn: redis.Redis = None
 ) -> Tuple[bool, int]:
     """
     Checks if a given key has exceeded any of the specified rate limits using Redis.
     Returns a tuple of (is_limited, retry_after_seconds).
     """
+    if redis_conn is None:
+        redis_conn = await get_healthy_redis_connection()
+
     now = time.time()
 
-    async with redis_conn.pipeline(transaction=True) as pipe:
-        pipe.zadd(key, {str(now): now})
-        max_period = max(limit[1] for limit in rate_limits) if rate_limits else 86400
-        pipe.zremrangebyscore(key, 0, now - max_period)
-
-        for _, period in rate_limits:
-            pipe.zcount(key, now - period, now)
-
-        results = await pipe.execute()
-
-    request_counts = results[2:]
-
-    for i, (limit, period) in enumerate(rate_limits):
-        count = request_counts[i]
-
-        if count > limit:
-
-            oldest_in_window_list = await redis_conn.zrange(
-                key, -count, -count, withscores=True
+    try:
+        async with redis_conn.pipeline(transaction=True) as pipe:
+            pipe.zadd(key, {str(now): now})
+            max_period = (
+                max(limit[1] for limit in rate_limits) if rate_limits else 86400
             )
+            pipe.zremrangebyscore(key, 0, now - max_period)
 
-            if oldest_in_window_list:
-                oldest_ts = oldest_in_window_list[0][1]
-                retry_after = int(period - (now - oldest_ts))
-                return True, max(1, retry_after)
+            for _, period in rate_limits:
+                pipe.zcount(key, now - period, now)
 
-            return True, period  # Fallback
+            results = await pipe.execute()
 
-    return False, 0
+        request_counts = results[2:]
+
+        for i, (limit, period) in enumerate(rate_limits):
+            count = request_counts[i]
+
+            if count > limit:
+
+                oldest_in_window_list = await redis_conn.zrange(
+                    key, -count, -count, withscores=True
+                )
+
+                if oldest_in_window_list:
+                    oldest_ts = oldest_in_window_list[0][1]
+                    retry_after = int(period - (now - oldest_ts))
+                    return True, max(1, retry_after)
+
+                return True, period
+
+        return False, 0
+    except Exception as e:
+        return False, 0
 
 
-async def get_violation_count(client_ip: str, redis_conn: redis.Redis) -> int:
+async def get_violation_count(client_ip: str, redis_conn: redis.Redis = None) -> int:
     """
     Get the number of rate limit violations for a client IP in the last hour.
     """
+    if redis_conn is None:
+        redis_conn = await get_healthy_redis_connection()
+
     violation_key = f"violations:{client_ip}"
     now = time.time()
 
-    # Remove violations older than 1 hour
-    await redis_conn.zremrangebyscore(violation_key, 0, now - 3600)
+    try:
+        await redis_conn.zremrangebyscore(violation_key, 0, now - 3600)
+        count = await redis_conn.zcard(violation_key)
+        return count
+    except Exception as e:
+        return 0
 
-    # Count violations in the last hour
-    count = await redis_conn.zcard(violation_key)
-    return count
 
-
-async def increment_violation(client_ip: str, redis_conn: redis.Redis):
+async def increment_violation(client_ip: str, redis_conn: redis.Redis = None):
     """
     Increment the violation count for a client IP.
     """
+    if redis_conn is None:
+        redis_conn = await get_healthy_redis_connection()
+
     violation_key = f"violations:{client_ip}"
     now = time.time()
 
-    # Add current violation timestamp
-    await redis_conn.zadd(violation_key, {str(now): now})
-
-    # Set expiry to 2 hours (1 hour for tracking + 1 hour buffer)
-    await redis_conn.expire(violation_key, 7200)
+    try:
+        await redis_conn.zadd(violation_key, {str(now): now})
+        await redis_conn.expire(violation_key, 7200)
+    except Exception as e:
+        pass
 
 
 def get_drop_percentage(violation_count: int) -> float:
@@ -121,13 +187,13 @@ def get_drop_percentage(violation_count: int) -> float:
     Determine the percentage of requests to drop based on violation count.
     """
     if violation_count <= 3:
-        return 0.0  # No dropping
+        return 0.0
     elif violation_count <= 6:
-        return 0.5  # Drop 50%
+        return 0.5
     elif violation_count <= 10:
-        return 0.8  # Drop 80%
+        return 0.8
     else:
-        return 0.95  # Drop 95%
+        return 0.95
 
 
 def custom_rate_limiter(rate_limit_str: str):
@@ -161,11 +227,11 @@ def custom_rate_limiter(rate_limit_str: str):
             )
             key = f"rate-limit:{endpoint}:{client_ip}"
 
-            # Check violation count and determine drop percentage
-            violation_count = await get_violation_count(client_ip, redis_pool)
+            redis_conn = await get_healthy_redis_connection()
+
+            violation_count = await get_violation_count(client_ip, redis_conn)
             drop_percentage = get_drop_percentage(violation_count)
 
-            # Random drop decision
             if random.random() < drop_percentage:
 
                 raise HTTPException(
@@ -183,11 +249,9 @@ def custom_rate_limiter(rate_limit_str: str):
                     },
                 )
 
-            # Continue with normal rate limiting
-            limited, retry_after = await is_rate_limited(key, rate_limits, redis_pool)
+            limited, retry_after = await is_rate_limited(key, rate_limits, redis_conn)
             if limited:
-                # Increment violation count when rate limit is exceeded
-                await increment_violation(client_ip, redis_pool)
+                await increment_violation(client_ip, redis_conn)
 
                 reset_time = datetime.now() + timedelta(seconds=retry_after)
                 raise HTTPException(

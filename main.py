@@ -46,7 +46,7 @@ from services.cloudflare import unblock
 from models.responses import AlertResponse
 
 # Local imports - Utils
-from utils.custom_limiter import custom_rate_limiter
+from utils.custom_limiter import custom_rate_limiter, redis_pool
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -177,6 +177,24 @@ async def get_openapi_json():
         description=API_DESCRIPTION,
         routes=app.routes,
     )
+
+
+@app.get("/_health", include_in_schema=False)
+async def health_check():
+    """Internal health check endpoint to verify Redis connectivity."""
+    import asyncio
+
+    try:
+        await asyncio.wait_for(redis_pool.ping(), timeout=2.0)
+        return {"status": "healthy", "redis": "connected"}
+    except asyncio.TimeoutError:
+        return {
+            "status": "unhealthy",
+            "redis": "timeout",
+            "error": "Redis ping timed out",
+        }
+    except Exception as e:
+        return {"status": "unhealthy", "redis": "disconnected", "error": str(e)}
 
 
 @app.get("/v1/unblock_cf/{token}", include_in_schema=False)
@@ -681,6 +699,24 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup resources on application shutdown."""
+    import asyncio
+
+    try:
+
+        await asyncio.wait_for(redis_pool.close(), timeout=5.0)
+        print("Redis connection pool closed successfully")
+    except asyncio.TimeoutError:
+        print("Redis connection pool close timed out during shutdown")
+    except asyncio.CancelledError:
+        print("Redis connection pool close was cancelled during shutdown")
+    except Exception as e:
+        print(f"Error closing Redis connection pool: {e}")
+
 
 if __name__ == "__main__":
     import uvicorn
