@@ -72,3 +72,6 @@ CACHE_MAX_SIZE = 1000
 API_PREFIX = "/v1"
 API_DOCS_URL = "/docs"
 API_OPENAPI_URL = "/openapi.json"
+
+# OpenAPI Server Configurations
+OPENAPI_SERVERS = [{"url": BASE_URL, "description": "Production server"}]

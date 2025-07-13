@@ -17,6 +17,7 @@ from config.settings import (
     API_TITLE,
     API_DESCRIPTION,
     CF_UNBLOCK_MAGIC,
+    OPENAPI_SERVERS,
 )
 from config.limiter import (
     RATE_LIMIT_HELP,
@@ -239,6 +240,9 @@ def custom_openapi():
 
     openapi_schema["openapi"] = "3.0.0"
 
+    # Add server configurations
+    openapi_schema["servers"] = OPENAPI_SERVERS
+
     if "components" in openapi_schema:
         del openapi_schema["components"]
 
@@ -284,6 +288,7 @@ def custom_openapi():
 
     openapi_schema["paths"]["/v1/breaches"] = {
         "get": {
+            "operationId": "getBreaches",
             "summary": "Get List Of Breaches",
             "description": (
                 "Retrieves a list of all known data breaches in the system. "
@@ -445,6 +450,7 @@ def custom_openapi():
 
     openapi_schema["paths"]["/v1/check-email/{email}"] = {
         "get": {
+            "operationId": "checkEmailBreaches",
             "summary": "Check Email For Breaches",
             "description": (
                 "Searches for any data breaches containing the specified email "
@@ -521,6 +527,7 @@ def custom_openapi():
 
     openapi_schema["paths"]["/v1/breach-analytics"] = {
         "get": {
+            "operationId": "getBreachAnalytics",
             "summary": "Get Breach Analytics",
             "description": (
                 "Retrieves analytics and statistics about breaches for a specific "
@@ -596,6 +603,7 @@ def custom_openapi():
 
     openapi_schema["paths"]["/v1/domain-breaches"] = {
         "post": {
+            "operationId": "getDomainBreaches",
             "summary": "Get Domain Breaches",
             "description": (
                 "Retrieves information about data breaches associated with "

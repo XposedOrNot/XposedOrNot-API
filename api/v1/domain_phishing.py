@@ -164,6 +164,7 @@ async def is_domain_verified_for_user(email: str, domain: str) -> bool:
         }
     },
     include_in_schema=True,
+    operation_id="checkDomainPhishing",
 )
 @custom_rate_limiter("10 per minute")
 async def check_domain_phishing(
