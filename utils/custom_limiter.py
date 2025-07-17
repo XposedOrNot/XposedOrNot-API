@@ -2,7 +2,7 @@ import time
 import redis.asyncio as redis
 import random
 from functools import wraps
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Tuple, Optional
 from fastapi import Request, HTTPException
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 from datetime import datetime, timedelta
@@ -196,13 +196,14 @@ def get_drop_percentage(violation_count: int) -> float:
         return 0.95
 
 
-def custom_rate_limiter(rate_limit_str: str):
+def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
     """
     A decorator for FastAPI routes to enforce custom rate limiting with request dropping.
 
     Args:
         rate_limit_str: A string defining the limits, e.g.,
                         "2 per second;5 per hour;100 per day"
+        message: An optional custom message to include in the 429 response.
     """
     rate_limits = parse_rate_limit(rate_limit_str)
 
@@ -254,14 +255,20 @@ def custom_rate_limiter(rate_limit_str: str):
                 await increment_violation(client_ip, redis_conn)
 
                 reset_time = datetime.now() + timedelta(seconds=retry_after)
+
+                error_detail = {
+                    "error": "Rate limit exceeded",
+                    "detail": f"Rate limit exceeded for endpoint {endpoint}. Please try again after {retry_after} seconds.",
+                    "retry_after": retry_after,
+                    "reset_time": reset_time.isoformat(),
+                }
+
+                if message:
+                    error_detail["message"] = message
+
                 raise HTTPException(
                     status_code=HTTP_429_TOO_MANY_REQUESTS,
-                    detail={
-                        "error": "Rate limit exceeded",
-                        "detail": f"Rate limit exceeded for endpoint {endpoint}. Please try again after {retry_after} seconds.",
-                        "retry_after": retry_after,
-                        "reset_time": reset_time.isoformat(),
-                    },
+                    detail=error_detail,
                     headers={"Retry-After": str(retry_after)},
                 )
 

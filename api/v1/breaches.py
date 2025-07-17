@@ -322,7 +322,10 @@ async def search_data_breaches(
     tags=["breaches"],
     operation_id="check_email_breaches",
 )
-@custom_rate_limiter("2 per second;25 per hour;100 per day")
+@custom_rate_limiter(
+    "2 per second;25 per hour;100 per day",
+    message="For faster checks, please consider upgrading to our paid plans. Visit https://plus.xposedornot.com/products/api for more details.",
+)
 async def search_email(
     request: Request,
     email: str = Path(
