@@ -2,18 +2,16 @@
 
 # Standard library imports
 import json
-import sys
 from datetime import datetime
-from typing import Optional, Union, List, Dict
+from typing import Optional, Union
 
 # Third-party imports
-from fastapi import APIRouter, HTTPException, Request, Header, Query, Path
+from fastapi import APIRouter, Header, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, Response
 from google.cloud import datastore
 
 # Local imports
 from config.settings import MAX_EMAIL_LENGTH
-from utils.custom_limiter import custom_rate_limiter
 from models.responses import (
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
@@ -28,13 +26,14 @@ from services.analytics import (
     get_ai_summary,
     get_summary_and_metrics,
 )
-from services.breach import get_exposure, get_sensitive_exposure, get_breaches
+from services.breach import get_breaches, get_exposure, get_sensitive_exposure
+from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import (
+    get_client_ip,
     string_to_boolean,
     validate_domain,
     validate_email_with_tld,
     validate_url,
-    get_client_ip,
 )
 from utils.validation import validate_variables
 

@@ -11,7 +11,6 @@ from typing import Dict, Any, Optional
 
 # Third-party imports
 import httpx
-import requests
 from fastapi import HTTPException
 
 # Mailjet configuration

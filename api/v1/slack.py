@@ -2,15 +2,15 @@
 
 from fastapi import APIRouter, HTTPException, Request
 
-from utils.custom_limiter import custom_rate_limiter
 from models.requests import ChannelSetupRequest
 from models.responses import ChannelConfigResponse, ChannelSetupResponse
 from services.slack import (
-    setup_slack_channel,
-    verify_slack_channel,
     delete_slack_channel,
     get_slack_channel_config,
+    setup_slack_channel,
+    verify_slack_channel,
 )
+from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import validate_url, validate_variables
 
 router = APIRouter()

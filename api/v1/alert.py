@@ -2,7 +2,6 @@
 
 # Standard library imports
 from datetime import datetime
-import sys
 import time
 
 # Third-party imports
@@ -14,7 +13,6 @@ from google.api_core import exceptions as google_exceptions
 from user_agents import parse
 
 # Local imports
-from utils.custom_limiter import custom_rate_limiter
 from models.responses import (
     AlertResponse,
     UnsubscribeResponse,
@@ -23,6 +21,7 @@ from models.responses import (
 from services.analytics import get_breaches_analytics
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
 from services.send_email import send_alert_confirmation, send_unsub_email
+from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.token import confirm_token, generate_confirmation_token
 from utils.validation import validate_email_with_tld, validate_url, validate_variables

@@ -5,44 +5,41 @@ import datetime
 import html
 import logging
 from collections import defaultdict
-from typing import Optional, Union, Dict, Any, List
+from typing import Any, Dict, Optional, Union
 
 # Third-party imports
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from google.cloud import datastore
 from google.api_core import exceptions as google_exceptions
 
 # Local imports
-from utils.custom_limiter import custom_rate_limiter
 from models.responses import (
-    DetailedMetricsResponse,
-    PulseNewsResponse,
-    DomainAlertResponse,
-    DomainAlertErrorResponse,
-    DomainBreachesResponse,
-    DomainBreachesErrorResponse,
     BreachDetails,
-    DetailedBreachInfo,
-    ShieldActivationResponse,
-    ShieldActivationErrorResponse,
     BreachHierarchyResponse,
+    DetailedBreachInfo,
+    DetailedMetricsResponse,
+    DomainAlertErrorResponse,
+    DomainAlertResponse,
+    DomainBreachesErrorResponse,
+    DomainBreachesResponse,
+    PulseNewsResponse,
+    ShieldActivationErrorResponse,
+    ShieldActivationResponse,
 )
-from services.analytics import (
-    get_detailed_metrics,
-    get_pulse_news,
-)
+from services.analytics import get_detailed_metrics, get_pulse_news
 from services.send_email import send_dashboard_email_confirmation, send_shield_email
+from utils.custom_limiter import custom_rate_limiter
+from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
+from utils.request import get_client_ip, get_user_agent_info
+from utils.token import confirm_token, generate_confirmation_token
 from utils.validation import (
     validate_email_with_tld,
+    validate_token,
     validate_url,
     validate_variables,
-    validate_token,
 )
-from utils.token import generate_confirmation_token, confirm_token
-from utils.helpers import get_preferred_ip_address, fetch_location_by_ip
-from utils.request import get_client_ip, get_user_agent_info
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")

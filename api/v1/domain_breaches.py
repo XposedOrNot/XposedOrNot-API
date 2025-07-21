@@ -5,16 +5,14 @@ from collections import defaultdict
 from typing import Dict, List
 from operator import itemgetter
 
-from fastapi import APIRouter, Request, HTTPException, Header, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from google.cloud import datastore
 from pydantic import BaseModel, Field
 
-from utils.custom_limiter import custom_rate_limiter
-from models.responses import DomainBreachesResponse, DomainBreachesErrorResponse
-
-# from services.analytics import get_domain_breach_analytics
-from utils.validation import validate_url  # , validate_api_key
 from models.base import BaseResponse
+from models.responses import DomainBreachesResponse
+from utils.custom_limiter import custom_rate_limiter
+from utils.validation import validate_url
 
 router = APIRouter()
 

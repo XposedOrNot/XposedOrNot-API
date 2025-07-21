@@ -5,12 +5,13 @@ for the globe visualization feature. It captures client IP addresses,
 retrieves geolocation information, and publishes the data to a PubSub topic.
 """
 
-import json
-import time
-import os
 import hashlib
+import json
+import os
+import time
+from typing import Any, Dict, Optional
+
 import httpx
-from typing import Dict, Any, Optional
 from google.cloud import pubsub_v1
 
 # Initialize PubSub constants

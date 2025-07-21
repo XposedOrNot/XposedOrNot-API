@@ -1,23 +1,21 @@
 """Domain phishing check router module."""
 
-import socket
 import json
-import os
+import socket
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
 
 import dnstwist
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Header
-from pydantic import BaseModel, Field, validator, EmailStr
+from fastapi import APIRouter, HTTPException, Query, Request
+from google.cloud import datastore
+from pydantic import BaseModel, EmailStr, Field, validator
 from redis import Redis
 
-from config.settings import REDIS_HOST, REDIS_PORT, REDIS_DB
+from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
 from models.responses import BaseResponse
-from utils.validation import validate_email_with_tld, validate_variables
-from utils.token import confirm_token
-from google.cloud import datastore
 from utils.custom_limiter import custom_rate_limiter
+from utils.token import confirm_token
 
 router = APIRouter()
 
@@ -37,6 +35,7 @@ if not TLD_FILE.exists():
 
 
 def validate_file_content(file_path: Path, min_lines: int = 1) -> None:
+    """Validate the content of a file to ensure it has sufficient lines."""
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
     with open(file_path, "r") as f:
@@ -55,10 +54,13 @@ except Exception as e:
 
 
 class DomainPhishingRequest(BaseModel):
+    """Request model for domain phishing check."""
+
     domain: str = Field(..., description="Domain to check for phishing variants")
 
     @validator("domain")
     def validate_domain(cls, v: str) -> str:
+        """Validate the domain format and length."""
         if not v or not isinstance(v, str):
             raise ValueError("Domain must be a non-empty string")
         if len(v) > 255:
@@ -69,6 +71,8 @@ class DomainPhishingRequest(BaseModel):
 
 
 class DomainPhishingSummaryResponse(BaseResponse):
+    """Summary response model for domain phishing check."""
+
     total_scanned: int
     total_live: int = 0
     unique_fuzzers: int = 0
@@ -76,6 +80,8 @@ class DomainPhishingSummaryResponse(BaseResponse):
 
 
 class DomainPhishingResponse(BaseResponse):
+    """Detailed response model for domain phishing check."""
+
     total_scanned: int
     total_live: int = 0
     unique_fuzzers: int = 0
@@ -85,6 +91,7 @@ class DomainPhishingResponse(BaseResponse):
 
 
 def is_domain_live(domain: str) -> bool:
+    """Check if a domain is live by resolving its IP address."""
     try:
         socket.gethostbyname(domain)
         return True
@@ -93,6 +100,7 @@ def is_domain_live(domain: str) -> bool:
 
 
 def get_cached_result(domain: str) -> Optional[Dict]:
+    """Retrieve cached phishing check results from Redis."""
     cache_key = f"phishing_check:{domain}"
     cached_data = redis_client.get(cache_key)
     if cached_data:
@@ -104,6 +112,7 @@ def get_cached_result(domain: str) -> Optional[Dict]:
 
 
 def cache_result(domain: str, result: Dict, expiry_hours: int = 24) -> None:
+    """Cache phishing check results in Redis."""
     cache_key = f"phishing_check:{domain}"
     if isinstance(result.get("last_checked"), datetime):
         result["last_checked"] = result["last_checked"].isoformat()
@@ -111,6 +120,7 @@ def cache_result(domain: str, result: Dict, expiry_hours: int = 24) -> None:
 
 
 async def verify_user_access(email: str, token: str) -> bool:
+    """Verify user access based on email and token."""
     if not email or not token:
         return False
     try:

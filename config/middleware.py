@@ -6,7 +6,6 @@ import asyncio
 # Third-party imports
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi.middleware import SlowAPIMiddleware
 
 # Local imports
 from services.globe import process_request_for_globe
