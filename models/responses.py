@@ -150,30 +150,6 @@ class DomainBreachDetails(BaseModel):
     breach_last_seen: Optional[str] = None
 
 
-class WebhookConfigResponse(BaseResponse):
-    """Response model for webhook configuration."""
-
-    data: Optional[Dict[str, str]] = None
-
-
-class ChannelConfigResponse(BaseResponse):
-    """Response model for channel configuration."""
-
-    data: Optional[Dict[str, str]] = None
-
-
-class WebhookSetupResponse(BaseResponse):
-    """Response model for webhook setup."""
-
-    verify_token: Optional[str] = None
-
-
-class ChannelSetupResponse(BaseResponse):
-    """Response model for channel setup."""
-
-    pass
-
-
 class DetailedMetricsResponse(BaseMetrics):
     """Response model for detailed metrics."""
 

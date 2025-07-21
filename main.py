@@ -35,9 +35,6 @@ from api.v1 import (
     domain_verification,
     feeds,
     metrics,
-    slack,
-    teams,
-    webhooks,
 )
 
 # Local imports - Services
@@ -84,11 +81,6 @@ app.include_router(
     analytics.router, prefix="/v1", tags=["analytics"], include_in_schema=False
 )
 app.include_router(metrics.router, prefix="/v1", tags=["metrics"])
-app.include_router(
-    webhooks.router, prefix="/v1", tags=["webhooks"], include_in_schema=False
-)
-app.include_router(slack.router, prefix="/v1", tags=["slack"], include_in_schema=False)
-app.include_router(teams.router, prefix="/v1", tags=["teams"], include_in_schema=False)
 app.include_router(
     alert.router,
     prefix="/v1",
