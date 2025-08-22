@@ -69,11 +69,246 @@ setup_middleware(app)
 setup_security_headers(app)
 
 
-# Mount static files and templates
+# MCP Integration - Manual endpoint approach
+@app.get("/mcp")
+async def mcp_get_handler():
+    """Handle MCP GET requests - return server info."""
+    return {
+        "jsonrpc": "2.0",
+        "result": {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {"tools": {}},
+            "serverInfo": {"name": "XON_MCP", "version": "1.0.0"},
+        },
+    }
+
+
+@app.post("/mcp")
+async def mcp_post_handler(fastapi_request: Request):
+    """Handle MCP protocol requests manually."""
+    # Get the JSON body from the request
+    request_body = await fastapi_request.json()
+
+    if request_body.get("method") == "initialize":
+        return {
+            "jsonrpc": "2.0",
+            "id": request_body.get("id"),
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {"tools": {}},
+                "serverInfo": {"name": "XON_MCP", "version": "1.0.0"},
+            },
+        }
+    elif request_body.get("method") == "tools/list":
+        return {
+            "jsonrpc": "2.0",
+            "id": request_body.get("id"),
+            "result": {
+                "tools": [
+                    {
+                        "name": "check_email_breaches",
+                        "description": "Check if an email address appears in any known data breaches",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "email": {
+                                    "type": "string",
+                                    "description": "Email address to check for breaches",
+                                }
+                            },
+                            "required": ["email"],
+                        },
+                    },
+                    {
+                        "name": "get_breach_analytics",
+                        "description": "Get detailed analytics and statistics about breaches for a specific email address",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "email": {
+                                    "type": "string",
+                                    "description": "Email address to get analytics for",
+                                },
+                                "token": {
+                                    "type": "string",
+                                    "description": "Optional token for accessing sensitive data",
+                                    "default": "",
+                                },
+                            },
+                            "required": ["email"],
+                        },
+                    },
+                    {
+                        "name": "list_breaches",
+                        "description": "Get a list of all known data breaches in the system",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "domain": {
+                                    "type": "string",
+                                    "description": "Optional domain to filter breaches",
+                                },
+                                "breach_id": {
+                                    "type": "string",
+                                    "description": "Optional specific breach ID to get",
+                                },
+                            },
+                            "required": [],
+                        },
+                    },
+                ]
+            },
+        }
+    elif request_body.get("method") == "tools/call":
+        tool_name = request_body.get("params", {}).get("name")
+        tool_args = request_body.get("params", {}).get("arguments", {})
+
+        if tool_name == "check_email_breaches":
+            email = tool_args.get("email")
+            if email:
+                import httpx
+
+                try:
+                    base_url = (
+                        f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
+                    )
+
+                    response = httpx.get(
+                        f"{base_url}/v1/check-email/{email}",
+                        follow_redirects=True,
+                        timeout=30.0,
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_body.get("id"),
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"Breach check results for {email}: {result}",
+                                }
+                            ]
+                        },
+                    }
+                except Exception as e:
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_body.get("id"),
+                        "error": {
+                            "code": -32603,
+                            "message": f"Internal error: {str(e)}",
+                        },
+                    }
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_body.get("id"),
+                    "error": {"code": -32602, "message": "Missing email parameter"},
+                }
+
+        elif tool_name == "get_breach_analytics":
+            email = tool_args.get("email")
+            token = tool_args.get("token", "")
+            if email:
+                import httpx
+
+                try:
+                    base_url = (
+                        f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
+                    )
+
+                    params = {"email": email}
+                    if token:
+                        params["token"] = token
+
+                    response = httpx.get(
+                        f"{base_url}/v1/breach-analytics",
+                        params=params,
+                        follow_redirects=True,
+                        timeout=30.0,
+                    )
+                    response.raise_for_status()
+                    result = response.json()
+
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_body.get("id"),
+                        "result": {
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"Breach analytics for {email}: {result}",
+                                }
+                            ]
+                        },
+                    }
+                except Exception as e:
+                    return {
+                        "jsonrpc": "2.0",
+                        "id": request_body.get("id"),
+                        "error": {
+                            "code": -32603,
+                            "message": f"Internal error: {str(e)}",
+                        },
+                    }
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_body.get("id"),
+                    "error": {"code": -32602, "message": "Missing email parameter"},
+                }
+
+        elif tool_name == "list_breaches":
+            import httpx
+
+            try:
+                base_url = (
+                    f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
+                )
+
+                params = {}
+                if tool_args.get("domain"):
+                    params["domain"] = tool_args.get("domain")
+                if tool_args.get("breach_id"):
+                    params["breach_id"] = tool_args.get("breach_id")
+
+                response = httpx.get(
+                    f"{base_url}/v1/breaches",
+                    params=params if params else None,
+                    follow_redirects=True,
+                    timeout=30.0,
+                )
+                response.raise_for_status()
+                result = response.json()
+
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_body.get("id"),
+                    "result": {
+                        "content": [{"type": "text", "text": f"Breach list: {result}"}]
+                    },
+                }
+            except Exception as e:
+                return {
+                    "jsonrpc": "2.0",
+                    "id": request_body.get("id"),
+                    "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
+                }
+
+    # Default response for unsupported methods
+    return {
+        "jsonrpc": "2.0",
+        "id": request_body.get("id"),
+        "error": {"code": -32601, "message": "Method not found"},
+    }
+
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Include routers with include_in_schema=False for routes we don't want in docs
 app.include_router(
     breaches.router, prefix="/v1", tags=["breaches"], include_in_schema=False
 )
