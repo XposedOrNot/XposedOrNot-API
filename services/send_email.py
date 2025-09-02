@@ -394,11 +394,11 @@ async def send_monthly_digest_email(
     new_breaches: List[Dict],
     month_year: str,
     user_domains: List[str],
-    template_id: int = 999999  # TODO: Replace with actual Mailjet template ID
+    template_id: int = 999999,  # TODO: Replace with actual Mailjet template ID
 ) -> Dict[str, Any]:
     """
     Sends XposedOrNot Monthly Digest Email
-    
+
     Args:
         email: Recipient email address (can be test email)
         original_user_email: Original user email for tracking
@@ -412,24 +412,28 @@ async def send_monthly_digest_email(
         # Format user exposures for template
         formatted_exposures = []
         for exposure in user_exposures:
-            formatted_exposures.append({
-                "breach_name": exposure.get("breach_name", ""),
-                "breach_date": exposure.get("breach_date", ""),
-                "data_exposed": exposure.get("data_exposed", ""),
-                "records_count": exposure.get("records_count", 0),
-                "domain": exposure.get("domain", "")
-            })
-        
+            formatted_exposures.append(
+                {
+                    "breach_name": exposure.get("breach_name", ""),
+                    "breach_date": exposure.get("breach_date", ""),
+                    "data_exposed": exposure.get("data_exposed", ""),
+                    "records_count": exposure.get("records_count", 0),
+                    "domain": exposure.get("domain", ""),
+                }
+            )
+
         # Format new breaches for template
         formatted_new_breaches = []
         for breach in new_breaches:
-            formatted_new_breaches.append({
-                "breach_name": breach.get("breach_name", ""),
-                "breach_date": breach.get("breach_date", ""),
-                "records_exposed": breach.get("records_exposed", 0),
-                "data_types": breach.get("data_types", "")
-            })
-        
+            formatted_new_breaches.append(
+                {
+                    "breach_name": breach.get("breach_name", ""),
+                    "breach_date": breach.get("breach_date", ""),
+                    "records_exposed": breach.get("records_exposed", 0),
+                    "data_types": breach.get("data_types", ""),
+                }
+            )
+
         # Prepare email data
         data = {
             "Messages": [
@@ -450,12 +454,12 @@ async def send_monthly_digest_email(
                         "exposures_count": len(formatted_exposures),
                         "new_breaches_count": len(formatted_new_breaches),
                         "original_user_email": original_user_email,  # For debugging
-                        "recipient_email": email  # For debugging
+                        "recipient_email": email,  # For debugging
                     },
                 }
             ]
         }
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
@@ -463,11 +467,12 @@ async def send_monthly_digest_email(
 
             if response.status_code != 200:
                 raise HTTPException(
-                    status_code=500, detail=f"Failed to send monthly digest email: {response.text}"
+                    status_code=500,
+                    detail=f"Failed to send monthly digest email: {response.text}",
                 )
-            
+
             return response.json()
-            
+
     except httpx.ConnectError as e:
         raise HTTPException(
             status_code=500, detail="Unable to connect to email service"

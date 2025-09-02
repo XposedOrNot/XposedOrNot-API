@@ -353,7 +353,7 @@ app.include_router(
 )
 app.include_router(
     monthly_digest.router,
-    prefix="/v1", 
+    prefix="/v1",
     tags=["monthly_digest"],
     include_in_schema=True,
 )
@@ -364,6 +364,7 @@ async def startup_event():
     """Initialize services on startup."""
     # Start the scheduler for automated tasks (can be disabled via env var)
     import os
+
     if os.environ.get("DISABLE_SCHEDULER", "false").lower() != "true":
         start_scheduler()
     else:

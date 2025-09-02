@@ -54,7 +54,9 @@ class MonthlyDigestResponse(BaseResponse):
 
     task_id: str
     trigger_type: str = Field(description="manual or automatic")
-    target_email: Optional[str] = Field(default=None, description="Target email for manual triggers")
+    target_email: Optional[str] = Field(
+        default=None, description="Target email for manual triggers"
+    )
     testing_mode: bool = Field(description="Whether emails are sent to test address")
 
 
