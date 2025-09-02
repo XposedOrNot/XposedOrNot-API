@@ -336,7 +336,9 @@ async def generate_monthly_digest_html(email: str, dashboard_token: str = None) 
             <p>We encountered an error while generating your monthly digest: {}</p>
             <p><a href="https://xposedornot.com" style="color: #3498db;">Visit XposedOrNot</a> for manual checking.</p>
         </div>
-        """.format(str(e))
+        """.format(
+            str(e)
+        )
 
 
 async def process_monthly_digest_for_all_users():
@@ -372,14 +374,13 @@ async def process_monthly_digest_for_all_users():
 
         logger.info(
             "[MONTHLY-DIGEST] Starting processing for %s unique emails",
-            len(unique_emails)
+            len(unique_emails),
         )
 
         # Send digest to each unique email
         for i, email in enumerate(unique_emails, 1):
             logger.info(
-                "[MONTHLY-DIGEST] Processing %s/%s: %s",
-                i, len(unique_emails), email
+                "[MONTHLY-DIGEST] Processing %s/%s: %s", i, len(unique_emails), email
             )
 
             try:
@@ -399,7 +400,7 @@ async def process_monthly_digest_for_all_users():
                     )
                     logger.info(
                         "[MONTHLY-DIGEST] Entity created, updating with token: %s",
-                        dashboard_token
+                        dashboard_token,
                     )
 
                     alert_task_data.update(
@@ -415,7 +416,8 @@ async def process_monthly_digest_for_all_users():
                     session_client.put(alert_task_data)
                     logger.info(
                         "[MONTHLY-DIGEST] ✅ Session successfully stored for %s with token %s",
-                        email, dashboard_token
+                        email,
+                        dashboard_token,
                     )
 
                     # Verify the session was created
@@ -425,8 +427,8 @@ async def process_monthly_digest_for_all_users():
                         logger.info(
                             "[MONTHLY-DIGEST] ✅ VERIFIED: Session exists with "
                             "magic_timestamp=%s and domain_magic=%s",
-                            verification_task.get('magic_timestamp'),
-                            verification_task.get('domain_magic')
+                            verification_task.get("magic_timestamp"),
+                            verification_task.get("domain_magic"),
                         )
                     else:
                         logger.error(
@@ -437,17 +439,17 @@ async def process_monthly_digest_for_all_users():
                 except Exception as session_error:
                     logger.error(
                         "[MONTHLY-DIGEST] ❌ Failed to create session for %s: %s",
-                        email, str(session_error)
+                        email,
+                        str(session_error),
                     )
                     logger.error(
                         "[MONTHLY-DIGEST] ❌ Exception type: %s",
-                        type(session_error).__name__
+                        type(session_error).__name__,
                     )
                     import traceback
 
                     logger.error(
-                        "[MONTHLY-DIGEST] ❌ Full traceback: %s",
-                        traceback.format_exc()
+                        "[MONTHLY-DIGEST] ❌ Full traceback: %s", traceback.format_exc()
                     )
                     # Continue anyway, but log the error
 
@@ -512,7 +514,8 @@ async def process_monthly_digest_for_all_users():
                             logger.info(
                                 "[MONTHLY-DIGEST] ✅ SUCCESS: Email sent for %s "
                                 "to deva@xposedornot.com (#%s)",
-                                email, i
+                                email,
+                                i,
                             )
                         else:
                             email_sending_errors += 1
@@ -527,7 +530,9 @@ async def process_monthly_digest_for_all_users():
                                 }
                             )
                             logger.error(
-                                "[MONTHLY-DIGEST] ❌ API ERROR for %s: %s", email, error_msg
+                                "[MONTHLY-DIGEST] ❌ API ERROR for %s: %s",
+                                email,
+                                error_msg,
                             )
 
                 except httpx.RequestError as e:
@@ -580,26 +585,29 @@ async def process_monthly_digest_for_all_users():
         logger.info("[MONTHLY-DIGEST] 📊 FINAL SUMMARY:")
         logger.info("[MONTHLY-DIGEST] ✅ Emails sent successfully: %s", emails_sent)
         logger.info(
-            "[MONTHLY-DIGEST] ❌ HTML generation errors: %s",
-            html_generation_errors
+            "[MONTHLY-DIGEST] ❌ HTML generation errors: %s", html_generation_errors
         )
         logger.info(
             "[MONTHLY-DIGEST] ❌ Email sending errors: %s", email_sending_errors
         )
         logger.info(
             "[MONTHLY-DIGEST] 📈 Success rate: %.2f%% (%s/%s)",
-            success_rate, emails_sent, len(unique_emails)
+            success_rate,
+            emails_sent,
+            len(unique_emails),
         )
 
         if detailed_errors:
             logger.error(
                 "[MONTHLY-DIGEST] ⚠️ Error summary: %s total errors occurred",
-                len(detailed_errors)
+                len(detailed_errors),
             )
             for error in detailed_errors[:5]:  # Log first 5 errors
                 logger.error(
                     "[MONTHLY-DIGEST] - %s: %s - %s...",
-                    error['email'], error['type'], error['error'][:100]
+                    error["email"],
+                    error["type"],
+                    error["error"][:100],
                 )
 
         return result

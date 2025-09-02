@@ -37,7 +37,7 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
 @custom_rate_limiter("500 per day;100 per hour")
 async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResponse:
     """Returns detailed summary of data breaches.
-    
+
     Including yearly count, top breaches, and recent breaches.
     """
     try:

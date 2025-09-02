@@ -54,7 +54,7 @@ class SchedulerService:
                     logger.debug(
                         "Monthly digest check - today is %s, "
                         "waiting for first Tuesday of month",
-                        now.strftime('%A %d')
+                        now.strftime("%A %d"),
                     )
                 return
 
@@ -67,8 +67,7 @@ class SchedulerService:
                         last_run = f.read().strip()
                     if last_run == today_str:
                         logger.info(
-                            "Monthly digest already triggered today (%s)",
-                            today_str
+                            "Monthly digest already triggered today (%s)", today_str
                         )
                         return
             except Exception:
@@ -108,9 +107,7 @@ class SchedulerService:
                 loop.close()
 
         except Exception as e:
-            logger.error(
-                "Direct call to monthly digest function failed: %s", str(e)
-            )
+            logger.error("Direct call to monthly digest function failed: %s", str(e))
             raise
 
     def start_scheduler(self):
