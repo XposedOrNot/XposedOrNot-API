@@ -112,8 +112,7 @@ async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
 
 
 def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
-    """Returns the exposed breaches with details including records, domain, industry,
-    and other metadata."""
+    """Returns the exposed breaches with details including records, domain, industry, and other metadata."""
     breaches_output = {"breaches_details": []}
     breach_list = breaches.split(";")
 

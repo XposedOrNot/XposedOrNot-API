@@ -10,19 +10,19 @@ from typing import List, Union
 # Third-party imports
 import domcheck
 import httpx
-from google.api_core import exceptions as google_exceptions
-from google.cloud import datastore
 from fastapi import APIRouter, HTTPException, Query, Request
+from google.cloud import datastore
+from google.api_core import exceptions as google_exceptions
 from pydantic import EmailStr
 
 # Local imports
+from utils.custom_limiter import custom_rate_limiter
 from config.settings import XMLAPI_KEY
 from models.base import BaseResponse
 from services.send_email import (
     send_domain_confirmation,
     send_domain_verified_success,
 )
-from utils.custom_limiter import custom_rate_limiter
 from utils.request import get_client_ip, get_user_agent_info
 from utils.token import generate_confirmation_token
 from utils.validation import validate_email_with_tld, validate_variables

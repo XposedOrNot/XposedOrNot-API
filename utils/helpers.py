@@ -13,6 +13,7 @@ from fastapi import Request
 from user_agents import parse
 
 # Local imports
+from utils.validation import validate_url, validate_variables, validate_email_with_tld
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -70,9 +71,9 @@ def get_client_ip(request: Request) -> str:
     client_ip = getattr(request.client, "host", "unknown")
 
     if client_ip == "unknown" or client_ip.startswith("169.254"):
-        logger.warning("Potentially invalid IP address detected: %s", client_ip)
+        logger.warning(f"Potentially invalid IP address detected: {client_ip}")
         # Try to get any other available IP information
-        logger.warning("All available headers: %s", dict(headers))
+        logger.warning(f"All available headers: {dict(headers)}")
 
     return client_ip
 
