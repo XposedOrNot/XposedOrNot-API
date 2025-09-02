@@ -3,13 +3,13 @@
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone, timedelta
-from typing import Optional
-import schedule
 import time
 import threading
-import httpx
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from typing import Optional
+
+import schedule
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +24,13 @@ class SchedulerService:
 
     def schedule_monthly_digest(self):
         """Schedule monthly digest to run at 9 AM EST on first Tuesday of every month."""
-        # Schedule for 9 AM EST (which is 14:00 UTC during standard time, 13:00 UTC during daylight saving)
+        # Schedule for 9 AM EST (which is 14:00 UTC during standard time,
+        # 13:00 UTC during daylight saving)
         # We'll use 13:00 UTC to be safe during daylight saving time
         schedule.every().day.at("13:00").do(self._trigger_monthly_digest_job)
         logger.info(
-            "Monthly digest scheduled for 9 AM EST (13:00 UTC) daily - will check for first Tuesday of month"
+            "Monthly digest scheduled for 9 AM EST (13:00 UTC) daily - "
+            "will check for first Tuesday of month"
         )
 
     def _is_first_tuesday_of_month(self, date):
@@ -50,7 +52,9 @@ class SchedulerService:
                 # Only log every 7 days to avoid spam
                 if now.day % 7 == 0:
                     logger.debug(
-                        f"Monthly digest check - today is {now.strftime('%A %d')}, waiting for first Tuesday of month"
+                        "Monthly digest check - today is %s, "
+                        "waiting for first Tuesday of month",
+                        now.strftime('%A %d')
                     )
                 return
 
@@ -63,7 +67,8 @@ class SchedulerService:
                         last_run = f.read().strip()
                     if last_run == today_str:
                         logger.info(
-                            f"Monthly digest already triggered today ({today_str})"
+                            "Monthly digest already triggered today (%s)",
+                            today_str
                         )
                         return
             except Exception:
@@ -82,16 +87,15 @@ class SchedulerService:
             except Exception:
                 pass  # Ignore file errors
 
-            logger.info(f"Monthly digest triggered successfully: {result}")
+            logger.info("Monthly digest triggered successfully: %s", result)
 
         except Exception as e:
-            logger.error(f"Failed to trigger monthly digest: {str(e)}")
+            logger.error("Failed to trigger monthly digest: %s", str(e))
 
     def _call_monthly_digest_api(self):
         """Call monthly digest function directly."""
         try:
             # Import and call the internal function directly
-            import asyncio
             from api.v1.monthly_digest import process_monthly_digest_for_all_users
 
             # Run the async function in a new event loop
@@ -104,7 +108,9 @@ class SchedulerService:
                 loop.close()
 
         except Exception as e:
-            logger.error(f"Direct call to monthly digest function failed: {str(e)}")
+            logger.error(
+                "Direct call to monthly digest function failed: %s", str(e)
+            )
             raise
 
     def start_scheduler(self):
@@ -132,7 +138,7 @@ class SchedulerService:
                 schedule.run_pending()
                 time.sleep(60)  # Check every minute
             except Exception as e:
-                logger.error(f"Scheduler loop error: {str(e)}")
+                logger.error("Scheduler loop error: %s", str(e))
                 time.sleep(60)
 
     def stop_scheduler(self):
@@ -167,7 +173,7 @@ class SchedulerService:
             result = future.result(timeout=300)
             return result
         except Exception as e:
-            logger.error(f"Manual trigger failed: {str(e)}")
+            logger.error("Manual trigger failed: %s", str(e))
             raise
 
 
@@ -181,7 +187,7 @@ def start_scheduler():
         scheduler_service.start_scheduler()
         logger.info("Scheduler service started successfully")
     except Exception as e:
-        logger.error(f"Failed to start scheduler service: {str(e)}")
+        logger.error("Failed to start scheduler service: %s", str(e))
 
 
 def stop_scheduler():
