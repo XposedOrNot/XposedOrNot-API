@@ -261,9 +261,19 @@ async def send_domain_breaches(
     request: Request,
     email: Optional[str] = Query(None),
     token: Optional[str] = Query(None),
+    time_filter: Optional[str] = Query("all"),
 ) -> Union[DomainBreachesResponse, DomainBreachesErrorResponse]:
     """
     Retrieves and sends the data breaches validated by token and email.
+
+    Args:
+        request: FastAPI request object
+        email: Email address for authentication
+        token: Token for authentication
+        time_filter: Filter breaches by time period ('all', '12m', '6m')
+                    - 'all': No time filtering (default)
+                    - '12m': Only breaches added in last 12 months
+                    - '6m': Only breaches added in last 6 months
     """
     try:
         # Check for presence of email and token
@@ -292,6 +302,15 @@ async def send_domain_breaches(
             raise HTTPException(
                 status_code=400,
                 detail=DomainBreachesErrorResponse(Error="Invalid request URL").dict(),
+            )
+
+        # Validate time_filter parameter
+        if time_filter not in ["all", "12m", "6m"]:
+            raise HTTPException(
+                status_code=400,
+                detail=DomainBreachesErrorResponse(
+                    Error="Invalid time_filter. Must be 'all', '12m', or '6m'"
+                ).dict(),
             )
 
         # Check for matching session in xon_domains_session
@@ -327,6 +346,18 @@ async def send_domain_breaches(
         if not verified_domains:
             return DomainBreachesErrorResponse(Error="No verified domains found")
 
+        # Calculate time threshold for filtering
+        time_threshold = None
+        if time_filter == "12m":
+            time_threshold = datetime.datetime.utcnow().replace(
+                tzinfo=datetime.timezone.utc
+            ) - datetime.timedelta(days=365)
+        elif time_filter == "6m":
+            time_threshold = datetime.datetime.utcnow().replace(
+                tzinfo=datetime.timezone.utc
+            ) - datetime.timedelta(days=183)
+        # If time_filter == "all", time_threshold remains None (no filtering)
+
         current_year = datetime.datetime.utcnow().year
         yearly_summary = {str(year): 0 for year in range(current_year, 2006, -1)}
         yearly_breach_summary = {
@@ -353,6 +384,21 @@ async def send_domain_breaches(
                 breach = client.get(breach_key)
 
                 if breach:
+                    # Apply time filtering if specified
+                    if time_threshold is not None:
+                        breach_timestamp = breach.get("timestamp")
+                        if breach_timestamp is None:
+                            continue  # Skip breaches without timestamp
+
+                        # Ensure both timestamps have timezone info for comparison
+                        if breach_timestamp.tzinfo is None:
+                            breach_timestamp = breach_timestamp.replace(
+                                tzinfo=datetime.timezone.utc
+                            )
+
+                        if breach_timestamp < time_threshold:
+                            continue  # Skip this breach if it's outside the time filter
+
                     default_breach_info = {
                         "breached_date": None,
                         "logo": "",
