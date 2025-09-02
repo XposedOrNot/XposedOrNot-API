@@ -471,12 +471,12 @@ async def process_monthly_digest_for_all_users():
 
                 current_month = datetime.now(timezone.utc).strftime("%B")
 
-                # EMAIL SENDING ENABLED FOR TESTING - sending to deva@xposedornot.com
+                # EMAIL SENDING ENABLED - sending to actual user emails
                 data = {
                     "Messages": [
                         {
                             "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
-                            "To": [{"Email": "deva@xposedornot.com", "Name": "User"}],
+                            "To": [{"Email": email, "Name": "User"}],
                             "Subject": f"🚨 New breaches detected — check your exposure ({current_month} update)",
                             "HTMLPart": html_content,
                             "TextPart": f"XposedOrNot Monthly Digest - Visit https://xposedornot.com to view your breach report for {email}",
@@ -499,7 +499,7 @@ async def process_monthly_digest_for_all_users():
                         if response.status_code == 200:
                             emails_sent += 1
                             logger.info(
-                                f"[MONTHLY-DIGEST] ✅ SUCCESS: Email sent for {email} to deva@xposedornot.com (#{i})"
+                                f"[MONTHLY-DIGEST] ✅ SUCCESS: Email sent to {email} (#{i})"
                             )
                         else:
                             email_sending_errors += 1
