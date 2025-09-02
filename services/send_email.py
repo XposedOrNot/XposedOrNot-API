@@ -445,7 +445,8 @@ async def send_monthly_digest_email(
                     "To": [{"Email": email}],
                     "TemplateID": template_id,
                     "TemplateLanguage": True,
-                    "Subject": f"🔒 New breaches detected – check your exposure ({month_year.split()[0]} update)",
+                    "Subject": f"🔒 New breaches detected – check your exposure "
+                    f"({month_year.split()[0]} update)",
                     "Variables": {
                         "month_year": month_year,
                         "user_exposures": formatted_exposures,

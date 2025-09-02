@@ -1,6 +1,7 @@
 """Main XON-API entry point."""
 
 # Third-party imports
+import asyncio
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse
@@ -430,7 +431,6 @@ async def get_openapi_json():
 @app.get("/_health", include_in_schema=False)
 async def health_check():
     """Internal health check endpoint to verify Redis connectivity."""
-    import asyncio
 
     try:
         await asyncio.wait_for(redis_pool.ping(), timeout=2.0)
@@ -959,7 +959,6 @@ app.openapi = custom_openapi
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup resources on application shutdown."""
-    import asyncio
 
     try:
 
