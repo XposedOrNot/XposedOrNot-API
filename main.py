@@ -35,10 +35,12 @@ from api.v1 import (
     domain_verification,
     feeds,
     metrics,
+    monthly_digest,
 )
 
 # Local imports - Services
 from services.cloudflare import unblock
+from services.scheduler import start_scheduler
 
 # Local imports - Models
 from models.responses import AlertResponse
@@ -347,8 +349,25 @@ app.include_router(
     domain_phishing.router,
     prefix="/v1",
     tags=["domain_phishing"],
+    include_in_schema=False,
+)
+app.include_router(
+    monthly_digest.router,
+    prefix="/v1", 
+    tags=["monthly_digest"],
     include_in_schema=True,
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services on startup."""
+    # Start the scheduler for automated tasks (can be disabled via env var)
+    import os
+    if os.environ.get("DISABLE_SCHEDULER", "false").lower() != "true":
+        start_scheduler()
+    else:
+        print("Scheduler disabled via DISABLE_SCHEDULER environment variable")
 
 
 @app.get("/", include_in_schema=False)

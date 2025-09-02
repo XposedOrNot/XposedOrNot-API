@@ -7,7 +7,7 @@
 import os
 import time
 import socket
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # Third-party imports
 import httpx
@@ -385,6 +385,99 @@ async def send_alert_email(email: str, confirm_url: str) -> Dict[str, Any]:
             return response.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to send alert email") from e
+
+
+async def send_monthly_digest_email(
+    email: str,
+    original_user_email: str,
+    user_exposures: List[Dict],
+    new_breaches: List[Dict],
+    month_year: str,
+    user_domains: List[str],
+    template_id: int = 999999  # TODO: Replace with actual Mailjet template ID
+) -> Dict[str, Any]:
+    """
+    Sends XposedOrNot Monthly Digest Email
+    
+    Args:
+        email: Recipient email address (can be test email)
+        original_user_email: Original user email for tracking
+        user_exposures: List of user's breach exposures from last 6 months
+        new_breaches: List of new breaches added in last month
+        month_year: Current month and year (e.g., "August 2025")
+        user_domains: List of user's validated domains
+        template_id: Mailjet template ID for monthly digest
+    """
+    try:
+        # Format user exposures for template
+        formatted_exposures = []
+        for exposure in user_exposures:
+            formatted_exposures.append({
+                "breach_name": exposure.get("breach_name", ""),
+                "breach_date": exposure.get("breach_date", ""),
+                "data_exposed": exposure.get("data_exposed", ""),
+                "records_count": exposure.get("records_count", 0),
+                "domain": exposure.get("domain", "")
+            })
+        
+        # Format new breaches for template
+        formatted_new_breaches = []
+        for breach in new_breaches:
+            formatted_new_breaches.append({
+                "breach_name": breach.get("breach_name", ""),
+                "breach_date": breach.get("breach_date", ""),
+                "records_exposed": breach.get("records_exposed", 0),
+                "data_types": breach.get("data_types", "")
+            })
+        
+        # Prepare email data
+        data = {
+            "Messages": [
+                {
+                    "From": {
+                        "Email": FROM_EMAIL,
+                        "Name": FROM_NAME,
+                    },
+                    "To": [{"Email": email}],
+                    "TemplateID": template_id,
+                    "TemplateLanguage": True,
+                    "Subject": f"🔒 New breaches detected – check your exposure ({month_year.split()[0]} update)",
+                    "Variables": {
+                        "month_year": month_year,
+                        "user_exposures": formatted_exposures,
+                        "new_breaches": formatted_new_breaches,
+                        "user_domains": user_domains,
+                        "exposures_count": len(formatted_exposures),
+                        "new_breaches_count": len(formatted_new_breaches),
+                        "original_user_email": original_user_email,  # For debugging
+                        "recipient_email": email  # For debugging
+                    },
+                }
+            ]
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
+            )
+
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=500, detail=f"Failed to send monthly digest email: {response.text}"
+                )
+            
+            return response.json()
+            
+    except httpx.ConnectError as e:
+        raise HTTPException(
+            status_code=500, detail="Unable to connect to email service"
+        ) from e
+    except httpx.TimeoutException as e:
+        raise HTTPException(status_code=500, detail="Email service timeout") from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send monthly digest email: {str(e)}"
+        ) from e
 
 
 async def send_subscribe_leaks_initial(email: str, confirm_url: str) -> Dict[str, Any]:

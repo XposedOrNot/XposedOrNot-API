@@ -49,6 +49,21 @@ class DomainExposureResponse(BaseModel):
     SearchStatus: str
 
 
+class MonthlyDigestResponse(BaseResponse):
+    """Response model for monthly digest endpoint."""
+
+    task_id: str
+    trigger_type: str = Field(description="manual or automatic")
+    target_email: Optional[str] = Field(default=None, description="Target email for manual triggers")
+    testing_mode: bool = Field(description="Whether emails are sent to test address")
+
+
+class MonthlyDigestErrorResponse(BaseModel):
+    """Error response model for monthly digest endpoint."""
+
+    Error: str
+
+
 class BreachSummary(BaseModel):
     """Model for breach summary."""
 
