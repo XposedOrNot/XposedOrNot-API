@@ -5,9 +5,9 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from utils.custom_limiter import custom_rate_limiter
 from models.responses import MetricsResponse, DetailedMetricsResponse
 from services.analytics import get_detailed_metrics
+from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import validate_url
 
 router = APIRouter()
@@ -36,7 +36,10 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
 @router.get("/metrics/detailed", response_model=DetailedMetricsResponse)
 @custom_rate_limiter("500 per day;100 per hour")
 async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResponse:
-    """Returns detailed summary of data breaches including yearly count, top breaches, and recent breaches."""
+    """Returns detailed summary of data breaches.
+    
+    Including yearly count, top breaches, and recent breaches.
+    """
     try:
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")

@@ -1,11 +1,16 @@
-import time
-import redis.asyncio as redis
+"""Custom rate limiter with Redis backend and violation tracking."""
+
+# Standard library imports
 import random
+import time
+from datetime import datetime, timedelta
 from functools import wraps
 from typing import Callable, Dict, List, Tuple, Optional
+
+# Third-party imports
+import redis.asyncio as redis
 from fastapi import Request, HTTPException
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
-from datetime import datetime, timedelta
 
 from config.settings import REDIS_URL
 from utils.helpers import get_client_ip
@@ -241,7 +246,10 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         "error": "Request dropped due to violation history",
                         "violation_count": violation_count,
                         "drop_percentage": f"{drop_percentage * 100:.0f}%",
-                        "detail": f"Request dropped due to {violation_count} previous violations. Please reduce your request rate.",
+                        "detail": (
+                            "Request dropped due to {} previous violations. "
+                            "Please reduce your request rate."
+                        ).format(violation_count),
                     },
                     headers={
                         "X-Dropped": "true",
@@ -258,7 +266,10 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
 
                 error_detail = {
                     "error": "Rate limit exceeded",
-                    "detail": f"Rate limit exceeded for endpoint {endpoint}. Please try again after {retry_after} seconds.",
+                    "detail": (
+                        "Rate limit exceeded for endpoint {}. "
+                        "Please try again after {} seconds."
+                    ).format(endpoint, retry_after),
                     "retry_after": retry_after,
                     "reset_time": reset_time.isoformat(),
                 }
