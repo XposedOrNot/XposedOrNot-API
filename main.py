@@ -41,13 +41,12 @@ from api.v1 import (
 # Local imports - Services
 from services.cloudflare import unblock
 
-# from services.scheduler import start_scheduler  # Disabled - using Google Cloud Scheduler
-
 # Local imports - Models
 from models.responses import AlertResponse
 
 # Local imports - Utils
 from utils.custom_limiter import custom_rate_limiter, redis_pool
+from utils.scan_protection import handle_404_with_protection
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -955,6 +954,13 @@ def custom_openapi():
 
 
 app.openapi = custom_openapi
+
+
+# Add custom 404 handler for scanning protection
+@app.exception_handler(404)
+async def custom_404_handler(request: Request, exc: HTTPException):
+    """Custom 404 handler with scanning protection."""
+    return await handle_404_with_protection(request, exc)
 
 
 @app.on_event("shutdown")
