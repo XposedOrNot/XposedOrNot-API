@@ -3,13 +3,15 @@
 import asyncio
 import logging
 import os
+import socket
+import threading
+import time
+import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-import schedule
-import time
-import threading
-import httpx
+
 import redis
+import schedule
 
 # from concurrent.futures import ThreadPoolExecutor  # No longer needed
 
@@ -22,10 +24,9 @@ try:
         REDIS_PORT,
         REDIS_DB,
         REDIS_PASSWORD,
-        CF_UNBLOCK_MAGIC,
-        BASE_URL,
         ENVIRONMENT,
     )
+    from api.v1.monthly_digest import process_monthly_digest_for_all_users
 
     redis_client = redis.Redis(
         host=REDIS_HOST,
@@ -54,17 +55,20 @@ class SchedulerService:
         # schedule.every().day.at("09:00").do(self._run_async_trigger)
 
         logger.info(
-            f"📅 SCHEDULER STARTED: Monthly digest scheduled for 09:00 UTC on first Tuesday of month (Environment: {ENVIRONMENT})"
+            f"📅 SCHEDULER STARTED: Monthly digest scheduled for 09:00 UTC on "
+            f"first Tuesday of month (Environment: {ENVIRONMENT})"
         )
         logger.info(
-            f"📅 SCHEDULER: Current UTC time is {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            f"📅 SCHEDULER: Current UTC time is "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
         )
 
         # Test the first Tuesday logic immediately
         test_date = datetime.now(timezone.utc)
         is_first_tuesday = self._is_first_tuesday_of_month(test_date)
         logger.info(
-            f"📅 SCHEDULER: Today ({test_date.strftime('%A %Y-%m-%d')}) is first Tuesday: {is_first_tuesday}"
+            f"📅 SCHEDULER: Today ({test_date.strftime('%A %Y-%m-%d')}) "
+            f"is first Tuesday: {is_first_tuesday}"
         )
 
     def _is_first_tuesday_of_month(self, date):
@@ -76,15 +80,18 @@ class SchedulerService:
         # Find first day of the month
         first_day = date.replace(day=1)
         logger.debug(
-            f"📅 FIRST_TUESDAY_CHECK: First day of month: {first_day.strftime('%A %Y-%m-%d')} (weekday: {first_day.weekday()})"
+            f"📅 FIRST_TUESDAY_CHECK: First day of month: "
+            f"{first_day.strftime('%A %Y-%m-%d')} (weekday: {first_day.weekday()})"
         )
 
-        # Tuesday is weekday 1 (Monday=0, Tuesday=1, Wednesday=2, Thursday=3, Friday=4, Saturday=5, Sunday=6)
+        # Tuesday is weekday 1 (Monday=0, Tuesday=1, Wednesday=2,
+        # Thursday=3, Friday=4, Saturday=5, Sunday=6)
         days_to_first_tuesday = (1 - first_day.weekday()) % 7
         first_tuesday = first_day + timedelta(days=days_to_first_tuesday)
 
         logger.debug(
-            f"📅 FIRST_TUESDAY_CHECK: Calculated first Tuesday: {first_tuesday.strftime('%A %Y-%m-%d')}"
+            f"📅 FIRST_TUESDAY_CHECK: Calculated first Tuesday: "
+            f"{first_tuesday.strftime('%A %Y-%m-%d')}"
         )
         logger.debug(
             f"📅 FIRST_TUESDAY_CHECK: Checking date: {date.strftime('%A %Y-%m-%d')}"
@@ -108,7 +115,8 @@ class SchedulerService:
             # Always use UTC timezone for consistency
             now = datetime.now(timezone.utc)
             logger.info(
-                f"🚀 DIGEST_TRIGGER: Checking monthly digest trigger at {now.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                f"🚀 DIGEST_TRIGGER: Checking monthly digest trigger at "
+                f"{now.strftime('%Y-%m-%d %H:%M:%S UTC')}"
             )
             logger.info(f"🚀 DIGEST_TRIGGER: Today is {now.strftime('%A %B %d, %Y')}")
 
@@ -120,15 +128,18 @@ class SchedulerService:
 
             if not is_first_tuesday:
                 logger.info(
-                    f"🚀 DIGEST_TRIGGER: ❌ CONDITIONS NOT MET - Today is not the first Tuesday of the month"
+                    f"🚀 DIGEST_TRIGGER: ❌ CONDITIONS NOT MET - Today is not the "
+                    f"first Tuesday of the month"
                 )
                 logger.info(
-                    f"🚀 DIGEST_TRIGGER: Waiting for first Tuesday. Current day: {now.strftime('%A %d')}"
+                    f"🚀 DIGEST_TRIGGER: Waiting for first Tuesday. Current day: "
+                    f"{now.strftime('%A %d')}"
                 )
                 return
 
             logger.info(
-                f"🚀 DIGEST_TRIGGER: ✅ CONDITIONS MET - Today IS the first Tuesday of the month!"
+                f"🚀 DIGEST_TRIGGER: ✅ CONDITIONS MET - Today IS the first "
+                f"Tuesday of the month!"
             )
 
             # ENHANCED: Check if we already sent THIS MONTH (not just today)
@@ -140,7 +151,9 @@ class SchedulerService:
                     last_run = redis_client.get(last_run_key)
                     if last_run and last_run.startswith(current_month):
                         logger.info(
-                            f"🚀 DIGEST_TRIGGER: ❌ ALREADY TRIGGERED - Monthly digest already sent this month ({current_month}) in {ENVIRONMENT} environment"
+                            f"🚀 DIGEST_TRIGGER: ❌ ALREADY TRIGGERED - Monthly digest "
+                            f"already sent this month ({current_month}) in {ENVIRONMENT} "
+                            f"environment"
                         )
                         logger.info(
                             f"🚀 DIGEST_TRIGGER: Last run ({ENVIRONMENT}): {last_run}"
@@ -148,19 +161,23 @@ class SchedulerService:
                         return
                     else:
                         logger.info(
-                            f"🚀 DIGEST_TRIGGER: ✅ NEW MONTH - Last run ({ENVIRONMENT}) was: {last_run or 'never'}, proceeding..."
+                            f"🚀 DIGEST_TRIGGER: ✅ NEW MONTH - Last run ({ENVIRONMENT}) "
+                            f"was: {last_run or 'never'}, proceeding..."
                         )
                 except Exception as e:
                     logger.error(
-                        f"🚀 DIGEST_TRIGGER: ⚠️ Redis check failed: {str(e)}, proceeding anyway..."
+                        f"🚀 DIGEST_TRIGGER: ⚠️ Redis check failed: {str(e)}, "
+                        f"proceeding anyway..."
                     )
             else:
                 logger.warning(
-                    "🚀 DIGEST_TRIGGER: ⚠️ Redis client not available, skipping duplicate check"
+                    "🚀 DIGEST_TRIGGER: ⚠️ Redis client not available, "
+                    "skipping duplicate check"
                 )
 
             logger.info(
-                "🚀 DIGEST_TRIGGER: ✅ FUNCTION CALLED - Triggering monthly digest for all validated users"
+                "🚀 DIGEST_TRIGGER: ✅ FUNCTION CALLED - Triggering monthly digest "
+                "for all validated users"
             )
 
             # Check if a digest task is already running with atomic Redis operation
@@ -169,7 +186,8 @@ class SchedulerService:
                 try:
                     task_start_time = now.strftime("%Y-%m-%d %H:%M:%S UTC")
                     # Use atomic SET NX EX operation to prevent race conditions
-                    # Only sets the key if it doesn't exist, with 30-minute expiry (reduced from 2 hours)
+                    # Only sets the key if it doesn't exist, with 30-minute expiry
+                    # (reduced from 2 hours)
                     was_set = redis_client.set(
                         running_task_key, task_start_time, nx=True, ex=1800
                     )
@@ -178,22 +196,27 @@ class SchedulerService:
                         # Task is already running, get the start time for logging
                         existing_task = redis_client.get(running_task_key)
                         logger.warning(
-                            f"🚀 DIGEST_TRIGGER: ⚠️ TASK ALREADY RUNNING - Another digest task is in progress (started: {existing_task})"
+                            f"🚀 DIGEST_TRIGGER: ⚠️ TASK ALREADY RUNNING - Another "
+                            f"digest task is in progress (started: {existing_task})"
                         )
                         return
                     else:
                         logger.info(
-                            f"🚀 DIGEST_TRIGGER: 🔄 TASK STARTED - Atomically marked digest task as running: {task_start_time}"
+                            f"🚀 DIGEST_TRIGGER: 🔄 TASK STARTED - Atomically marked "
+                            f"digest task as running: {task_start_time}"
                         )
                 except Exception as e:
                     logger.error(
-                        f"🚀 DIGEST_TRIGGER: ⚠️ Failed to atomically check/set running task Redis key: {str(e)}, aborting to prevent duplicates"
+                        f"🚀 DIGEST_TRIGGER: ⚠️ Failed to atomically check/set "
+                        f"running task Redis key: {str(e)}, aborting to prevent "
+                        f"duplicates"
                     )
                     return  # Don't proceed if Redis operations fail, to prevent duplicates
 
             # Use direct function call for identical execution context
             logger.info(
-                "🚀 DIGEST_TRIGGER: 🔄 CALLING MANUAL TRIGGER DIRECTLY - Using identical execution context"
+                "🚀 DIGEST_TRIGGER: 🔄 CALLING MANUAL TRIGGER DIRECTLY - "
+                "Using identical execution context"
             )
 
             # Call manual trigger function directly for consistent performance
@@ -239,14 +262,17 @@ class SchedulerService:
                         redis_client.setex(last_run_key, ttl_seconds, full_timestamp)
 
                         logger.info(
-                            f"🚀 DIGEST_TRIGGER: ✅ SUCCESS REDIS UPDATED - HTTP trigger successful, set '{last_run_key}' = '{full_timestamp}'"
+                            f"🚀 DIGEST_TRIGGER: ✅ SUCCESS REDIS UPDATED - HTTP trigger "
+                            f"successful, set '{last_run_key}' = '{full_timestamp}'"
                         )
                         logger.info(
-                            f"🚀 DIGEST_TRIGGER: ✅ TTL: {ttl_seconds} seconds (expires: {ttl_until.strftime('%Y-%m-%d %H:%M:%S UTC')})"
+                            f"🚀 DIGEST_TRIGGER: ✅ TTL: {ttl_seconds} seconds "
+                            f"(expires: {ttl_until.strftime('%Y-%m-%d %H:%M:%S UTC')})"
                         )
                     else:
                         logger.warning(
-                            f"🚀 DIGEST_TRIGGER: ⚠️ SUCCESS REDIS NOT UPDATED - Direct call failed or returned error"
+                            f"🚀 DIGEST_TRIGGER: ⚠️ SUCCESS REDIS NOT UPDATED - "
+                            f"Direct call failed or returned error"
                         )
                 except Exception as redis_error:
                     logger.error(
@@ -268,10 +294,10 @@ class SchedulerService:
 
         except Exception as e:
             logger.error(
-                f"🚀 DIGEST_TRIGGER: ❌ FUNCTION FAILED - Error triggering monthly digest: {str(e)}"
+                f"🚀 DIGEST_TRIGGER: ❌ FUNCTION FAILED - Error triggering "
+                f"monthly digest: {str(e)}"
             )
             logger.error(f"🚀 DIGEST_TRIGGER: ❌ Exception type: {type(e).__name__}")
-            import traceback
 
             logger.error(
                 f"🚀 DIGEST_TRIGGER: ❌ Full traceback: {traceback.format_exc()}"
@@ -306,11 +332,11 @@ class SchedulerService:
                     "🚀 DIRECT_TRIGGER: ✅ Manual trigger via direct call successful"
                 )
                 return {"status": "success", "data": result}
-            else:
-                logger.error(
-                    "🚀 DIRECT_TRIGGER: ❌ Direct call returned error or no result"
-                )
-                return {"status": "error", "data": result}
+
+            logger.error(
+                "🚀 DIRECT_TRIGGER: ❌ Direct call returned error or no result"
+            )
+            return {"status": "error", "data": result}
 
         except Exception as e:
             logger.error(
@@ -463,8 +489,6 @@ class SchedulerService:
         if redis_client:
             try:
                 # Try to acquire global scheduler lock (expires in 10 minutes, renewed by heartbeat)
-                import socket
-
                 instance_id = f"{socket.gethostname()}_{os.getpid()}"
                 was_set = redis_client.set(
                     scheduler_lock_key, instance_id, nx=True, ex=600
@@ -473,23 +497,27 @@ class SchedulerService:
                 if not was_set:
                     existing_instance = redis_client.get(scheduler_lock_key)
                     logger.warning(
-                        f"⚠️ SCHEDULER_START: Another scheduler instance already running: {existing_instance}"
+                        f"⚠️ SCHEDULER_START: Another scheduler instance already "
+                        f"running: {existing_instance}"
                     )
                     logger.warning(
-                        "⚠️ SCHEDULER_START: This instance will NOT start scheduler to prevent conflicts"
+                        "⚠️ SCHEDULER_START: This instance will NOT start scheduler "
+                        "to prevent conflicts"
                     )
                     return
-                else:
-                    logger.info(
-                        f"🔒 SCHEDULER_START: Acquired global scheduler lock for instance: {instance_id}"
-                    )
+
+                logger.info(
+                    f"🔒 SCHEDULER_START: Acquired global scheduler lock for "
+                    f"instance: {instance_id}"
+                )
 
             except Exception as e:
                 logger.error(
                     f"⚠️ SCHEDULER_START: Failed to acquire scheduler lock: {str(e)}"
                 )
                 logger.error(
-                    "⚠️ SCHEDULER_START: Will NOT start scheduler to prevent conflicts"
+                    "⚠️ SCHEDULER_START: Will NOT start scheduler to prevent "
+                    "conflicts"
                 )
                 return
 
@@ -512,7 +540,8 @@ class SchedulerService:
             "🔄 SCHEDULER_LOOP: Scheduler loop started - checking every 60 seconds"
         )
         logger.info(
-            f"🔄 SCHEDULER_LOOP: Current UTC time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            f"🔄 SCHEDULER_LOOP: Current UTC time: "
+            f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}"
         )
 
         loop_count = 0
@@ -525,7 +554,9 @@ class SchedulerService:
                 if loop_count % 10 == 0:
                     current_time = datetime.now(timezone.utc)
                     logger.info(
-                        f"🔄 SCHEDULER_LOOP: Heartbeat #{loop_count} at {current_time.strftime('%H:%M:%S UTC')} - scheduler running normally"
+                        f"🔄 SCHEDULER_LOOP: Heartbeat #{loop_count} at "
+                        f"{current_time.strftime('%H:%M:%S UTC')} - scheduler running "
+                        f"normally"
                     )
 
                     # Show next scheduled jobs
@@ -574,7 +605,9 @@ class SchedulerService:
         logger.info("Manually triggering monthly digest - direct execution")
         try:
             # Direct execution for consistent performance (no ThreadPoolExecutor)
-            from api.v1.monthly_digest import process_monthly_digest_for_all_users
+            from api.v1.monthly_digest import (
+                process_monthly_digest_for_all_users,
+            )
 
             # Call the async function directly with await (no asyncio.run needed)
             result = await process_monthly_digest_for_all_users()
@@ -592,7 +625,8 @@ class SchedulerService:
             # Only check if we're past the 5th of the month
             if now.day < 5:
                 logger.info(
-                    f"🔍 STARTUP CHECK - Too early in month (day {now.day}), skipping missed digest check"
+                    f"🔍 STARTUP CHECK - Too early in month (day {now.day}), "
+                    f"skipping missed digest check"
                 )
                 return
 
@@ -618,7 +652,8 @@ class SchedulerService:
                     should_send = True
                 elif last_run and not last_run.startswith(current_month):
                     logger.warning(
-                        f"🚨 OLD DIGEST RECORD - Last run: {last_run}, Current month: {current_month}"
+                        f"🚨 OLD DIGEST RECORD - Last run: {last_run}, "
+                        f"Current month: {current_month}"
                     )
                     should_send = True
                 elif not last_run:
@@ -636,12 +671,14 @@ class SchedulerService:
 
                     if now.date() > (first_tuesday.date() + timedelta(days=2)):
                         logger.warning(
-                            "🚨 MISSED DIGEST DETECTED - But startup recovery disabled to prevent race conditions"
+                            "🚨 MISSED DIGEST DETECTED - But startup recovery disabled "
+                            "to prevent race conditions"
                         )
                         # self.executor.submit(self._call_monthly_digest_api)  # COMMENTED OUT - Legacy
                     else:
                         logger.info(
-                            f"🔍 STARTUP CHECK - Still within normal window, first Tuesday was {first_tuesday.date()}"
+                            f"🔍 STARTUP CHECK - Still within normal window, first Tuesday "
+                            f"was {first_tuesday.date()}"
                         )
 
         except Exception as e:
