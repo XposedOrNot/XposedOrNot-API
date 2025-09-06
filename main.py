@@ -40,7 +40,8 @@ from api.v1 import (
 
 # Local imports - Services
 from services.cloudflare import unblock
-from services.scheduler import start_scheduler
+
+# from services.scheduler import start_scheduler  # Disabled - using Google Cloud Scheduler
 
 # Local imports - Models
 from models.responses import AlertResponse
@@ -362,13 +363,13 @@ app.include_router(
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
-    # Start the scheduler for automated tasks (can be disabled via env var)
-    import os
-
-    if os.environ.get("DISABLE_SCHEDULER", "false").lower() != "true":
-        start_scheduler()
-    else:
-        print("Scheduler disabled via DISABLE_SCHEDULER environment variable")
+    # Scheduler disabled - using Google Cloud Scheduler + manual trigger instead
+    # import os
+    # if os.environ.get("DISABLE_SCHEDULER", "false").lower() != "true":
+    #     start_scheduler()
+    # else:
+    #     print("Scheduler disabled via DISABLE_SCHEDULER environment variable")
+    print("Scheduler disabled - using external Google Cloud Scheduler")
 
 
 @app.get("/", include_in_schema=False)

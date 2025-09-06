@@ -17,12 +17,26 @@ from models.responses import (
     MonthlyDigestErrorResponse,
     DetailedBreachInfo,
 )
-from services.send_email import send_monthly_digest_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.validation import validate_email_with_tld, validate_url
 from utils.token import generate_confirmation_token
-from config.settings import REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD, BASE_URL
-from services.scheduler import scheduler_service
+from config.settings import (
+    REDIS_HOST,
+    REDIS_PORT,
+    REDIS_DB,
+    REDIS_PASSWORD,
+    BASE_URL,
+    CF_UNBLOCK_MAGIC,
+    ENVIRONMENT,
+    DEBUG_EMAIL,
+)
+
+from .monthly_digest_helpers import (
+    heartbeat_logger,
+    prefetch_breach_data,
+    batch_create_sessions,
+    generate_monthly_digest_html_optimized,
+)
 import httpx
 
 # Email constants from send_email service
@@ -45,543 +59,484 @@ redis_client = redis.Redis(
 )
 
 
-async def generate_monthly_digest_html(email: str, dashboard_token: str = None) -> str:
-    """
-    Generate complete HTML content for monthly digest email - matches JSON endpoint logic
-    """
+async def process_single_email_optimized(
+    email: str,
+    email_index: int,
+    total_emails: int,
+    batch_num: int,
+    user_domains: list,
+    dashboard_token: str,
+    all_breach_data: dict,
+    client,
+) -> dict:
+    """Optimized single email processing with pre-fetched data."""
     try:
-        # Initialize datastore client
-        client = datastore.Client()
+        # Generate HTML content with pre-fetched data (much faster)
+        html_content = await generate_monthly_digest_html_optimized(
+            email, dashboard_token, user_domains, all_breach_data, client
+        )
 
-        # Get verified domains for this email
-        query = client.query(kind="xon_domains")
-        query.add_filter("email", "=", email.lower().strip())
-        query.add_filter("verified", "=", True)
-        user_domains = [ent["domain"] for ent in query.fetch()]
+        current_month = datetime.now(timezone.utc).strftime("%B")
 
-        # Get user exposures from last 6 months
-        user_exposures = []
-        six_months_ago = datetime.now(timezone.utc) - timedelta(days=180)
+        # Environment-specific email logic
+        if ENVIRONMENT in ["dev", "test"]:
+            # Development/test: send to debug email from environment variable
+            send_to_email = DEBUG_EMAIL
+        else:
+            # Production: send to actual user email
+            send_to_email = email
 
-        for domain in user_domains:
-            # Get domain summary
-            query = client.query(kind="xon_domains_summary")
-            query.add_filter("domain", "=", domain)
+        data = {
+            "Messages": [
+                {
+                    "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
+                    "To": [{"Email": send_to_email, "Name": "User"}],
+                    "Subject": f"🚨 New breaches detected — check your exposure ({current_month} update)",
+                    "HTMLPart": html_content,
+                    "TextPart": f"XposedOrNot Monthly Digest - Visit https://xposedornot.com to view your breach report for {email}",
+                }
+            ]
+        }
 
-            for entity in query.fetch():
-                if entity["breach"] == "No_Breaches":
-                    continue
-
-                # Get breach details
-                breach_key = client.key("xon_breaches", entity["breach"])
-                breach = client.get(breach_key)
-
-                if breach and breach.get("timestamp"):
-                    # Use timestamp field for filtering when data was added
-                    breach_timestamp = breach["timestamp"]
-                    if breach_timestamp >= six_months_ago:
-                        # Safe datetime formatting with error handling
-                        try:
-                            breach_date_str = (
-                                breach.get("breached_date", "").strftime("%b %Y")
-                                if breach.get("breached_date")
-                                else "Unknown"
-                            )
-                            added_timestamp_str = breach_timestamp.strftime("%b %Y")
-                        except (AttributeError, ValueError):
-                            breach_date_str = "Unknown"
-                            added_timestamp_str = "Unknown"
-
-                        # Handle xposed_data field (can be string or list)
-                        data_exposed = breach.get("xposed_data", "")
-                        if isinstance(data_exposed, list):
-                            data_exposed = ";".join(data_exposed)
-
-                        exposure = {
-                            "breach_name": entity.get("breach", "Unknown"),
-                            "breach_date": breach_date_str,
-                            "added_date": added_timestamp_str,
-                            "data_exposed": str(data_exposed),
-                            "records_count": (
-                                int(breach.get("xposed_records", 0))
-                                if breach.get("xposed_records")
-                                else 0
-                            ),
-                            "email_count": (
-                                int(entity.get("email_count", 0))
-                                if entity.get("email_count")
-                                else 0
-                            ),
-                            "domain": domain,
-                        }
-                        user_exposures.append(exposure)
-
-        # Get new breaches added in the last month
-        new_breaches = []
-        one_month_ago = datetime.now(timezone.utc) - timedelta(days=30)
-
-        query = client.query(kind="xon_breaches")
-        query.add_filter("timestamp", ">=", one_month_ago)
-        query.order = ["-timestamp"]
-
-        for breach in query.fetch():
-            # Safe datetime formatting with error handling
-            try:
-                breach_date_str = (
-                    breach.get("breached_date", "").strftime("%b %Y")
-                    if breach.get("breached_date")
-                    else "Unknown"
+        try:
+            async with httpx.AsyncClient() as http_client:
+                response = await http_client.post(
+                    MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
                 )
-                added_date_str = (
-                    breach.get("timestamp", "").strftime("%b %Y")
-                    if breach.get("timestamp")
-                    else "Unknown"
-                )
-            except (AttributeError, ValueError):
-                breach_date_str = "Unknown"
-                added_date_str = "Unknown"
 
-            # Handle data_types field (can be string or list)
-            data_types = breach.get("xposed_data", "")
-            if isinstance(data_types, list):
-                data_types = ";".join(data_types)
+                if response.status_code == 200:
+                    logger.info(
+                        f"[MONTHLY-DIGEST] ✅ Email sent: {email_index}/{total_emails} ({email})"
+                    )
+                    return {"email": email, "status": "success", "type": "sent"}
+                else:
+                    error_msg = f"Mailjet API error: HTTP {response.status_code}"
+                    logger.error(
+                        f"[MONTHLY-DIGEST] ❌ API error for {email}: {error_msg}"
+                    )
+                    return {
+                        "email": email,
+                        "status": "error",
+                        "type": "api_error",
+                        "error": error_msg,
+                    }
 
-            breach_info = {
-                "breach_name": breach.key.name if breach.key.name else "Unknown",
-                "breach_date": breach_date_str,
-                "records_exposed": (
-                    int(breach.get("xposed_records", 0))
-                    if breach.get("xposed_records")
-                    else 0
-                ),
-                "data_types": str(data_types),
-                "added_date": added_date_str,
+        except Exception as e:
+            error_msg = f"Email sending error: {str(e)}"
+            logger.error(f"[MONTHLY-DIGEST] ❌ Send error for {email}: {error_msg}")
+            return {
+                "email": email,
+                "status": "error",
+                "type": "send_error",
+                "error": error_msg,
             }
-            new_breaches.append(breach_info)
-
-        # Generate HTML content - ALWAYS show full template structure
-        current_month_year = datetime.now(timezone.utc).strftime("%B %Y")
-        current_month = current_month_year.split()[0]
-
-        # Summary info for email (replace debug) - process this first
-        domains_text = (
-            ", ".join(user_domains) if user_domains else "No verified domains"
-        )
-        summary_info = "Your summary: <strong>{} verified domains</strong> ({}) • <strong>{} exposures</strong> • <strong>{} new breaches</strong> this month".format(
-            len(user_domains), domains_text, len(user_exposures), len(new_breaches)
-        )
-
-        # Use provided dashboard token or generate new one
-        if not dashboard_token:
-            dashboard_token = await generate_confirmation_token(email)
-
-        # Use production domain for dashboard URL (not API domain)
-        dashboard_base_url = "https://xposedornot.com"
-        email_param = f"email={email}"
-        token_param = f"token={dashboard_token}"
-        dashboard_url = (
-            f"{dashboard_base_url}/breach-dashboard?{email_param}&{token_param}"
-        )
-
-        # Build dynamic table rows first
-        exposure_rows = ""
-        if user_exposures:
-            for exposure in user_exposures[:10]:  # Limit to top 10
-                exposure_rows += f"""
-                                <tr>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{exposure.get('breach_name', 'Unknown')}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{exposure.get('breach_date', 'Unknown')}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{exposure.get('added_date', 'Unknown')}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{exposure.get('records_count', 0):,}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057; font-size: 14px;">{exposure.get('data_exposed', 'Unknown')}</td>
-                                </tr>"""
-        else:
-            exposure_rows = """
-                                <tr>
-                                    <td colspan="5" style="padding: 20px; text-align: center; color: #155724; font-weight: bold; background-color: #d4edda; border: 1px solid #9ca3af;">
-                                        ✅ Good news! No new exposures found for your domains in the last 6 months.
-                                    </td>
-                                </tr>"""
-
-        breach_rows = ""
-        if new_breaches:
-            for breach in new_breaches[:10]:  # Limit to top 10
-                breach_rows += f"""
-                                <tr>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{breach.get('breach_name', 'Unknown')}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{breach.get('breach_date', 'Unknown')}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{breach.get('added_date', 'Unknown')}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057;">{breach.get('records_exposed', 0):,}</td>
-                                    <td style="padding: 10px; border: 1px solid #9ca3af; color: #495057; font-size: 14px;">{breach.get('data_types', 'Unknown')}</td>
-                                </tr>"""
-        else:
-            breach_rows = """
-                                <tr>
-                                    <td colspan="5" style="padding: 20px; text-align: center; color: #155724; font-weight: bold; background-color: #d4edda; border: 1px solid #9ca3af;">
-                                        ✅ No new breaches added this month.
-                                    </td>
-                                </tr>"""
-
-        # Use .format() instead of f-strings to avoid CSS conflicts
-        html_content = """
-        <div style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f8f9fa;">
-            <div style="background-color: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-                
-                <!-- Header -->
-                <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #2c3e50; margin: 0;">XposedOrNot Community Breach Digest</h1>
-                    <p style="color: #7f8c8d; font-size: 16px; margin: 10px 0 0 0;">({current_month_year})</p>
-                </div>
-
-                <!-- Greeting -->
-                <p style="color: #34495e; font-size: 16px; line-height: 1.6;">Hello there,</p>
-                <p style="color: #34495e; font-size: 16px; line-height: 1.6;">
-                    We've updated XposedOrNot with new breach data this month. Here's your personalized summary:
-                </p>
-
-                <!-- Summary Info -->
-                <div style="background-color: #e8f4fd; padding: 15px; font-size: 14px; color: #2c3e50; margin: 15px 0; border-radius: 6px; border-left: 4px solid #3498db;">
-                    📊 {summary_info}
-                </div>
-
-                <!-- User Exposures Section -->
-                <div style="margin: 30px 0;">
-                    <h2 style="color: #e74c3c; font-size: 18px; margin-bottom: 15px;">🚨 Your Exposures (last 6 months):</h2>
-                    
-                    <!-- Always show table structure -->
-                    <div style="background-color: #fff5f5; border-left: 4px solid #e74c3c; padding: 15px; margin: 15px 0;">
-                        <table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #9ca3af;">
-                            <thead>
-                                <tr style="background-color: #f8f9fa;">
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Breach Name</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Breached Date</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Added Date</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Records</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Data Types</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-{exposure_rows}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div style="text-align: center; margin: 20px 0;">
-                        <a href="{dashboard_url}" style="background-color: #e74c3c; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">🔍 View your full breach report</a>
-                    </div>
-                </div>
-
-                <!-- New Breaches Section -->
-                <div style="margin: 30px 0;">
-                    <h2 style="color: #f39c12; font-size: 18px; margin-bottom: 15px;">🚨 New Breaches Added in {current_month}:</h2>
-                    
-                    <!-- Always show new breaches table -->
-                    <div style="background-color: #fff9e6; border-left: 4px solid #f39c12; padding: 15px; margin: 15px 0;">
-                        <table style="width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #9ca3af;">
-                            <thead>
-                                <tr style="background-color: #f8f9fa;">
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Breach Name</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Breached Date</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Added Date</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Records</th>
-                                    <th style="padding: 10px; text-align: left; border: 1px solid #9ca3af; border-bottom: 2px solid #dee2e6; color: #495057;">Data Types</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-{breach_rows}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div style="text-align: center; margin: 20px 0;">
-                        <a href="https://xposedornot.com/xposed" style="background-color: #f39c12; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">📋 See complete breach list</a>
-                    </div>
-                </div>
-
-                <!-- Security Reminder -->
-                <div style="background-color: #e8f4fd; border-left: 4px solid #3498db; padding: 20px; margin: 30px 0;">
-                    <h3 style="color: #2980b9; font-size: 16px; margin: 0 0 10px 0;">🛡️ Security Reminder</h3>
-                    <p style="color: #34495e; font-size: 14px; line-height: 1.6; margin: 0 0 15px 0;">
-                        Even if your email wasn't in these recent breaches, attackers often reuse leaked data across platforms.
-                    </p>
-                    <ul style="color: #34495e; font-size: 14px; line-height: 1.6; margin: 0; padding-left: 20px;">
-                        <li>Rotate reused passwords</li>
-                        <li>Enable 2FA on key accounts</li>
-                        <li>Use a password manager</li>
-                    </ul>
-                </div>
-
-                <!-- Closing -->
-                <div style="text-align: center; margin: 30px 0 20px 0; padding: 20px 0; border-top: 1px solid #dee2e6;">
-                    <p style="color: #34495e; font-size: 16px; margin: 0 0 10px 0;">Stay safe,</p>
-                    <p style="color: #2c3e50; font-weight: bold; margin: 0;">⚡ The XposedOrNot Team</p>
-                </div>
-
-                <!-- Email Footer -->
-                <div style="background-color: #f8f9fa; padding: 20px; margin-top: 30px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
-                    <p style="margin: 0 0 10px 0;">This email was sent to <strong>{user_email}</strong> because of monthly breach notifications in XposedOrNot.com.</p>
-                    <p style="margin: 0;">© 2025 XposedOrNot. All rights reserved. | <a href="https://xposedornot.com/dashboard" style="color: #6c757d;">Visit Website</a></p>
-                </div>
-
-            </div>
-        </div>
-        """.format(
-            current_month_year=current_month_year,
-            summary_info=summary_info,
-            current_month=current_month,
-            user_email=email,
-            exposure_rows=exposure_rows,
-            breach_rows=breach_rows,
-            dashboard_url=dashboard_url,
-        )
-
-        return html_content
 
     except Exception as e:
-        # Return error HTML if data fetch fails
-        return f"""
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h2 style="color: #e74c3c;">❌ Error Generating Digest</h2>
-            <p>We encountered an error while generating your monthly digest: {str(e)}</p>
-            <p><a href="https://xposedornot.com" style="color: #3498db;">Visit XposedOrNot</a> for manual checking.</p>
-        </div>
-        """
+        error_msg = f"HTML generation error: {str(e)}"
+        logger.error(f"[MONTHLY-DIGEST] ❌ HTML error for {email}: {error_msg}")
+        return {
+            "email": email,
+            "status": "error",
+            "type": "html_error",
+            "error": error_msg,
+        }
 
 
 async def process_monthly_digest_for_all_users():
     """
     Internal function to process monthly digest for all verified domain users.
-    This function can be called directly by the scheduler without HTTP overhead.
+    Optimized with batch datastore operations and performance monitoring.
     """
+    import asyncio
+    import time
+    from datetime import datetime, timezone
+
+    start_time = time.time()
+    heartbeat_task = None
+
     try:
-        # Get all verified domains
-        client = datastore.Client()
+        # Start heartbeat to keep container alive
+        heartbeat_task = asyncio.create_task(heartbeat_logger())
+        logger.info(
+            f"[MONTHLY-DIGEST] 🚀 STARTED - Processing began at {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+        )
+
+        # Get all verified domains with optimized batch operations
+        from google.cloud.datastore import Client
+
+        client = Client()
+
+        # PERFORMANCE: Single query for all verified domains
+        perf_start = time.time()
         query = client.query(kind="xon_domains")
         query.add_filter("verified", "=", True)
-        verified_domains = list(query.fetch())
+        verified_domains = list(query.fetch(limit=1000))
+        logger.info(
+            f"[MONTHLY-DIGEST] 📊 PERF: Domain query took {time.time() - perf_start:.2f}s - Found {len(verified_domains)} domains"
+        )
 
         if not verified_domains:
-            logger.info("No verified domains found for monthly digest")
+            logger.info("[MONTHLY-DIGEST] No verified domains found")
             return {
                 "status": "success",
                 "message": "No verified domains found",
                 "emails_sent": 0,
             }
 
-        # Get unique emails from verified domains
+        email_to_domains = {}
         unique_emails = set()
+        skipped_custid_domains = 0
         for domain in verified_domains:
-            if domain.get("email"):
-                unique_emails.add(domain["email"])
+            if domain.get("custid"):
+                skipped_custid_domains += 1
+                logger.debug(
+                    f"[MONTHLY-DIGEST] 🔍 CUSTID SKIP: Skipping domain '{domain.get('domain')}' for '{domain.get('email')}' - has custid: {domain.get('custid')}"
+                )
+                continue
 
+            email = domain.get("email")
+            if email:
+                email = email.lower().strip()
+                unique_emails.add(email)
+                if email not in email_to_domains:
+                    email_to_domains[email] = []
+                email_to_domains[email].append(domain["domain"])
+
+        unique_emails_list = list(unique_emails)
+        processed_domains = len(verified_domains) - skipped_custid_domains
+        logger.info(
+            f"[MONTHLY-DIGEST] 📊 DATA PREP: {len(unique_emails_list)} unique emails, {processed_domains} processed domains (skipped {skipped_custid_domains} custid domains from {len(verified_domains)} total)"
+        )
+
+        # Check if all domains were skipped due to custid
+        if not unique_emails_list:
+            logger.info(
+                "[MONTHLY-DIGEST] All domains skipped due to custid - no digest emails to send"
+            )
+            return {
+                "status": "success",
+                "message": f"All {len(verified_domains)} verified domains have custid - skipped digest",
+                "emails_sent": 0,
+                "skipped_custid_domains": skipped_custid_domains,
+                "total_verified_domains": len(verified_domains),
+            }
+
+        perf_start = time.time()
+        all_breach_data = await prefetch_breach_data(client)
+        logger.info(
+            f"[MONTHLY-DIGEST] 📊 PERF: Breach prefetch took {time.time() - perf_start:.2f}s - {len(all_breach_data)} breaches"
+        )
+
+        perf_start = time.time()
+        email_tokens = {}
+        for email in unique_emails_list:
+            email_tokens[email] = await generate_confirmation_token(email)
+        logger.info(
+            f"[MONTHLY-DIGEST] 📊 PERF: Token generation took {time.time() - perf_start:.2f}s"
+        )
+
+        await batch_create_sessions(client, email_tokens)
+
+        # Process emails with optimized batching
         emails_sent = 0
         html_generation_errors = 0
         email_sending_errors = 0
         detailed_errors = []
 
+        batch_size = 10
+        total_batches = (len(unique_emails_list) + batch_size - 1) // batch_size
+
         logger.info(
-            f"[MONTHLY-DIGEST] Starting processing for {len(unique_emails)} unique emails"
+            f"[MONTHLY-DIGEST] 🔄 BATCH PROCESSING: {len(unique_emails_list)} emails in {total_batches} batches"
         )
 
-        # Send digest to each unique email
-        for i, email in enumerate(unique_emails, 1):
+        for batch_num in range(total_batches):
+            batch_start_time = time.time()
+            start_idx = batch_num * batch_size
+            end_idx = min(start_idx + batch_size, len(unique_emails_list))
+            batch_emails = unique_emails_list[start_idx:end_idx]
+
             logger.info(
-                f"[MONTHLY-DIGEST] Processing {i}/{len(unique_emails)}: {email}"
+                f"[MONTHLY-DIGEST] 📦 BATCH {batch_num + 1}/{total_batches}: Processing emails {start_idx + 1}-{end_idx}"
             )
 
-            try:
-                # Generate dashboard token and create session FIRST
-                dashboard_token = await generate_confirmation_token(email)
-                logger.debug(f"[MONTHLY-DIGEST] Generated token for {email}")
+            # Create optimized batch tasks with pre-fetched data
+            batch_tasks = []
+            for i, email in enumerate(batch_emails, start_idx + 1):
+                user_domains = email_to_domains.get(email, [])
+                dashboard_token = email_tokens[email]
+                task = process_single_email_optimized(
+                    email,
+                    i,
+                    len(unique_emails_list),
+                    batch_num + 1,
+                    user_domains,
+                    dashboard_token,
+                    all_breach_data,
+                    client,
+                )
+                batch_tasks.append(task)
 
-                # Create session data (matches analytics.py:212-225 exactly)
-                try:
-                    session_client = datastore.Client()
-                    logger.info(
-                        f"[MONTHLY-DIGEST] Creating session key for email: {email}"
-                    )
+            # Execute batch concurrently
+            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
 
-                    alert_task_data = datastore.Entity(
-                        session_client.key("xon_domains_session", email)
+            # Process results
+            for result in batch_results:
+                if isinstance(result, Exception):
+                    logger.error(f"[MONTHLY-DIGEST] ❌ Batch task failed: {result}")
+                    detailed_errors.append(
+                        {"email": "unknown", "type": "task_error", "error": str(result)}
                     )
-                    logger.info(
-                        f"[MONTHLY-DIGEST] Entity created, updating with token: {dashboard_token}"
-                    )
-
-                    alert_task_data.update(
-                        {
-                            "magic_timestamp": datetime.now(),
-                            "domain_magic": dashboard_token,
-                        }
-                    )
-                    logger.info(
-                        f"[MONTHLY-DIGEST] Data updated, putting to datastore..."
-                    )
-
-                    session_client.put(alert_task_data)
-                    logger.info(
-                        f"[MONTHLY-DIGEST] ✅ Session successfully stored for {email} with token {dashboard_token}"
-                    )
-
-                    # Verify the session was created
-                    verification_key = session_client.key("xon_domains_session", email)
-                    verification_task = session_client.get(verification_key)
-                    if verification_task:
-                        logger.info(
-                            f"[MONTHLY-DIGEST] ✅ VERIFIED: Session exists with magic_timestamp={verification_task.get('magic_timestamp')} and domain_magic={verification_task.get('domain_magic')}"
-                        )
+                elif isinstance(result, dict):
+                    if result["status"] == "success":
+                        emails_sent += 1
                     else:
-                        logger.error(
-                            f"[MONTHLY-DIGEST] ❌ VERIFICATION FAILED: Session not found after creation"
-                        )
-
-                except Exception as session_error:
-                    logger.error(
-                        f"[MONTHLY-DIGEST] ❌ Failed to create session for {email}: {str(session_error)}"
-                    )
-                    logger.error(
-                        f"[MONTHLY-DIGEST] ❌ Exception type: {type(session_error).__name__}"
-                    )
-                    import traceback
-
-                    logger.error(
-                        f"[MONTHLY-DIGEST] ❌ Full traceback: {traceback.format_exc()}"
-                    )
-                    # Continue anyway, but log the error
-
-                # Generate HTML content with the token
-                html_content = await generate_monthly_digest_html(
-                    email, dashboard_token
-                )
-                logger.debug(
-                    f"[MONTHLY-DIGEST] HTML generated successfully for {email}"
-                )
-
-                # Generate dashboard URL for testing (production domain, not API)
-                dashboard_base_url = "https://xposedornot.com"
-                email_param = f"email={email}"
-                token_param = f"token={dashboard_token}"
-                dashboard_url = (
-                    f"{dashboard_base_url}/breach-dashboard?{email_param}&{token_param}"
-                )
-
-                # DEBUG: Log the dashboard URL for manual testing
-                logger.info(
-                    f"[MONTHLY-DIGEST] 🔗 DASHBOARD URL for {email}: {dashboard_url}"
-                )
-                logger.info(f"[MONTHLY-DIGEST] 🔑 TOKEN for {email}: {dashboard_token}")
-
-                current_month = datetime.now(timezone.utc).strftime("%B")
-
-                # EMAIL SENDING ENABLED - sending to actual user emails
-                data = {
-                    "Messages": [
-                        {
-                            "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
-                            "To": [{"Email": email, "Name": "User"}],
-                            "Subject": f"🚨 New breaches detected — check your exposure ({current_month} update)",
-                            "HTMLPart": html_content,
-                            "TextPart": f"XposedOrNot Monthly Digest - Visit https://xposedornot.com to view your breach report for {email}",
-                        }
-                    ]
-                }
-
-                try:
-                    async with httpx.AsyncClient() as http_client:
-                        logger.debug(
-                            f"[MONTHLY-DIGEST] Attempting to send email for {email}"
-                        )
-                        response = await http_client.post(
-                            MAILJET_API_URL,
-                            json=data,
-                            auth=(API_KEY, API_SECRET),
-                            timeout=30.0,
-                        )
-
-                        if response.status_code == 200:
-                            emails_sent += 1
-                            logger.info(
-                                f"[MONTHLY-DIGEST] ✅ SUCCESS: Email sent to {email} (#{i})"
-                            )
+                        if result["type"] == "html_error":
+                            html_generation_errors += 1
                         else:
                             email_sending_errors += 1
-                            error_msg = f"Mailjet API error for {email}: HTTP {response.status_code} - {response.text[:200]}"
-                            detailed_errors.append(
-                                {
-                                    "email": email,
-                                    "type": "api_error",
-                                    "error": error_msg,
-                                }
-                            )
-                            logger.error(
-                                f"[MONTHLY-DIGEST] ❌ API ERROR for {email}: {error_msg}"
-                            )
+                        detailed_errors.append(result)
 
-                except httpx.RequestError as e:
-                    email_sending_errors += 1
-                    error_msg = f"Network error for {email}: {str(e)}"
-                    detailed_errors.append(
-                        {"email": email, "type": "network_error", "error": error_msg}
-                    )
-                    logger.error(
-                        f"[MONTHLY-DIGEST] ❌ NETWORK ERROR for {email}: {error_msg}"
-                    )
-                except Exception as e:
-                    email_sending_errors += 1
-                    error_msg = f"Email sending error for {email}: {str(e)}"
-                    detailed_errors.append(
-                        {"email": email, "type": "send_error", "error": error_msg}
-                    )
-                    logger.error(
-                        f"[MONTHLY-DIGEST] ❌ SEND ERROR for {email}: {error_msg}"
-                    )
+            batch_duration = time.time() - batch_start_time
+            logger.info(
+                f"[MONTHLY-DIGEST] ✅ BATCH {batch_num + 1} COMPLETED in {batch_duration:.2f}s - Progress: {emails_sent}/{len(unique_emails_list)}"
+            )
 
-            except Exception as e:
-                html_generation_errors += 1
-                error_msg = f"HTML generation error for {email}: {str(e)}"
-                detailed_errors.append(
-                    {"email": email, "type": "html_error", "error": error_msg}
-                )
-                logger.error(f"[MONTHLY-DIGEST] ❌ HTML ERROR for {email}: {error_msg}")
+            # Brief pause between batches to prevent overwhelming
+            if batch_num < total_batches - 1:
+                await asyncio.sleep(1)  # Reduced to 1 second
 
-        # Calculate totals
+        # Calculate totals and performance metrics
+        total_duration = time.time() - start_time
         total_errors = html_generation_errors + email_sending_errors
-        success_rate = (emails_sent / len(unique_emails) * 100) if unique_emails else 0
+        success_rate = (
+            (emails_sent / len(unique_emails_list) * 100) if unique_emails_list else 0
+        )
 
         result = {
             "status": "success",
             "message": f"Monthly digest processing complete",
             "emails_sent": emails_sent,
-            "total_unique_emails": len(unique_emails),
+            "total_unique_emails": len(unique_emails_list),
             "html_generation_errors": html_generation_errors,
             "email_sending_errors": email_sending_errors,
             "total_errors": total_errors,
             "success_rate": round(success_rate, 2),
-            "detailed_errors": (
-                detailed_errors[:10] if detailed_errors else []
-            ),  # Limit to 10 most recent
+            "processing_time_seconds": round(total_duration, 2),
+            "emails_per_minute": round(
+                (emails_sent / (total_duration / 60)) if total_duration > 0 else 0, 2
+            ),
+            "detailed_errors": detailed_errors[:10] if detailed_errors else [],
+            "skipped_custid_domains": skipped_custid_domains,
+            "total_verified_domains": len(verified_domains),
         }
 
-        logger.info(f"[MONTHLY-DIGEST] 📊 FINAL SUMMARY:")
-        logger.info(f"[MONTHLY-DIGEST] ✅ Emails sent successfully: {emails_sent}")
         logger.info(
-            f"[MONTHLY-DIGEST] ❌ HTML generation errors: {html_generation_errors}"
+            f"[MONTHLY-DIGEST] 🏁 FINAL SUMMARY - Duration: {total_duration:.2f}s ({total_duration/60:.1f}min)"
         )
-        logger.info(f"[MONTHLY-DIGEST] ❌ Email sending errors: {email_sending_errors}")
         logger.info(
-            f"[MONTHLY-DIGEST] 📈 Success rate: {success_rate:.2f}% ({emails_sent}/{len(unique_emails)})"
+            f"[MONTHLY-DIGEST] ✅ Emails sent: {emails_sent}/{len(unique_emails_list)} ({success_rate:.1f}%)"
+        )
+        logger.info(
+            f"[MONTHLY-DIGEST] 📊 Performance: {result['emails_per_minute']:.1f} emails/min"
+        )
+        logger.info(
+            f"[MONTHLY-DIGEST] ❌ Errors: HTML={html_generation_errors}, Email={email_sending_errors}"
+        )
+        logger.info(
+            f"[MONTHLY-DIGEST] 🔍 Filtering: {skipped_custid_domains} custid domains skipped from {len(verified_domains)} total"
         )
 
         if detailed_errors:
-            logger.error(
-                f"[MONTHLY-DIGEST] ⚠️ Error summary: {len(detailed_errors)} total errors occurred"
-            )
-            for error in detailed_errors[:5]:  # Log first 5 errors
+            logger.error(f"[MONTHLY-DIGEST] ⚠️ {len(detailed_errors)} errors occurred:")
+            for error in detailed_errors[:3]:  # Log first 3 errors
                 logger.error(
-                    f"[MONTHLY-DIGEST] - {error['email']}: {error['type']} - {error['error'][:100]}..."
+                    f"[MONTHLY-DIGEST] - {error.get('email', 'unknown')}: {error.get('error', 'unknown')[:80]}..."
                 )
 
         return result
 
     except Exception as e:
-        error_msg = f"Monthly digest processing failed: {str(e)}"
-        logger.error(error_msg)
+        total_duration = time.time() - start_time
+        error_msg = (
+            f"Monthly digest processing failed after {total_duration:.2f}s: {str(e)}"
+        )
+        logger.error(f"[MONTHLY-DIGEST] ❌ CRITICAL FAILURE: {error_msg}")
+        import traceback
+
+        logger.error(f"[MONTHLY-DIGEST] ❌ Traceback: {traceback.format_exc()}")
         raise Exception(error_msg)
+    finally:
+        # Stop heartbeat task safely
+        if heartbeat_task and not heartbeat_task.done():
+            try:
+                heartbeat_task.cancel()
+                # Wait for graceful cancellation
+                await asyncio.wait_for(heartbeat_task, timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                # Expected when cancelling
+                pass
+            except Exception as e:
+                logger.warning(
+                    f"[MONTHLY-DIGEST] ⚠️ Heartbeat cleanup warning: {str(e)}"
+                )
+
+        total_duration = time.time() - start_time
+        logger.info(
+            f"[MONTHLY-DIGEST] 🔚 CLEANUP COMPLETED - Total session duration: {total_duration:.2f}s"
+        )
+
+
+@router.get("/debug/redis-state")
+@custom_rate_limiter(
+    "5 per minute;20 per hour", message="Debug endpoints are rate limited"
+)
+async def debug_redis_state(
+    request: Request,
+    token: Optional[str] = Query(None, description="Authentication token"),
+):
+    """Debug endpoint to check monthly digest Redis state."""
+    # Check magic token for authentication
+    if not token or token != CF_UNBLOCK_MAGIC:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not redis_client:
+        return {"error": "Redis not available"}
+
+    try:
+        last_run_key = f"{ENVIRONMENT}_monthly_digest_last_run"
+        last_run = redis_client.get(last_run_key)
+        ttl = redis_client.ttl(last_run_key)
+        current_month = datetime.now(timezone.utc).strftime("%Y-%m")
+
+        return {
+            "redis_key": last_run_key,
+            "value": last_run,
+            "ttl_seconds": ttl,
+            "ttl_human": f"{ttl//3600}h {(ttl%3600)//60}m" if ttl > 0 else "N/A",
+            "key_exists": ttl != -2,
+            "current_month": current_month,
+            "is_blocked": (
+                last_run and last_run.startswith(current_month) if last_run else False
+            ),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/debug/redis-clear")
+@custom_rate_limiter(
+    "2 per minute;10 per hour", message="Redis clear endpoint is rate limited"
+)
+async def debug_clear_redis(
+    request: Request,
+    token: Optional[str] = Query(None, description="Authentication token"),
+):
+    """Debug endpoint to clear monthly digest Redis state."""
+    # Check magic token for authentication
+    if not token or token != CF_UNBLOCK_MAGIC:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not redis_client:
+        return {"error": "Redis not available"}
+
+    try:
+        last_run_key = f"{ENVIRONMENT}_monthly_digest_last_run"
+        running_task_key = f"{ENVIRONMENT}_monthly_digest_task_running"
+        scheduler_lock_key = f"{ENVIRONMENT}_global_scheduler_instance_lock"
+
+        # Clear all digest-related keys
+        result1 = redis_client.delete(last_run_key)
+        result2 = redis_client.delete(running_task_key)
+        result3 = redis_client.delete(scheduler_lock_key)
+
+        return {
+            "cleared": {
+                "last_run_key": bool(result1),
+                "running_task_key": bool(result2),
+                "scheduler_lock_key": bool(result3),
+            },
+            "message": "All Redis locks cleared for testing - scheduler instances can now start",
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/trigger-manual", response_model=MonthlyDigestResponse)
+@custom_rate_limiter(
+    "1 per 10 minutes;3 per hour;5 per day",
+    message="Monthly digest trigger is heavily rate limited for security",
+)
+async def trigger_manual_monthly_digest(
+    request: Request,
+    token: Optional[str] = Query(None, description="Authentication token"),
+    target_email: Optional[str] = Query(
+        None, description="Target email for manual testing"
+    ),
+):
+    """
+    Manual trigger for monthly digest.
+    """
+    try:
+        # Check magic token for authentication
+        if not token or token != CF_UNBLOCK_MAGIC:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        logger.info(
+            f"Manual monthly digest trigger requested - target: {target_email or 'all users'}"
+        )
+
+        result = await process_monthly_digest_for_all_users()
+
+        # Update Redis state after successful execution
+        if result and result.get("status") == "success" and redis_client:
+            try:
+                from datetime import timedelta
+
+                now = datetime.now(timezone.utc)
+
+                # Calculate TTL to last until next month's first Tuesday + buffer
+                current_month = now.replace(day=1)
+                next_month = (current_month + timedelta(days=32)).replace(day=1)
+
+                # Find next month's first Tuesday (weekday 1)
+                days_to_next_first_tue = (1 - next_month.weekday()) % 7
+                next_first_tuesday = next_month + timedelta(days=days_to_next_first_tue)
+
+                # TTL until 3 days after next month's first Tuesday
+                ttl_until = next_first_tuesday + timedelta(days=3)
+                ttl_seconds = int((ttl_until - now).total_seconds())
+
+                # Ensure TTL is positive (minimum 1 day)
+                if ttl_seconds <= 0:
+                    ttl_seconds = 86400  # 1 day fallback
+
+                # Store success timestamp with calculated TTL
+                last_run_key = f"{ENVIRONMENT}_monthly_digest_last_run"
+                full_timestamp = now.strftime("%Y-%m-%d %H:%M:%S UTC")
+                redis_client.setex(last_run_key, ttl_seconds, full_timestamp)
+
+                logger.info(
+                    f"✅ MANUAL TRIGGER: Updated Redis state - '{last_run_key}' = '{full_timestamp}'"
+                )
+                logger.info(
+                    f"✅ TTL: {ttl_seconds} seconds (expires: {ttl_until.strftime('%Y-%m-%d %H:%M:%S UTC')})"
+                )
+
+            except Exception as redis_error:
+                logger.error(
+                    f"❌ MANUAL TRIGGER: Failed to update Redis state: {str(redis_error)}"
+                )
+
+        task_id = f"manual_{int(datetime.now(timezone.utc).timestamp())}"
+
+        return MonthlyDigestResponse(
+            status="success",
+            message="Manual monthly digest triggered successfully",
+            task_id=task_id,
+            trigger_type="manual",
+            target_email=target_email,
+            testing_mode=True,  # Always testing mode for manual triggers
+        )
+
+    except Exception as e:
+        logger.error(f"Manual monthly digest trigger failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
