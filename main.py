@@ -3,7 +3,7 @@
 # Third-party imports
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -391,6 +391,14 @@ async def helper(request: Request):  # pylint: disable=unused-argument
 async def serve_robots_txt(request: Request):  # pylint: disable=unused-argument
     """Returns robots.txt file content."""
     return HTMLResponse(content=open("static/robots.txt", encoding="utf-8").read())
+
+
+@app.get("/.well-known/security.txt", include_in_schema=False)
+async def serve_security_txt(request: Request):  # pylint: disable=unused-argument
+    """Returns security.txt file content."""
+    return PlainTextResponse(
+        content=open("static/.well-known/security.txt", encoding="utf-8").read()
+    )
 
 
 @app.get("/docs", include_in_schema=False)

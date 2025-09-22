@@ -1,0 +1,6 @@
+Contact: deva @ xposedornot.com
+Preferred-Languages: en-ENGLISH,
+
+Canonical: https://xposedornot.com/.well-known/security.txt
+
+Policy: https://xposedornot.com/responsible-disclosure.html
