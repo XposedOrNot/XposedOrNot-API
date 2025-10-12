@@ -188,24 +188,48 @@ async def send_dashboard_email_confirmation(
         ) from e
 
 
-async def send_exception_email(api: str) -> Optional[Dict[str, Any]]:
-    """
-    Sends Exception email to admin
+# Module-level rate limiting state
+_error_count = 0
+_last_error_time = 0.0
+_RATE_LIMIT = 5
+_ERROR_WINDOW = 60
 
+
+async def send_exception_email(
+    api_route: str,
+    error_message: Optional[str] = None,
+    exception_type: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    request_params: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """
-    rate_limit = 5
-    error_window = 60
-    error_count = 0
-    last_error_time = 0
+    Sends Exception email to admin with detailed error information.
+
+    Args:
+        api_route: The API route where the exception occurred (e.g., "GET /v1/check-email/{email}")
+        error_message: The exception error message (optional)
+        exception_type: The type of exception (e.g., "ValueError", "HTTPException") (optional)
+        user_agent: The User-Agent header from the request (optional)
+        request_params: Additional request parameters as a string (optional)
+
+    Returns:
+        Response JSON if successful, None otherwise
+    """
+    global _error_count, _last_error_time
+
     current_time = time.time()
 
-    if current_time - last_error_time <= error_window:
-        error_count += 1
-        if error_count > rate_limit:
-            return None
-    else:
-        error_count = 0
-    last_error_time = current_time
+    # Reset counter if outside the error window
+    if current_time - _last_error_time > _ERROR_WINDOW:
+        _error_count = 0
+
+    # Check rate limit
+    if _error_count >= _RATE_LIMIT:
+        return None
+
+    # Increment counter and update timestamp
+    _error_count += 1
+    _last_error_time = current_time
 
     try:
         data = {
@@ -219,7 +243,13 @@ async def send_exception_email(api: str) -> Optional[Dict[str, Any]]:
                     "TemplateID": 4318335,
                     "TemplateLanguage": True,
                     "Subject": "Xonnie API exception",
-                    "Variables": {"api": api},
+                    "Variables": {
+                        "api": api_route,
+                        "error_message": error_message or "No error message provided",
+                        "exception_type": exception_type or "Exception",
+                        "user_agent": user_agent or "Unknown",
+                        "request_params": request_params or "None",
+                    },
                 }
             ]
         }

@@ -27,6 +27,7 @@ from services.analytics import (
     get_summary_and_metrics,
 )
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
+from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import (
     get_client_ip,
@@ -131,6 +132,13 @@ async def get_xposed_breaches(
         return BreachListResponse(status="success", exposedBreaches=breach_details)
 
     except Exception as e:
+        await send_exception_email(
+            api_route="GET /v1/breaches",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"domain={domain}, breach_id={breach_id}, if_modified_since={'provided' if if_modified_since else 'not_provided'}",
+        )
         raise HTTPException(status_code=404, detail=str(e)) from e
 
 
@@ -198,6 +206,13 @@ async def search_data_breaches_v2(
         return BreachAnalyticsV2Response(AI_Summary=ai_summary)
 
     except Exception as exc:
+        await send_exception_email(
+            api_route="GET /v1/v2/breach-analytics",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={email}, token={'provided' if token else 'not_provided'}",
+        )
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
@@ -289,6 +304,13 @@ async def search_data_breaches(
         )
 
     except Exception as exc:
+        await send_exception_email(
+            api_route="GET /v1/breach-analytics",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={email}, token={'provided' if token else 'not_provided'}",
+        )
         raise HTTPException(status_code=404, detail="Not found") from exc
 
 
@@ -418,7 +440,15 @@ async def search_email(
             content={"Error": "No breaches found", "email": email, "status": "failed"},
         )
 
-    except Exception:
+    except Exception as exc:
+        await send_exception_email(
+            api_route=f"GET /v1/check-email/{email}",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={email}, details={details}",
+        )
+
         return JSONResponse(
             status_code=404,
             content={"Error": "Not found", "email": email, "status": "failed"},
@@ -444,75 +474,88 @@ async def get_domain_breach_summary(
     if not d or not validate_domain(d) or not validate_url(request):
         raise HTTPException(status_code=404, detail="Not found")
 
-    domain = d.lower().strip()
+    try:
+        domain = d.lower().strip()
 
-    # Initialize datastores
-    ds_xon = datastore.Client()
+        # Initialize datastores
+        ds_xon = datastore.Client()
 
-    # Query xon records for domain
-    xon_rec = ds_xon.query(kind="xon")
-    xon_rec.add_filter("domain", "=", domain)
-    query_xon = xon_rec.fetch(limit=1000)
+        # Query xon records for domain
+        xon_rec = ds_xon.query(kind="xon")
+        xon_rec.add_filter("domain", "=", domain)
+        query_xon = xon_rec.fetch(limit=1000)
 
-    unique_emails = set()
-    unique_sites = set()
-    total_records = 0
+        unique_emails = set()
+        unique_sites = set()
+        total_records = 0
 
-    # Process xon records
-    for entity_xon in query_xon:
-        email = entity_xon.key.name
-        if len(unique_emails) <= 1000:
-            unique_emails.add(email)
-        if "site" in entity_xon:
-            sites = entity_xon["site"].split(";")
-            unique_sites.update(sites)
-            total_records += len(sites)
+        # Process xon records
+        for entity_xon in query_xon:
+            email = entity_xon.key.name
+            if len(unique_emails) <= 1000:
+                unique_emails.add(email)
+            if "site" in entity_xon:
+                sites = entity_xon["site"].split(";")
+                unique_sites.update(sites)
+                total_records += len(sites)
 
-    unique_sites.discard("")
+        unique_sites.discard("")
 
-    breach_count = len(unique_sites)
-    emails_count = len(unique_emails)
+        breach_count = len(unique_sites)
+        emails_count = len(unique_emails)
 
-    # Query paste records
-    ds_paste = datastore.Client()
-    paste_rec = ds_paste.query(kind="xon_paste")
-    paste_rec.add_filter("domain", "=", domain)
-    query_paste = paste_rec.fetch(limit=50)
+        # Query paste records
+        ds_paste = datastore.Client()
+        paste_rec = ds_paste.query(kind="xon_paste")
+        paste_rec.add_filter("domain", "=", domain)
+        query_paste = paste_rec.fetch(limit=50)
 
-    pastes_count = sum(1 for _ in query_paste)
+        pastes_count = sum(1 for _ in query_paste)
 
-    # Get latest breach date
-    breach_last_seen = None
-    if unique_sites:
-        breach_dates = []
-        ds_breaches = datastore.Client()
-        for site in unique_sites:
-            breach_rec = ds_breaches.query(kind="xon_breaches")
-            breach_rec.add_filter("__key__", "=", ds_breaches.key("xon_breaches", site))
-            breach_rec.order = ["-breached_date"]
-            query_breaches = list(breach_rec.fetch(limit=1))
-            if query_breaches:
-                breach_dates.append(query_breaches[0]["breached_date"])
+        # Get latest breach date
+        breach_last_seen = None
+        if unique_sites:
+            breach_dates = []
+            ds_breaches = datastore.Client()
+            for site in unique_sites:
+                breach_rec = ds_breaches.query(kind="xon_breaches")
+                breach_rec.add_filter(
+                    "__key__", "=", ds_breaches.key("xon_breaches", site)
+                )
+                breach_rec.order = ["-breached_date"]
+                query_breaches = list(breach_rec.fetch(limit=1))
+                if query_breaches:
+                    breach_dates.append(query_breaches[0]["breached_date"])
 
-            if breach_dates:
-                breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
+                if breach_dates:
+                    breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
 
-    breaches_dict = {
-        "breaches_details": [
-            {
-                "domain": domain,
-                "breach_pastes": pastes_count,
-                "breach_emails": emails_count,
-                "breach_total": total_records,
-                "breach_count": breach_count,
-                "breach_last_seen": breach_last_seen,
-            }
-        ]
-    }
+        breaches_dict = {
+            "breaches_details": [
+                {
+                    "domain": domain,
+                    "breach_pastes": pastes_count,
+                    "breach_emails": emails_count,
+                    "breach_total": total_records,
+                    "breach_count": breach_count,
+                    "breach_last_seen": breach_last_seen,
+                }
+            ]
+        }
 
-    return DomainBreachSummaryResponse(
-        sendDomains=breaches_dict, SearchStatus="Success"
-    )
+        return DomainBreachSummaryResponse(
+            sendDomains=breaches_dict, SearchStatus="Success"
+        )
+
+    except Exception as exc:
+        await send_exception_email(
+            api_route="GET /v1/domain-breach-summary",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"domain={d}",
+        )
+        raise HTTPException(status_code=404, detail="Not found") from exc
 
 
 def _prepare_for_logging(data):
