@@ -451,6 +451,13 @@ async def send_domain_breaches(
                             else "No"
                         )
 
+                    # Get timestamp for added field (ISO 8601 format)
+                    timestamp = breach.get("timestamp")
+                    if timestamp:
+                        added = timestamp.replace(microsecond=0).isoformat()
+                    else:
+                        added = None
+
                     detailed_breach_info[entity["breach"]] = DetailedBreachInfo(
                         breached_date=formatted_date,
                         logo=breach["logo"],
@@ -459,6 +466,7 @@ async def send_domain_breaches(
                         xposed_data=xposed_data,
                         xposed_records=breach["xposed_records"],
                         xposure_desc=breach["xposure_desc"],
+                        added=added,
                     )
 
             # Get breach details

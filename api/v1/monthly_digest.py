@@ -1,31 +1,22 @@
 """Monthly digest endpoint for sending breach summaries to validated domain users."""
 
-import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
-from collections import defaultdict
-from typing import Dict, List, Optional, Union
-import redis
 import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Request, BackgroundTasks
-from google.cloud import datastore
-from google.api_core import exceptions as google_exceptions
+import httpx
+import redis
+from fastapi import APIRouter, HTTPException, Query, Request
 
-from models.responses import (
-    MonthlyDigestResponse,
-    MonthlyDigestErrorResponse,
-    DetailedBreachInfo,
-)
+from models.responses import MonthlyDigestResponse
 from utils.custom_limiter import custom_rate_limiter
-from utils.validation import validate_email_with_tld, validate_url
 from utils.token import generate_confirmation_token
 from config.settings import (
     REDIS_HOST,
     REDIS_PORT,
     REDIS_DB,
     REDIS_PASSWORD,
-    BASE_URL,
     CF_UNBLOCK_MAGIC,
     ENVIRONMENT,
     DEBUG_EMAIL,
@@ -37,7 +28,6 @@ from .monthly_digest_helpers import (
     batch_create_sessions,
     generate_monthly_digest_html_optimized,
 )
-import httpx
 
 # Email constants from send_email service
 FROM_EMAIL = "notifications@xposedornot.com"
@@ -91,9 +81,15 @@ async def process_single_email_optimized(
                 {
                     "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
                     "To": [{"Email": send_to_email, "Name": "User"}],
-                    "Subject": f"🚨 New breaches detected — check your exposure ({current_month} update)",
+                    "Subject": (
+                        f"🚨 New breaches detected — check your exposure "
+                        f"({current_month} update)"
+                    ),
                     "HTMLPart": html_content,
-                    "TextPart": f"XposedOrNot Monthly Digest - Visit https://xposedornot.com to view your breach report for {email}",
+                    "TextPart": (
+                        f"XposedOrNot Monthly Digest - Visit https://xposedornot.com "
+                        f"to view your breach report for {email}"
+                    ),
                 }
             ]
         }
@@ -158,7 +154,8 @@ async def process_monthly_digest_for_all_users():
         # Start heartbeat to keep container alive
         heartbeat_task = asyncio.create_task(heartbeat_logger())
         logger.info(
-            f"[MONTHLY-DIGEST] 🚀 STARTED - Processing began at {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+            f"[MONTHLY-DIGEST] 🚀 STARTED - Processing began at "
+            f"{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
         )
 
         # Get all verified domains with optimized batch operations
@@ -172,7 +169,8 @@ async def process_monthly_digest_for_all_users():
         query.add_filter("verified", "=", True)
         verified_domains = list(query.fetch(limit=1000))
         logger.info(
-            f"[MONTHLY-DIGEST] 📊 PERF: Domain query took {time.time() - perf_start:.2f}s - Found {len(verified_domains)} domains"
+            f"[MONTHLY-DIGEST] 📊 PERF: Domain query took {time.time() - perf_start:.2f}s - "
+            f"Found {len(verified_domains)} domains"
         )
 
         if not verified_domains:
@@ -190,7 +188,9 @@ async def process_monthly_digest_for_all_users():
             if domain.get("custid"):
                 skipped_custid_domains += 1
                 logger.debug(
-                    f"[MONTHLY-DIGEST] 🔍 CUSTID SKIP: Skipping domain '{domain.get('domain')}' for '{domain.get('email')}' - has custid: {domain.get('custid')}"
+                    f"[MONTHLY-DIGEST] 🔍 CUSTID SKIP: Skipping domain "
+                    f"'{domain.get('domain')}' for '{domain.get('email')}' - "
+                    f"has custid: {domain.get('custid')}"
                 )
                 continue
 
@@ -205,7 +205,9 @@ async def process_monthly_digest_for_all_users():
         unique_emails_list = list(unique_emails)
         processed_domains = len(verified_domains) - skipped_custid_domains
         logger.info(
-            f"[MONTHLY-DIGEST] 📊 DATA PREP: {len(unique_emails_list)} unique emails, {processed_domains} processed domains (skipped {skipped_custid_domains} custid domains from {len(verified_domains)} total)"
+            f"[MONTHLY-DIGEST] 📊 DATA PREP: {len(unique_emails_list)} unique emails, "
+            f"{processed_domains} processed domains (skipped {skipped_custid_domains} "
+            f"custid domains from {len(verified_domains)} total)"
         )
 
         # Check if all domains were skipped due to custid
@@ -215,7 +217,10 @@ async def process_monthly_digest_for_all_users():
             )
             return {
                 "status": "success",
-                "message": f"All {len(verified_domains)} verified domains have custid - skipped digest",
+                "message": (
+                    f"All {len(verified_domains)} verified domains have custid - "
+                    f"skipped digest"
+                ),
                 "emails_sent": 0,
                 "skipped_custid_domains": skipped_custid_domains,
                 "total_verified_domains": len(verified_domains),
@@ -224,7 +229,8 @@ async def process_monthly_digest_for_all_users():
         perf_start = time.time()
         all_breach_data = await prefetch_breach_data(client)
         logger.info(
-            f"[MONTHLY-DIGEST] 📊 PERF: Breach prefetch took {time.time() - perf_start:.2f}s - {len(all_breach_data)} breaches"
+            f"[MONTHLY-DIGEST] 📊 PERF: Breach prefetch took "
+            f"{time.time() - perf_start:.2f}s - {len(all_breach_data)} breaches"
         )
 
         perf_start = time.time()
@@ -247,7 +253,8 @@ async def process_monthly_digest_for_all_users():
         total_batches = (len(unique_emails_list) + batch_size - 1) // batch_size
 
         logger.info(
-            f"[MONTHLY-DIGEST] 🔄 BATCH PROCESSING: {len(unique_emails_list)} emails in {total_batches} batches"
+            f"[MONTHLY-DIGEST] 🔄 BATCH PROCESSING: {len(unique_emails_list)} "
+            f"emails in {total_batches} batches"
         )
 
         for batch_num in range(total_batches):
@@ -257,7 +264,8 @@ async def process_monthly_digest_for_all_users():
             batch_emails = unique_emails_list[start_idx:end_idx]
 
             logger.info(
-                f"[MONTHLY-DIGEST] 📦 BATCH {batch_num + 1}/{total_batches}: Processing emails {start_idx + 1}-{end_idx}"
+                f"[MONTHLY-DIGEST] 📦 BATCH {batch_num + 1}/{total_batches}: "
+                f"Processing emails {start_idx + 1}-{end_idx}"
             )
 
             # Create optimized batch tasks with pre-fetched data
@@ -299,7 +307,8 @@ async def process_monthly_digest_for_all_users():
 
             batch_duration = time.time() - batch_start_time
             logger.info(
-                f"[MONTHLY-DIGEST] ✅ BATCH {batch_num + 1} COMPLETED in {batch_duration:.2f}s - Progress: {emails_sent}/{len(unique_emails_list)}"
+                f"[MONTHLY-DIGEST] ✅ BATCH {batch_num + 1} COMPLETED in "
+                f"{batch_duration:.2f}s - Progress: {emails_sent}/{len(unique_emails_list)}"
             )
 
             # Brief pause between batches to prevent overwhelming
@@ -332,19 +341,23 @@ async def process_monthly_digest_for_all_users():
         }
 
         logger.info(
-            f"[MONTHLY-DIGEST] 🏁 FINAL SUMMARY - Duration: {total_duration:.2f}s ({total_duration/60:.1f}min)"
+            f"[MONTHLY-DIGEST] 🏁 FINAL SUMMARY - Duration: {total_duration:.2f}s "
+            f"({total_duration/60:.1f}min)"
         )
         logger.info(
-            f"[MONTHLY-DIGEST] ✅ Emails sent: {emails_sent}/{len(unique_emails_list)} ({success_rate:.1f}%)"
+            f"[MONTHLY-DIGEST] ✅ Emails sent: {emails_sent}/{len(unique_emails_list)} "
+            f"({success_rate:.1f}%)"
         )
         logger.info(
             f"[MONTHLY-DIGEST] 📊 Performance: {result['emails_per_minute']:.1f} emails/min"
         )
         logger.info(
-            f"[MONTHLY-DIGEST] ❌ Errors: HTML={html_generation_errors}, Email={email_sending_errors}"
+            f"[MONTHLY-DIGEST] ❌ Errors: HTML={html_generation_errors}, "
+            f"Email={email_sending_errors}"
         )
         logger.info(
-            f"[MONTHLY-DIGEST] 🔍 Filtering: {skipped_custid_domains} custid domains skipped from {len(verified_domains)} total"
+            f"[MONTHLY-DIGEST] 🔍 Filtering: {skipped_custid_domains} custid "
+            f"domains skipped from {len(verified_domains)} total"
         )
 
         if detailed_errors:
@@ -392,7 +405,7 @@ async def process_monthly_digest_for_all_users():
     "5 per minute;20 per hour", message="Debug endpoints are rate limited"
 )
 async def debug_redis_state(
-    request: Request,
+    request: Request,  # pylint: disable=unused-argument
     token: Optional[str] = Query(None, description="Authentication token"),
 ):
     """Debug endpoint to check monthly digest Redis state."""
@@ -428,7 +441,7 @@ async def debug_redis_state(
     "2 per minute;10 per hour", message="Redis clear endpoint is rate limited"
 )
 async def debug_clear_redis(
-    request: Request,
+    request: Request,  # pylint: disable=unused-argument
     token: Optional[str] = Query(None, description="Authentication token"),
 ):
     """Debug endpoint to clear monthly digest Redis state."""
@@ -466,7 +479,7 @@ async def debug_clear_redis(
     message="Monthly digest trigger is heavily rate limited for security",
 )
 async def trigger_manual_monthly_digest(
-    request: Request,
+    request: Request,  # pylint: disable=unused-argument
     token: Optional[str] = Query(None, description="Authentication token"),
     target_email: Optional[str] = Query(
         None, description="Target email for manual testing"
@@ -489,7 +502,6 @@ async def trigger_manual_monthly_digest(
         # Update Redis state after successful execution
         if result and result.get("status") == "success" and redis_client:
             try:
-                from datetime import timedelta
 
                 now = datetime.now(timezone.utc)
 

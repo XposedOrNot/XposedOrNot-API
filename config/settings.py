@@ -4,7 +4,9 @@ import os
 from typing import Optional
 
 # Environment Variables
+ENVIRONMENT: str = os.environ.get("ENVIRONMENT", "production")
 AUTH_EMAIL: str = os.environ["AUTH_EMAIL"]
+DEBUG_EMAIL: Optional[str] = os.environ.get("DEBUG_EMAIL")
 AUTHKEY: str = os.environ["AUTHKEY"]
 CF_MAGIC: str = os.environ["CF_MAGIC"]
 CF_UNBLOCK_MAGIC: str = os.environ["CF_UNBLOCK_MAGIC"]

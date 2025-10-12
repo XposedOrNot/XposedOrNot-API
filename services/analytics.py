@@ -378,6 +378,14 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                         else "No"
                     )
 
+                # Get timestamp for sorting (ISO 8601 format)
+                timestamp = query_result.get("timestamp")
+                if timestamp:
+                    # Ensure UTC timezone and format as ISO 8601
+                    added = timestamp.replace(microsecond=0).isoformat()
+                else:
+                    added = None
+
                 breach_details = {
                     "breach": breach,
                     "details": query_result.get("xposure_desc", ""),
@@ -391,6 +399,7 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                     "xposed_data": query_result.get("xposed_data", ""),
                     "xposed_date": breach_year,
                     "xposed_records": xposed_records,
+                    "added": added,
                 }
                 breaches_output["breaches_details"].append(breach_details)
             else:
@@ -398,6 +407,11 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
 
         except Exception as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+    # Sort breaches by 'added' timestamp in descending order (most recent first)
+    breaches_output["breaches_details"].sort(
+        key=lambda x: x.get("added") or "", reverse=True
+    )
 
     return breaches_output
 

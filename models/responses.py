@@ -282,6 +282,7 @@ class DetailedBreachInfo(BaseModel):
     xposed_data: str = ""
     xposed_records: Union[int, str] = 0
     xposure_desc: str = ""
+    added: Optional[str] = None
 
     class Config:
         """Pydantic model configuration."""
