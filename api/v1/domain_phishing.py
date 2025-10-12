@@ -183,6 +183,11 @@ async def check_domain_phishing(
     email: Optional[EmailStr] = Query(None, description="Email for authentication"),
     token: Optional[str] = Query(None, description="Verification token"),
 ) -> Union[DomainPhishingSummaryResponse, DomainPhishingResponse]:
+    """
+    Check domain for phishing variants using DNS twist.
+
+    Returns summary for unauthenticated users, detailed results for authenticated users.
+    """
     try:
         domain_request = DomainPhishingRequest(domain=domain)
         domain = domain_request.domain
@@ -195,7 +200,10 @@ async def check_domain_phishing(
                 if not is_domain_verified:
                     raise HTTPException(
                         status_code=401,
-                        detail="Domain not verified for this user. Please verify domain ownership first.",
+                        detail=(
+                            "Domain not verified for this user. "
+                            "Please verify domain ownership first."
+                        ),
                     )
 
         cached_result = get_cached_result(domain)

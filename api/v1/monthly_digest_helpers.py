@@ -17,7 +17,10 @@ async def heartbeat_logger():
             await asyncio.sleep(30)  # Heartbeat every 30 seconds
             heartbeat_count += 1
             logger.info(
-                f"[MONTHLY-DIGEST] 💓 HEARTBEAT {heartbeat_count} - Processing still active at {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+                (
+                    f"[MONTHLY-DIGEST] 💓 HEARTBEAT {heartbeat_count} - "
+                    f"Processing still active at {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+                )
             )
     except asyncio.CancelledError:
         logger.info(
@@ -99,7 +102,10 @@ async def prefetch_breach_data(client) -> dict:
 
     duration = time.time() - start_time
     logger.info(
-        f"[MONTHLY-DIGEST] 📊 PREFETCH: Loaded {len(new_breaches)} new breaches, {len(all_breaches)} total breach records in {duration:.2f}s"
+        (
+            f"[MONTHLY-DIGEST] 📊 PREFETCH: Loaded {len(new_breaches)} new breaches, "
+            f"{len(all_breaches)} total breach records in {duration:.2f}s"
+        )
     )
 
     return {
@@ -133,7 +139,10 @@ async def batch_create_sessions(client, email_tokens: dict):
             client.put_multi(batch)
             batch_num = (i // batch_size) + 1
             logger.info(
-                f"[MONTHLY-DIGEST] 📝 SESSION BATCH {batch_num}/{total_batches}: Created {len(batch)} sessions"
+                (
+                    f"[MONTHLY-DIGEST] 📝 SESSION BATCH {batch_num}/{total_batches}: "
+                    f"Created {len(batch)} sessions"
+                )
             )
         except Exception as e:
             logger.error(
@@ -142,7 +151,10 @@ async def batch_create_sessions(client, email_tokens: dict):
 
     duration = time.time() - start_time
     logger.info(
-        f"[MONTHLY-DIGEST] ✅ SESSION CREATION: Created {len(session_entities)} sessions in {duration:.2f}s"
+        (
+            f"[MONTHLY-DIGEST] ✅ SESSION CREATION: Created {len(session_entities)} "
+            f"sessions in {duration:.2f}s"
+        )
     )
 
 
@@ -308,9 +320,10 @@ async def generate_html_template(
 
     # Summary info
     domains_text = ", ".join(user_domains) if user_domains else "No verified domains"
-    summary_info = "Your summary: <strong>{} verified domains</strong> ({}) • <strong>{} exposures</strong> • <strong>{} new breaches</strong> this month".format(
-        len(user_domains), domains_text, len(user_exposures), len(new_breaches)
-    )
+    summary_info = (
+        "Your summary: <strong>{} verified domains</strong> ({}) • "
+        "<strong>{} exposures</strong> • <strong>{} new breaches</strong> this month"
+    ).format(len(user_domains), domains_text, len(user_exposures), len(new_breaches))
 
     # Dashboard URL
     dashboard_url = f"https://xposedornot.com/breach-dashboard?email={email}&token={dashboard_token}"

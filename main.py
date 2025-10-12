@@ -1,6 +1,8 @@
 """Main XON-API entry point."""
 
 # Third-party imports
+import asyncio
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, PlainTextResponse
@@ -109,7 +111,9 @@ async def mcp_post_handler(fastapi_request: Request):
                 "tools": [
                     {
                         "name": "check_email_breaches",
-                        "description": "Check if an email address appears in any known data breaches",
+                        "description": (
+                            "Check if an email address appears in any known data breaches"
+                        ),
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -123,7 +127,10 @@ async def mcp_post_handler(fastapi_request: Request):
                     },
                     {
                         "name": "get_breach_analytics",
-                        "description": "Get detailed analytics and statistics about breaches for a specific email address",
+                        "description": (
+                            "Get detailed analytics and statistics about breaches "
+                            "for a specific email address"
+                        ),
                         "inputSchema": {
                             "type": "object",
                             "properties": {
@@ -168,8 +175,6 @@ async def mcp_post_handler(fastapi_request: Request):
         if tool_name == "check_email_breaches":
             email = tool_args.get("email")
             if email:
-                import httpx
-
                 try:
                     base_url = (
                         f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
@@ -215,8 +220,6 @@ async def mcp_post_handler(fastapi_request: Request):
             email = tool_args.get("email")
             token = tool_args.get("token", "")
             if email:
-                import httpx
-
                 try:
                     base_url = (
                         f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
@@ -264,8 +267,6 @@ async def mcp_post_handler(fastapi_request: Request):
                 }
 
         elif tool_name == "list_breaches":
-            import httpx
-
             try:
                 base_url = (
                     f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
@@ -438,8 +439,6 @@ async def get_openapi_json():
 @app.get("/_health", include_in_schema=False)
 async def health_check():
     """Internal health check endpoint to verify Redis connectivity."""
-    import asyncio
-
     try:
         await asyncio.wait_for(redis_pool.ping(), timeout=2.0)
         return {"status": "healthy", "redis": "connected"}
@@ -974,8 +973,6 @@ async def custom_404_handler(request: Request, exc: HTTPException):
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup resources on application shutdown."""
-    import asyncio
-
     try:
 
         await asyncio.wait_for(redis_pool.close(), timeout=5.0)

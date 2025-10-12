@@ -340,7 +340,10 @@ def calculate_risk_score(
 
 
 def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
-    """Returns the exposed breaches with details including records, domain, industry, and other metadata."""
+    """
+    Returns the exposed breaches with details including records, domain, industry,
+    and other metadata.
+    """
     ds_client = datastore.Client()
     breaches_output = {"breaches_details": []}
 

@@ -1,13 +1,16 @@
 """Monthly digest endpoint for sending breach summaries to validated domain users."""
 
+import asyncio
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
 import redis
 from fastapi import APIRouter, HTTPException, Query, Request
+from google.cloud.datastore import Client
 
 from models.responses import MonthlyDigestResponse
 from utils.custom_limiter import custom_rate_limiter
@@ -143,10 +146,6 @@ async def process_monthly_digest_for_all_users():
     Internal function to process monthly digest for all verified domain users.
     Optimized with batch datastore operations and performance monitoring.
     """
-    import asyncio
-    import time
-    from datetime import datetime, timezone
-
     start_time = time.time()
     heartbeat_task = None
 
@@ -159,8 +158,6 @@ async def process_monthly_digest_for_all_users():
         )
 
         # Get all verified domains with optimized batch operations
-        from google.cloud.datastore import Client
-
         client = Client()
 
         # PERFORMANCE: Single query for all verified domains
@@ -364,7 +361,10 @@ async def process_monthly_digest_for_all_users():
             logger.error(f"[MONTHLY-DIGEST] ⚠️ {len(detailed_errors)} errors occurred:")
             for error in detailed_errors[:3]:  # Log first 3 errors
                 logger.error(
-                    f"[MONTHLY-DIGEST] - {error.get('email', 'unknown')}: {error.get('error', 'unknown')[:80]}..."
+                    (
+                        f"[MONTHLY-DIGEST] - {error.get('email', 'unknown')}: "
+                        f"{error.get('error', 'unknown')[:80]}..."
+                    )
                 )
 
         return result
@@ -530,7 +530,10 @@ async def trigger_manual_monthly_digest(
                     f"✅ MANUAL TRIGGER: Updated Redis state - '{last_run_key}' = '{full_timestamp}'"
                 )
                 logger.info(
-                    f"✅ TTL: {ttl_seconds} seconds (expires: {ttl_until.strftime('%Y-%m-%d %H:%M:%S UTC')})"
+                    (
+                        f"✅ TTL: {ttl_seconds} seconds "
+                        f"(expires: {ttl_until.strftime('%Y-%m-%d %H:%M:%S UTC')})"
+                    )
                 )
 
             except Exception as redis_error:

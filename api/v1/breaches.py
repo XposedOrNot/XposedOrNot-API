@@ -137,7 +137,10 @@ async def get_xposed_breaches(
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"domain={domain}, breach_id={breach_id}, if_modified_since={'provided' if if_modified_since else 'not_provided'}",
+            request_params=(
+                f"domain={domain}, breach_id={breach_id}, "
+                f"if_modified_since={'provided' if if_modified_since else 'not_provided'}"
+            ),
         )
         raise HTTPException(status_code=404, detail=str(e)) from e
 
@@ -345,7 +348,10 @@ async def search_data_breaches(
 )
 @custom_rate_limiter(
     "2 per second;25 per hour;100 per day",
-    message="For faster checks, please consider upgrading to our paid plans. Visit https://plus.xposedornot.com/products/api for more details.",
+    message=(
+        "For faster checks, please consider upgrading to our paid plans. "
+        "Visit https://plus.xposedornot.com/products/api for more details."
+    ),
 )
 async def search_email(
     request: Request,
@@ -357,7 +363,10 @@ async def search_email(
     ),
     details: bool = Query(
         False,
-        description="Include detailed breach information in the response (case-insensitive: true/false, yes/no, 1/0)",
+        description=(
+            "Include detailed breach information in the response "
+            "(case-insensitive: true/false, yes/no, 1/0)"
+        ),
         example=False,
     ),
 ) -> Union[EmailBreachResponse, EmailBreachErrorResponse]:

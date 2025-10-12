@@ -241,7 +241,10 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         "error": "Request dropped due to violation history",
                         "violation_count": violation_count,
                         "drop_percentage": f"{drop_percentage * 100:.0f}%",
-                        "detail": f"Request dropped due to {violation_count} previous violations. Please reduce your request rate.",
+                        "detail": (
+                            f"Request dropped due to {violation_count} previous violations. "
+                            "Please reduce your request rate."
+                        ),
                     },
                     headers={
                         "X-Dropped": "true",
@@ -258,7 +261,10 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
 
                 error_detail = {
                     "error": "Rate limit exceeded",
-                    "detail": f"Rate limit exceeded for endpoint {endpoint}. Please try again after {retry_after} seconds.",
+                    "detail": (
+                        f"Rate limit exceeded for endpoint {endpoint}. "
+                        f"Please try again after {retry_after} seconds."
+                    ),
                     "retry_after": retry_after,
                     "reset_time": reset_time.isoformat(),
                 }

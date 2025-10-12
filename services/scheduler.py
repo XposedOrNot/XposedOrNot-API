@@ -276,7 +276,10 @@ class SchedulerService:
                         )
                 except Exception as redis_error:
                     logger.error(
-                        f"🚀 DIGEST_TRIGGER: ❌ Failed to update success Redis state: {str(redis_error)}"
+                        (
+                            "🚀 DIGEST_TRIGGER: ❌ Failed to update success Redis state: "
+                            f"{str(redis_error)}"
+                        )
                     )
 
             # Always clear the running task key when done (success or failure)
@@ -289,7 +292,10 @@ class SchedulerService:
                     )
                 except Exception as cleanup_error:
                     logger.error(
-                        f"🚀 DIGEST_TRIGGER: ⚠️ Failed to clear running task key: {str(cleanup_error)}"
+                        (
+                            "🚀 DIGEST_TRIGGER: ⚠️ Failed to clear running task key: "
+                            f"{str(cleanup_error)}"
+                        )
                     )
 
         except Exception as e:
@@ -313,7 +319,10 @@ class SchedulerService:
                     )
                 except Exception as cleanup_error:
                     logger.error(
-                        f"🚀 DIGEST_TRIGGER: ⚠️ Failed to clear running task key in exception handler: {str(cleanup_error)}"
+                        (
+                            "🚀 DIGEST_TRIGGER: ⚠️ Failed to clear running task key "
+                            f"in exception handler: {str(cleanup_error)}"
+                        )
                     )
 
     async def _call_manual_trigger_directly(self):
@@ -671,8 +680,10 @@ class SchedulerService:
 
                     if now.date() > (first_tuesday.date() + timedelta(days=2)):
                         logger.warning(
-                            "🚨 MISSED DIGEST DETECTED - But startup recovery disabled "
-                            "to prevent race conditions"
+                            (
+                                "🚨 MISSED DIGEST DETECTED - But startup recovery disabled "
+                                "to prevent race conditions"
+                            )
                         )
                         # self.executor.submit(self._call_monthly_digest_api)  # COMMENTED OUT - Legacy
                     else:

@@ -36,7 +36,10 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
 @router.get("/metrics/detailed", response_model=DetailedMetricsResponse)
 @custom_rate_limiter("500 per day;100 per hour")
 async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResponse:
-    """Returns detailed summary of data breaches including yearly count, top breaches, and recent breaches."""
+    """
+    Returns detailed summary of data breaches including yearly count, top breaches,
+    and recent breaches.
+    """
     try:
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")
