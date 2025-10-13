@@ -492,7 +492,7 @@ async def get_domain_breach_summary(
         # Query xon records for domain
         xon_rec = ds_xon.query(kind="xon")
         xon_rec.add_filter("domain", "=", domain)
-        query_xon = xon_rec.fetch(limit=1000)
+        query_xon = xon_rec.fetch(limit=10000)
 
         unique_emails = set()
         unique_sites = set()
@@ -501,7 +501,7 @@ async def get_domain_breach_summary(
         # Process xon records
         for entity_xon in query_xon:
             email = entity_xon.key.name
-            if len(unique_emails) <= 1000:
+            if len(unique_emails) <= 10000:
                 unique_emails.add(email)
             if "site" in entity_xon:
                 sites = entity_xon["site"].split(";")
