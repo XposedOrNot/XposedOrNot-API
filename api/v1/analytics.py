@@ -29,7 +29,11 @@ from models.responses import (
     ShieldActivationResponse,
 )
 from services.analytics import get_detailed_metrics, get_pulse_news
-from services.send_email import send_dashboard_email_confirmation, send_exception_email, send_shield_email
+from services.send_email import (
+    send_dashboard_email_confirmation,
+    send_exception_email,
+    send_shield_email,
+)
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.request import get_client_ip, get_user_agent_info
