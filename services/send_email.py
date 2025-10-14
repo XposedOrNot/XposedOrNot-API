@@ -7,11 +7,13 @@
 import os
 import time
 import socket
+import datetime
 from typing import Dict, Any, Optional, List
 
 # Third-party imports
 import httpx
 from fastapi import HTTPException
+from google.cloud import datastore
 
 # Mailjet configuration
 MAILJET_API_KEY = os.environ.get("MAILJET_API_KEY")
@@ -195,6 +197,60 @@ _RATE_LIMIT = 5
 _ERROR_WINDOW = 60
 
 
+async def log_exception_to_db(
+    api_route: str,
+    error_message: str,
+    exception_type: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    request_params: Optional[str] = None,
+) -> bool:
+    """
+    Logs exception details to the xon_except table in Datastore.
+
+    Args:
+        api_route: The API route where the exception occurred
+        error_message: The exception error message
+        exception_type: The type of exception (e.g., "ValueError", "HTTPException")
+        user_agent: The User-Agent header from the request
+        request_params: Additional request parameters as a string
+
+    Returns:
+        True if logged successfully, False otherwise
+    """
+    try:
+        client = datastore.Client()
+
+        # Create unique key using api_route and timestamp
+        timestamp = time.time()
+        entity_key = f"{api_route}-{timestamp}"
+
+        # Create entity
+        exception_entity = datastore.Entity(
+            client.key("xon_except", entity_key),
+            exclude_from_indexes=["error", "user_agent", "request_params"],
+        )
+
+        # Store exception details
+        exception_entity.update(
+            {
+                "api": api_route,
+                "error": error_message,
+                "exception_type": exception_type or "Exception",
+                "user_agent": user_agent or "Unknown",
+                "request_params": request_params or "None",
+                "timestamp": datetime.datetime.utcnow(),
+            }
+        )
+
+        # Save to datastore
+        client.put(exception_entity)
+        return True
+
+    except Exception:
+        # Silently fail if logging fails - don't want to cause cascading errors
+        return False
+
+
 async def send_exception_email(
     api_route: str,
     error_message: Optional[str] = None,
@@ -203,7 +259,7 @@ async def send_exception_email(
     request_params: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Sends Exception email to admin with detailed error information.
+    Sends Exception email to admin with detailed error information and logs to database.
 
     Args:
         api_route: The API route where the exception occurred (e.g., "GET /v1/check-email/{email}")
@@ -216,6 +272,15 @@ async def send_exception_email(
         Response JSON if successful, None otherwise
     """
     global _error_count, _last_error_time
+
+    # Log exception to database (non-blocking)
+    await log_exception_to_db(
+        api_route=api_route,
+        error_message=error_message or "No error message provided",
+        exception_type=exception_type,
+        user_agent=user_agent,
+        request_params=request_params,
+    )
 
     current_time = time.time()
 

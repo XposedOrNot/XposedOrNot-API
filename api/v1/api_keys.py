@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request
 from google.cloud import datastore
 
 from models.base import BaseResponse
+from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.validation import validate_url, validate_variables
 
@@ -63,6 +64,13 @@ async def create_api_key(token: str, request: Request):
 
     except Exception as exc:
         logging.error("Error creating API key: %s", str(exc))
+        await send_exception_email(
+            api_route="GET /v1/create-api-key/{token}",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"token={'provided' if token else 'missing'}",
+        )
         return APIKeyResponse(
             status="error",
             message="Unfortunately an error occurred while creating/renewing the API key",
@@ -103,6 +111,13 @@ async def get_api_key(token: str, request: Request):
 
     except Exception as exc:
         logging.error("Error retrieving API key: %s", str(exc))
+        await send_exception_email(
+            api_route="GET /v1/get-api-key/{token}",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"token={'provided' if token else 'missing'}",
+        )
         return APIKeyResponse(
             status="error", message="API key not found", status_code=404
         )

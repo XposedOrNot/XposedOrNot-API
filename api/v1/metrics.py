@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from utils.custom_limiter import custom_rate_limiter
 from models.responses import MetricsResponse, DetailedMetricsResponse
 from services.analytics import get_detailed_metrics
+from services.send_email import send_exception_email
 from utils.helpers import validate_url
 
 router = APIRouter()
@@ -30,6 +31,13 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
         )
 
     except Exception as e:
+        await send_exception_email(
+            api_route="GET /v1/metrics",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params="None",
+        )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -91,6 +99,13 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
         )
 
     except Exception as e:
+        await send_exception_email(
+            api_route="GET /v1/metrics/detailed",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params="None",
+        )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -120,4 +135,11 @@ async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
         return JSONResponse(content=domain_metrics)
 
     except Exception as e:
+        await send_exception_email(
+            api_route=f"GET /v1/metrics/domain/{domain}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"domain={domain}",
+        )
         raise HTTPException(status_code=500, detail=str(e)) from e

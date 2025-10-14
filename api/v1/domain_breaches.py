@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from models.base import BaseResponse
 from models.responses import DomainBreachesResponse
+from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.validation import validate_url
 
@@ -171,6 +172,13 @@ async def protected(
     except HTTPException:
         raise
     except Exception as exception_details:
+        await send_exception_email(
+            api_route="POST /v1/domain-breaches/",
+            error_message=str(exception_details),
+            exception_type=type(exception_details).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"api_key={'provided' if x_api_key else 'missing'}",
+        )
         raise HTTPException(
             status_code=500, detail="An error occurred during processing"
         ) from exception_details

@@ -7,6 +7,7 @@ from google.cloud import datastore
 from pydantic import BaseModel
 from feedgen.feed import FeedGenerator
 from models.base import BaseResponse
+from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 
 router = APIRouter()
@@ -49,6 +50,13 @@ async def get_pulse_data(request: Request):
         return PulseNewsResponse(status="success", data=data, status_code=200)
     except Exception as exc:
         logging.error("Failed to fetch news feed: %s", str(exc))
+        await send_exception_email(
+            api_route="GET /v1/xon-pulse",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params="None",
+        )
         return PulseNewsResponse(
             status="error", message="Failed to fetch news feed", status_code=404
         )
@@ -95,4 +103,11 @@ async def rss_feed(request: Request):
 
     except Exception as exc:
         logging.error("Feed generation failed: %s", str(exc))
+        await send_exception_email(
+            api_route="GET /v1/rss",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params="None",
+        )
         return Response(content="Feed generation failed", status_code=404)

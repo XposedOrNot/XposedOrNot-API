@@ -14,6 +14,7 @@ from redis import Redis
 
 from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
 from models.responses import BaseResponse
+from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.token import confirm_token
 
@@ -286,6 +287,13 @@ async def check_domain_phishing(
                 status_code=500, detail=f"Error running domain check: {str(e)}"
             )
     except Exception as e:
+        await send_exception_email(
+            api_route=f"GET /v1/domain-phishing/{domain}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"domain={domain}, email={'provided' if email else 'not_provided'}, token={'provided' if token else 'not_provided'}",
+        )
         raise HTTPException(
             status_code=500, detail=f"Error processing domain: {str(e)}"
         )

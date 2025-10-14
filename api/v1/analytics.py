@@ -29,7 +29,7 @@ from models.responses import (
     ShieldActivationResponse,
 )
 from services.analytics import get_detailed_metrics, get_pulse_news
-from services.send_email import send_dashboard_email_confirmation, send_shield_email
+from services.send_email import send_dashboard_email_confirmation, send_exception_email, send_shield_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.request import get_client_ip, get_user_agent_info
@@ -60,6 +60,13 @@ async def get_metrics(request: Request) -> DetailedMetricsResponse:
         metrics = await get_detailed_metrics()
         return DetailedMetricsResponse(**metrics)
     except Exception as e:
+        await send_exception_email(
+            api_route="GET /v1/analytics/metrics",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params="None",
+        )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -71,6 +78,13 @@ async def get_news_feed(request: Request) -> PulseNewsResponse:
         news_items = await get_pulse_news()
         return PulseNewsResponse(status="success", data=news_items)
     except Exception as e:
+        await send_exception_email(
+            api_route="GET /v1/analytics/pulse",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params="None",
+        )
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -167,6 +181,13 @@ async def domain_alert(
         return DomainAlertResponse()
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        await send_exception_email(
+            api_route=f"GET /v1/domain-alert/{user_email}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={user_email}",
+        )
         return DomainAlertErrorResponse(
             Error=f"Internal error: {str(e)}", email=user_email
         )
@@ -239,6 +260,13 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
         )
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        await send_exception_email(
+            api_route="GET /v1/domain-verify/{token}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"token={verification_token}",
+        )
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "domain_dashboard_error.html", {"request": request}
@@ -530,6 +558,13 @@ async def send_domain_breaches(
         return response
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        await send_exception_email(
+            api_route="GET /v1/send_domain_breaches",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={email}, token={'provided' if token else 'not_provided'}, time_filter={time_filter}",
+        )
         error_detail = f"Error: {str(e)}"
         return DomainBreachesErrorResponse(Error=error_detail)
 
@@ -613,6 +648,13 @@ async def activate_shield(
         return ShieldActivationErrorResponse(Error="Unexpected state")
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        await send_exception_email(
+            api_route=f"GET /v1/shield-on/{email}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={email}",
+        )
         return ShieldActivationErrorResponse(
             Error=f"Internal error: {str(e)}", email=email
         )
@@ -682,6 +724,13 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
         )
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        await send_exception_email(
+            api_route="GET /v1/verify-shield/{token}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"token={token_shield}",
+        )
         return HTMLResponse(
             content=templates.TemplateResponse(
                 "email_shield_error.html", {"request": request}
@@ -784,6 +833,15 @@ async def get_breach_hierarchy_analytics(
 
         return get_details
     except Exception as e:
+        # Note: This is a helper function, not a route handler, so request object not available
+        # Logging without request context
+        await send_exception_email(
+            api_route="HELPER /get_breach_hierarchy_analytics",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent="N/A (helper function)",
+            request_params=f"breaches={breaches[:50] if breaches else 'None'}, sensitive_breaches={'provided' if sensitive_breaches else 'not_provided'}",
+        )
         raise HTTPException(
             status_code=404, detail="Error processing breach data"
         ) from e
@@ -824,4 +882,11 @@ async def get_analytics(
         return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        await send_exception_email(
+            api_route=f"GET /v1/analytics/{user_email}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={user_email}",
+        )
         return JSONResponse(status_code=404, content={"Error": f"Error: {str(e)}"})

@@ -21,6 +21,7 @@ from models.base import BaseResponse
 from services.send_email import (
     send_domain_confirmation,
     send_domain_verified_success,
+    send_exception_email,
 )
 from utils.custom_limiter import custom_rate_limiter
 from utils.request import get_client_ip, get_user_agent_info
@@ -392,4 +393,11 @@ async def domain_verification(
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
     except Exception as e:
+        await send_exception_email(
+            api_route="GET /v1/domain_verification",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"command={z}, domain={d}, email={a}",
+        )
         raise HTTPException(status_code=404, detail="Verification failed") from e

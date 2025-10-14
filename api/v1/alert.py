@@ -20,7 +20,7 @@ from models.responses import (
 )
 from services.analytics import get_breaches_analytics
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
-from services.send_email import send_alert_confirmation, send_unsub_email
+from services.send_email import send_alert_confirmation, send_exception_email, send_unsub_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.token import confirm_token, generate_confirmation_token
@@ -119,6 +119,13 @@ async def subscribe_to_alert_me(
         HTTPException,
         google_exceptions.GoogleAPIError,
     ) as exception_details:
+        await send_exception_email(
+            api_route=f"GET /v1/alertme/{user_email}",
+            error_message=str(exception_details),
+            exception_type=type(exception_details).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={user_email}",
+        )
         raise HTTPException(status_code=404) from exception_details
 
 
@@ -206,6 +213,13 @@ async def alert_me_verification(verification_token: str, request: Request):
         )
 
     except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
+        await send_exception_email(
+            api_route="GET /v1/verifyme/{token}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"token={verification_token}",
+        )
         return templates.TemplateResponse("email_error.html", {"request": request})
 
 
@@ -272,6 +286,13 @@ async def send_verification(
         HTTPException,
         google_exceptions.GoogleAPIError,
     ) as exception_details:
+        await send_exception_email(
+            api_route="GET /v1/send_verification",
+            error_message=str(exception_details),
+            exception_type=type(exception_details).__name__,
+            user_agent=request.headers.get("User-Agent") if request else "Unknown",
+            request_params=f"email={email}, token={'provided' if token != 'None' else 'not_provided'}",
+        )
         return VerificationResponse(status="Failed")
 
 
@@ -314,6 +335,13 @@ async def unsubscribe(user_email: str, request: Request):
         HTTPException,
         google_exceptions.GoogleAPIError,
     ) as exception_details:
+        await send_exception_email(
+            api_route=f"GET /v1/unsubscribe-on/{user_email}",
+            error_message=str(exception_details),
+            exception_type=type(exception_details).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={user_email}",
+        )
         raise HTTPException(status_code=404, detail="Not found") from exception_details
 
 
@@ -358,4 +386,11 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
         HTTPException,
         google_exceptions.GoogleAPIError,
     ) as exception_details:
+        await send_exception_email(
+            api_route="GET /v1/verify_unsub/{token}",
+            error_message=str(exception_details),
+            exception_type=type(exception_details).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"token={unsubscribe_token}",
+        )
         raise HTTPException(status_code=404, detail="Not found") from exception_details
