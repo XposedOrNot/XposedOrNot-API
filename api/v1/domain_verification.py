@@ -22,6 +22,7 @@ from services.send_email import (
     send_domain_confirmation,
     send_domain_verified_success,
     send_exception_email,
+    send_domain_verification_admin_notification,
 )
 from utils.custom_limiter import custom_rate_limiter
 from utils.request import get_client_ip, get_user_agent_info
@@ -244,6 +245,10 @@ async def verify_email(
                 await send_domain_confirmation_email(
                     email, token, client_ip_address, browser_type, client_platform
                 )
+
+                # Send admin notification
+                await send_domain_verification_admin_notification(domain)
+
                 return DomainVerificationResponse(
                     status="success", domainVerification="Success"
                 )
@@ -281,6 +286,10 @@ async def verify_dns(
         await send_domain_verified_success(
             email, client_ip_address, browser_type, client_platform
         )
+
+        # Send admin notification
+        await send_domain_verification_admin_notification(domain)
+
         return DomainVerificationResponse(
             status="success", domainVerification="Success"
         )
@@ -314,6 +323,10 @@ async def verify_html(
         await send_domain_verified_success(
             email, client_ip_address, browser_type, client_platform
         )
+
+        # Send admin notification
+        await send_domain_verification_admin_notification(domain)
+
         return DomainVerificationResponse(
             status="success", domainVerification="Success"
         )

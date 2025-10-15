@@ -613,3 +613,47 @@ async def send_domain_verified_success(
         raise HTTPException(
             status_code=500, detail="Failed to send verification success email"
         ) from e
+
+
+async def send_domain_verification_admin_notification(
+    domain: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Sends admin notification when a domain is successfully verified.
+
+    Args:
+        domain: The verified domain name
+
+    Returns:
+        Response JSON if successful, None otherwise
+    """
+    try:
+        data = {
+            "Messages": [
+                {
+                    "From": {
+                        "Email": FROM_EMAIL,
+                        "Name": FROM_NAME,
+                    },
+                    "To": [{"Email": "deva@xposedornot.com"}],
+                    "TemplateID": 4318335,
+                    "TemplateLanguage": True,
+                    "Subject": "XON: Domain Successfully Verified",
+                    "Variables": {
+                        "api": "Domain Verification Success",
+                        "error_message": domain,
+                        "exception_type": "New Domain",
+                        "user_agent": "N/A",
+                        "request_params": "N/A",
+                    },
+                }
+            ]
+        }
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
+            )
+            return response.json() if response.status_code == 200 else None
+    except Exception:
+        # Silently fail - don't want notification failures to break verification
+        return None
