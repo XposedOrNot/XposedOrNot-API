@@ -1,23 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
-   <head>
-      <meta charset="utf-8">
-      <title>XposedOrNot API Reference</title>
-      <link rel="shortcut icon" type="image/ico" href="https://xposedornot.com/favicon.ico" />
-      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
-      <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js" integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV" crossorigin="anonymous"></script>
-      <link rel=stylesheet href='https://fonts.googleapis.com/css?family=Poppins%3A300%2C400%2C500%2C600%2C700%2C900&#038;subset' type=text/css media=all>
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" integrity="sha256-BtbhCIbtfeVWGsqxk1vOHEYXS6qcvQvLMZqjtpWUEx8=" crossorigin="anonymous" />
-   </head>
-   <body style="font-family:Poppins;color:#3c5fec">
-      <br>
-      <div class="container" align="center">
-	  <nav class="navbar navbar-expand-lg navbar-light">
-		<b><a style="color:#3c5fec" class="navbar-brand" href="https://xposedornot.com">XposedOrNot</a></b>
-	</nav>
-         <div class="boxx">
-            <div class="swal2-icon swal2-success swal2-animate-success-icon" style="display: flex;">
+
+<head>
+   <meta charset="utf-8">
+   <title>XposedOrNot API Reference</title>
+   <link rel="shortcut icon" type="image/ico" href="https://xposedornot.com/favicon.ico" />
+   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      integrity="sha384-JcKb8q3iqJ61gNV9KGb8thSsNjpSL0n8PARn9HuZOnIxN0hoP+VmmDGMN5t9UJ0Z" crossorigin="anonymous">
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js"
+      integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg=="
+      crossorigin="anonymous"></script>
+   <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"
+      integrity="sha384-B4gt1jrGC7Jh4AgTPSdUtOBvfO8shuf57BaghqFfPlYxofvL8/KUEfYiJOMMV+rV"
+      crossorigin="anonymous"></script>
+   <link rel=stylesheet
+      href='https://fonts.googleapis.com/css?family=Poppins%3A300%2C400%2C500%2C600%2C700%2C900&#038;subset'
+      type=text/css media=all>
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css"
+      integrity="sha256-BtbhCIbtfeVWGsqxk1vOHEYXS6qcvQvLMZqjtpWUEx8=" crossorigin="anonymous" />
+   <style>
+      body {
+         font-family: 'Poppins', sans-serif;
+         color: #3c5fec;
+         background-color: #f8f9fa;
+      }
+
+      .container {
+         max-width: 1200px;
+         margin: 0 auto;
+         padding: 2rem;
+      }
+
+      .navbar {
+         background-color: white;
+         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+         padding: 1rem;
+         margin-bottom: 2rem;
+      }
+
+      .boxx {
+         background-color: white;
+         border-radius: 10px;
+         padding: 2rem;
+         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      .feature-card {
+         background-color: white;
+         border-radius: 8px;
+         padding: 1.5rem;
+         margin: 1rem 0;
+         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+         transition: transform 0.3s ease;
+      }
+
+      .feature-card:hover {
+         transform: translateY(-5px);
+      }
+
+      .button-link {
+         display: inline-block;
+         padding: 12px 24px;
+         color: #fff;
+         background-color: #3c5fec;
+         text-decoration: none;
+         border-radius: 5px;
+         transition: all 0.3s ease;
+         font-weight: 500;
+      }
+
+      .button-link:hover {
+         background-color: #2d4bcc;
+         color: #fff;
+         text-decoration: none;
+         transform: translateY(-2px);
+      }
+
+      .social-links {
+         margin-top: 2rem;
+      }
+
+      .social-links a {
+         margin: 0 1rem;
+         transition: transform 0.3s ease;
+      }
+
+      .social-links a:hover {
+         transform: scale(1.1);
+      }
+
+      .api-features {
+         display: grid;
+         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+         gap: 1.5rem;
+         margin: 2rem 0;
+      }
+   </style>
+</head>
+
+<body>
+   <div class="container">
+      <nav class="navbar navbar-expand-lg navbar-light">
+         <b><a style="color:#3c5fec" class="navbar-brand" href="https://xposedornot.com">XposedOrNot</a></b>
+      </nav>
+      <div class="boxx">
+         <div class="text-center mb-4">
+            <div class="swal2-icon swal2-success swal2-animate-success-icon" style="display: flex; margin: 0 auto;">
                <div class="swal2-success-circular-line-left" style="background-color: rgb(255, 255, 255);"></div>
                <span class="swal2-success-line-tip"></span>
                <span class="swal2-success-line-long"></span>
@@ -25,39 +113,53 @@
                <div class="swal2-success-fix" style="background-color: rgb(255, 255, 255);"></div>
                <div class="swal2-success-circular-line-right" style="background-color: rgb(255, 255, 255);"></div>
             </div>
-	      <div align="center">		      
-	       <div class="alert alert-success" role="alert" >
-            <h2>Welcome to XposedOrNot API Portal </h2>
-		       <i class="fas fa-check-circle"></i> <b>Your comprehensive solution for querying exposed data breaches via our REST API.</b> <br><br><br>
-               <p style="color:green;font-size:14px">
-	       <h5><b>I appreciate your interest in integrating the XposedOrNot API into your applications.<br> I am thrilled to have you on board! 🎉</b></h5> <br><br><br>
-			      <p>Explore XposedOrNot API Playground and Dive into our API Playground to get a hands-on experience with our API's capabilities. <br><br>
-
-For more in-depth information, please refer to our <a href="https://xposedornot.com/api_doc"> API-documentation guide</a> and <a href="https://xposedornot.com/faq">FAQ</a>. These resources are designed to provide you with all the details you need to effectively use our API.</p><br>
-               <h3><a href="https://xposedornot.apiary.io" target="_blank" class="button-link"> API Playground</a></h3>
-                  <style>
-                     .button-link {
-                     display: inline-block;
-                     padding: 10px 20px;
-                     color: #fff;
-                     background-color: #007BFF;
-                     text-decoration: none;
-                     border-radius: 5px;
-                     transition: background-color 0.3s ease;
-                     }
-                     .button-link:hover {
-                     background-color: #FFBF00;
-                     }
-                  </style>
-                  <br><br><br>
-			      <br>More detailed information can be read at <a href="https://xposedornot.com/api_doc"> API-documentation guide</a> and <a href="https://xposedornot.com/faq">FAQ</a>. </p>
-                           </div>
+         </div>
+         <div class="alert alert-success" role="alert">
+            <h2 class="text-center mb-4">Welcome to XposedOrNot API Portal</h2>
+            <div class="text-center mb-4">
+               <i class="fas fa-check-circle fa-2x"></i>
+               <h4 class="mt-2"><b>Your comprehensive solution for querying exposed data breaches via our REST API</b>
+               </h4>
             </div>
-	    <br><br><a style="color:#3c5fec" href="https://twitter.com/xposedornot"  target="_blank" rel="noopener">&nbsp <i class="fab fa-twitter fa-3x"></i></a>
-               <a style="color:#3c5fec" href="https://facebook.com/xposedornot" target="_blank" rel="noopener">&nbsp <i class="fab fa-facebook fa-3x"></i></a> 
-	       <br>
+            <div class="api-features">
+               <div class="feature-card">
+                  <i class="fas fa-search fa-2x mb-3" style="color: #3c5fec;"></i>
+                  <h5>Email Breach Check</h5>
+                  <p>Check if an email address has been exposed in any data breaches</p>
+               </div>
+               <div class="feature-card">
+                  <i class="fas fa-building fa-2x mb-3" style="color: #3c5fec;"></i>
+                  <h5>Domain Analysis</h5>
+                  <p>Analyze entire domains for breach exposure and security risks</p>
+               </div>
+               <div class="feature-card">
+                  <i class="fas fa-users fa-2x mb-3" style="color: #3c5fec;"></i>
+                  <h5>Bulk Processing</h5>
+                  <p>Process multiple email addresses efficiently with our bulk API</p>
+               </div>
+            </div>
+            <div class="text-center mt-4">
+               <p class="lead">We appreciate your interest in integrating the XposedOrNot API into your applications. We
+                  are thrilled to have you on board! 🎉</p>
+               <p>Explore our API documentation to get hands-on experience with our API's capabilities.</p>
+               <div class="mt-4">
+                  <a href="/docs" class="button-link">API Documentation</a>
+               </div>
+               <div class="mt-4">
+                  <p>For more information, please refer to our <a href="https://xposedornot.com/api_doc">API Guide</a> and <a href="https://xposedornot.com/faq">FAQ</a>.</p>
+               </div>
+            </div>
+         </div>
+         <div class="social-links text-center">
+            <a style="color:#3c5fec" href="https://twitter.com/xposedornot" target="_blank" rel="noopener">
+               <i class="fab fa-twitter fa-3x"></i>
+            </a>
+            <a style="color:#3c5fec" href="https://facebook.com/xposedornot" target="_blank" rel="noopener">
+               <i class="fab fa-facebook fa-3x"></i>
+            </a>
          </div>
       </div>
-   </body>
-</html>
+   </div>
+</body>
 
+</html>

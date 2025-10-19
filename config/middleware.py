@@ -43,7 +43,7 @@ def setup_security_headers(app: FastAPI) -> None:
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;"
             "object-src 'none';"
             "base-uri 'self';"
-            "connect-src 'self' https://xposedornot.com https://api.xposedornot.com https://cdnjs.cloudflare.com;"
+            "connect-src 'self' https://xposedornot.com https://api.xposedornot.com https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com;"
             "worker-src 'self' blob:;"
         )
 
