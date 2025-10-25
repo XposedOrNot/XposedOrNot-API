@@ -402,8 +402,10 @@ async def search_email(
         xon_record = data_store.get(xon_key)
 
         if xon_record and "site" in xon_record:
+            # Use set to filter out duplicate breaches
             domains = xon_record["site"].split(";")
-            filtered_domains = [domain.strip() for domain in domains if domain.strip()]
+            unique_domains = set(domain.strip() for domain in domains if domain.strip())
+            filtered_domains = list(unique_domains)
 
             if filtered_domains:
                 response_content = {
@@ -413,7 +415,9 @@ async def search_email(
                 }
 
                 if details:
-                    raw_breaches = get_breaches(xon_record["site"])
+                    # Pass deduplicated breaches to get_breaches
+                    deduplicated_sites = ";".join(unique_domains)
+                    raw_breaches = get_breaches(deduplicated_sites)
                     formatted_breaches = []
 
                     for breach in raw_breaches["breaches_details"]:
