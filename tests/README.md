@@ -25,16 +25,17 @@ pytest tests/ --hypothesis-seed=random
 
 ## Test Coverage
 
-### Domain Validation (`test_fuzz_domain_validation.py`)
+### Helper Functions (`test_fuzz_helpers.py`)
 - Tests `validate_domain()` with random text inputs
-- Tests `is_safe_domain()` to prevent SSRF attacks
-- Verifies private/internal IP blocking
-- Validates public domain allowance
+- Tests domain validation with unicode and special characters
+- Validates handling of wrong input types
+- Edge case handling for malformed domains
 
-### General Validation (`test_fuzz_validation.py`)
-- Tests `validate_email_with_tld()` with various email formats
-- Tests `validate_variables()` with mixed input types
-- Edge case handling for empty/null inputs
+### SSRF Protection (`test_fuzz_ssrf_protection.py`)
+- Tests `is_safe_domain()` to prevent SSRF attacks
+- Verifies private/internal IP blocking (127.0.0.1, 192.168.x.x, 10.x.x.x)
+- Validates public domain allowance
+- Tests against cloud metadata endpoints (169.254.169.254)
 
 ## Benefits for Security
 
