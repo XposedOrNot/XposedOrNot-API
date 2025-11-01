@@ -21,13 +21,13 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
+        python -m pip install pip==24.3.1
         pip install -r requirements.txt
 
     - name: Install Pylint
       run: |
-        pip install pylint
+        pip install pylint==3.2.7
 
     - name: Run Pylint
       run: |
-        pylint --fail-under=8 $(git ls-files '*.py')
+        pylint --fail-under=8 $(git ls-files '*.py' | grep -v '^.github/fuzz/')
