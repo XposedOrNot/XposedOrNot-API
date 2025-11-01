@@ -26,9 +26,7 @@ class TestValidationFuzzing:
                 f"validate_email_with_tld crashed on input: {repr(email_input)}"
             ) from e
 
-    @given(
-        st.emails()
-    )
+    @given(st.emails())
     @settings(
         suppress_health_check=[HealthCheck.function_scoped_fixture],
         max_examples=100,
@@ -43,9 +41,7 @@ class TestValidationFuzzing:
                 f"validate_email_with_tld crashed on valid email: {repr(email)}"
             ) from e
 
-    @given(
-        st.lists(st.text(), min_size=0, max_size=10)
-    )
+    @given(st.lists(st.text(), min_size=0, max_size=10))
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
     def test_validate_variables_never_crashes(self, variables):
         """Test that validate_variables never crashes on any list input."""
