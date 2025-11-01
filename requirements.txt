@@ -49,3 +49,7 @@ whois
 # py-tlsh>=4.5.0
 # ssdeep
 
+# Testing dependencies
+pytest>=7.4.0
+hypothesis>=6.82.0
+

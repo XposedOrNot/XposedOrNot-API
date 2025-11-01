@@ -1,0 +1,37 @@
+name: Fuzzing Tests
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  schedule:
+    - cron: '0 2 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-test:
+    name: Run Hypothesis Fuzzing Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Python
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest hypothesis
+          pip install -r requirements.txt || echo "Some dependencies may not install in CI - continuing"
+
+      - name: Run fuzzing tests
+        run: |
+          pytest tests/ -v --tb=short
+        continue-on-error: false
