@@ -21,12 +21,14 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install pip==24.3.1
+        python -m pip install pip==24.3.1 \
+          --hash sha256:3790624780082365f47549d032f3770eeb2b1e8bd1f7b2e02dace1afa361b4ed
         pip install -r requirements.txt
 
     - name: Install Pylint
       run: |
-        pip install pylint==3.2.7
+        pip install pylint==3.2.7 \
+          --hash sha256:02f4aedeac91be69fb3b4bea997ce580a4ac68ce58b89eaefeaf06749df73f4b
 
     - name: Run Pylint
       run: |
