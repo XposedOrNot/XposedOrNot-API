@@ -26,8 +26,7 @@ jobs:
 
     - name: Install Pylint
       run: |
-        pip install --require-hashes --only-binary :all: pylint==3.2.7 \
-          --hash sha256:02f4aedeac91be69fb3b4bea997ce580a4ac68ce58b89eaefeaf06749df73f4b
+        pip install -r .github/requirements-pylint.txt
 
     - name: Run Pylint
       run: |
