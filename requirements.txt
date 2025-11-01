@@ -1,7 +1,7 @@
-aiohttp
+aiohttp>=3.12.14
 blinker
 bson
-cryptography
+cryptography>=46.0.0
 dnspython>=1.16.0
 dnstwist
 domcheck
@@ -19,7 +19,7 @@ httpx
 idna>=2.8
 ipaddress
 itsdangerous
-jinja2
+jinja2>=3.1.4
 lxml
 mailjet_rest
 openai
@@ -27,12 +27,12 @@ ppdeep>=20200505
 pydantic>=1.8.0
 python-dateutil
 python-jose
-python-multipart>=0.0.5
+python-multipart>=0.0.9
 python-whois
-pyyaml
+pyyaml>=6.0.2
 PySocks
 redis>=4.5.0
-requests
+requests>=2.32.3
 simplejson
 slowapi
 starlette>=0.14.0
@@ -40,7 +40,7 @@ tld>=0.9.1
 typing-extensions>=4.0.0
 ua-parser
 user-agents
-urllib3
+urllib3>=2.2.3
 uvicorn>=0.15.0
 validate-email
 validators
