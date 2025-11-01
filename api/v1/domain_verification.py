@@ -1,7 +1,9 @@
 """Domain verification endpoints and utilities."""
 
 # Standard library imports
+import ipaddress
 import re
+import socket
 import threading
 from collections import defaultdict
 from datetime import datetime
@@ -334,6 +336,41 @@ async def verify_html(
     return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
+def is_safe_domain(domain: str) -> bool:
+    """
+    Check if a domain is safe to make requests to (not private/internal IPs).
+
+    Args:
+        domain: The domain to check
+
+    Returns:
+        bool: True if domain is safe (resolves to public IPs only), False otherwise
+    """
+    try:
+        # Resolve domain to IP addresses
+        ip_addresses = socket.getaddrinfo(domain, None)
+
+        for result in ip_addresses:
+            ip_str = result[4][0]
+            ip = ipaddress.ip_address(ip_str)
+
+            # Check if IP is private, loopback, link-local, or multicast
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_multicast
+                or ip.is_reserved
+            ):
+                return False
+
+        return True
+
+    except (socket.gaierror, ValueError, OSError):
+        # DNS resolution failed or invalid IP
+        return False
+
+
 async def check_file(domain: str, prefix: str, code: str) -> bool:
     """
     Supports domain verification using HTML file check process.
@@ -347,6 +384,9 @@ async def check_file(domain: str, prefix: str, code: str) -> bool:
         bool: True if verification successful, False otherwise
     """
     if not validate_domain(domain) or not validate_variables([code]):
+        return False
+
+    if not is_safe_domain(domain):
         return False
 
     headers = {
