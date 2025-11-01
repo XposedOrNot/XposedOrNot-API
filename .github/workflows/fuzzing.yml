@@ -35,8 +35,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip==24.3.1
-          pip install -r .github/requirements-fuzz.txt
+          python -m pip install --upgrade pip==25.0.1
+          pip install --require-hashes -r .github/requirements-fuzz.txt
           # Install only minimal dependencies needed for fuzz targets
           pip install -r requirements.txt || echo "Some dependencies may not install in CI - continuing"
 
