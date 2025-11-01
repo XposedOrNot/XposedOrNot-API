@@ -2,6 +2,9 @@ name: Friendly Greetings
 
 on: [pull_request_target, issues]
 
+permissions:
+  contents: read
+
 jobs:
   warm-welcome:
     runs-on: ubuntu-latest
