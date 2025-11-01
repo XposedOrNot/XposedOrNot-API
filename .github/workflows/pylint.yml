@@ -21,8 +21,8 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip==25.0.1
-        pip install -r requirements.txt
+        python -m pip install --require-hashes -r .github/requirements-pip.txt
+        pip install --require-hashes -r requirements-hashed.txt
 
     - name: Install Pylint
       run: |
