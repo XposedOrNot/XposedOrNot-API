@@ -14,8 +14,8 @@ jobs:
     steps:
     - uses: actions/first-interaction@34f15e814fe48ac9312ccf29db4e74fa767cbab7  # v1.3.0
       with:
-        repo-token: ${{ secrets.GITHUB_TOKEN }}
-        issue-message: >
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        issue_message: >
           🌟 Hi there! We're thrilled to see you contributing for the first time! Thank you for raising this issue. Our community values your input, and we look forward to addressing your concerns. Feel free to ask questions or seek assistance if needed. Welcome aboard! 🚀
-        pr-message: >
+        pr_message: >
           🎉 Welcome to our project! Your first pull request marks an exciting moment for us. We're eager to review your contribution and collaborate to merge it into our codebase. Thanks for investing your time in improving our project. If you have any questions or need help, don't hesitate to
