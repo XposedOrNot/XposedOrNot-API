@@ -6,7 +6,9 @@ import os
 import atheris
 
 # Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.insert(0, project_root)
 
 from utils.helpers import (
@@ -69,8 +71,9 @@ def TestGetPreferredIPAddress(data):
 
     try:
         result = get_preferred_ip_address(x_forwarded_for)
-        assert result is None or isinstance(result, str), \
-            "get_preferred_ip_address must return None or str"
+        assert result is None or isinstance(
+            result, str
+        ), "get_preferred_ip_address must return None or str"
     except Exception as e:
         if not isinstance(e, AssertionError):
             raise

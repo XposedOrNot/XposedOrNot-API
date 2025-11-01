@@ -6,7 +6,9 @@ import os
 import atheris
 
 # Add project root to path
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+project_root = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 sys.path.insert(0, project_root)
 
 from utils.validation import (
@@ -23,8 +25,10 @@ def TestValidateVariables(data):
 
     # Generate a list of random strings
     list_size = fdp.ConsumeIntInRange(0, 10)
-    test_list = [fdp.ConsumeUnicodeNoSurrogates(fdp.ConsumeIntInRange(0, 100))
-                 for _ in range(list_size)]
+    test_list = [
+        fdp.ConsumeUnicodeNoSurrogates(fdp.ConsumeIntInRange(0, 100))
+        for _ in range(list_size)
+    ]
 
     try:
         result = validate_variables(test_list)
