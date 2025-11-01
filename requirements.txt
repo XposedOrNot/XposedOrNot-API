@@ -1,13 +1,8 @@
-aiohttp==3.10.11 \
-    --hash=sha256:bc6f1ab987a27b83c5268a17218463c2ec08dbb754195113867a27b166cd6087 \
-    ; python_version < "3.9"
-aiohttp==3.13.2 \
-    --hash=sha256:4356474ad6333e41ccefd39eae869ba15a6c5299c9c01dfdcfdd5c107be4363e \
-    ; python_version >= "3.9"
+aiohttp>=3.10.11; python_version < "3.9"
+aiohttp>=3.13.2; python_version >= "3.9"
 blinker
 bson
-cryptography==46.0.3 \
-    --hash=sha256:a2c0cd47381a3229c403062f764160d57d4d175e022c1df84e168c6251a22eec
+cryptography>=46.0.0
 dnspython>=1.16.0
 dnstwist
 domcheck
@@ -25,8 +20,7 @@ httpx
 idna>=2.8
 ipaddress
 itsdangerous
-jinja2==3.1.6 \
-    --hash=sha256:85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67
+jinja2>=3.1.4
 lxml
 mailjet_rest
 openai
@@ -34,15 +28,12 @@ ppdeep>=20200505
 pydantic>=1.8.0
 python-dateutil
 python-jose
-python-multipart==0.0.20 \
-    --hash=sha256:8a62d3a8335e06589fe01f2a3e178cdcc632f3fbe0d492ad9ee0ec35aab1f104
+python-multipart>=0.0.9
 python-whois
-pyyaml==6.0.3 \
-    --hash=sha256:ba1cc08a7ccde2d2ec775841541641e4548226580ab850948cbfda66a1befcdc
+pyyaml>=6.0.2
 PySocks
 redis>=4.5.0
-requests==2.32.5 \
-    --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6
+requests>=2.32.3
 simplejson
 slowapi
 starlette>=0.14.0
@@ -50,8 +41,7 @@ tld>=0.9.1
 typing-extensions>=4.0.0
 ua-parser
 user-agents
-urllib3==2.5.0 \
-    --hash=sha256:e6b01673c0fa6a13e374b50871808eb3bf7046c4b125b216f6bf1cc604cff0dc
+urllib3>=2.2.3
 uvicorn>=0.15.0
 validate-email
 validators
@@ -63,4 +53,3 @@ whois
 # Testing dependencies
 pytest>=7.4.0
 atheris>=2.3.0
-
