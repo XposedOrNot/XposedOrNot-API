@@ -35,9 +35,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install pip==24.3.1 \
-            --hash sha256:3790624780082365f47549d032f3770eeb2b1e8bd1f7b2e02dace1afa361b4ed
-          pip install atheris==2.3.0 \
+          python -m pip install --upgrade pip==24.3.1
+          pip install --require-hashes --only-binary :all: atheris==2.3.0 \
             --hash sha256:b91cb296d60915c3efa4f6db48f09c4678b574cddb7ca98035f1cb9d9fb96f64
           # Install only minimal dependencies needed for fuzz targets
           pip install -r requirements.txt || echo "Some dependencies may not install in CI - continuing"

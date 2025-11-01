@@ -23,8 +23,7 @@ RUN apt-get update && \
 COPY requirements.txt ./
 
 # Install dependencies efficiently
-RUN pip install --no-cache-dir pip==24.3.1 \
-    --hash sha256:3790624780082365f47549d032f3770eeb2b1e8bd1f7b2e02dace1afa361b4ed && \
+RUN pip install --no-cache-dir --upgrade pip==24.3.1 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the app source code
