@@ -1,5 +1,5 @@
 # Use the smaller 'slim' version of Python to reduce image size
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:e97cf9a2e84d604941d9902f00616db7466ff302af4b1c3c67fb7c522efa8ed9
 
 # Set environment variables for better Cloud Run compatibility
 ENV PYTHONUNBUFFERED=True
@@ -23,7 +23,7 @@ RUN apt-get update && \
 COPY requirements.txt ./
 
 # Install dependencies efficiently
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir pip==24.3.1 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the app source code
