@@ -1,4 +1,4 @@
-name: Fuzzing Tests
+name: Atheris Fuzzing
 
 on:
   push:
@@ -6,32 +6,60 @@ on:
   pull_request:
     branches: [ "master" ]
   schedule:
+    # Run fuzzing every Monday at 2 AM
     - cron: '0 2 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  fuzz-test:
-    name: Run Hypothesis Fuzzing Tests
+  fuzz:
+    name: Run Atheris Fuzz Tests
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        fuzz-target:
+          - fuzz_validation.py
+          - fuzz_helpers.py
 
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
 
       - name: Set up Python
-        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c  # v6.0.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: '3.10'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest hypothesis
+          pip install atheris
+          # Install only minimal dependencies needed for fuzz targets
           pip install -r requirements.txt || echo "Some dependencies may not install in CI - continuing"
 
-      - name: Run fuzzing tests
+      - name: Run fuzzing - ${{ matrix.fuzz-target }}
         run: |
-          pytest tests/ -v --tb=short
+          cd .github/fuzz
+          # Run each fuzzer for 60 seconds
+          timeout 60s python ${{ matrix.fuzz-target }} -atheris_runs=100000 || exit_code=$?
+          # Exit code 124 means timeout (expected), 0 means success, anything else is a crash
+          if [ $exit_code -ne 0 ] && [ $exit_code -ne 124 ]; then
+            echo "Fuzzer crashed with exit code $exit_code"
+            exit 1
+          fi
+          echo "Fuzzing completed successfully"
         continue-on-error: false
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes-${{ matrix.fuzz-target }}
+          path: |
+            .github/fuzz/crash-*
+            .github/fuzz/leak-*
+            .github/fuzz/timeout-*
+          if-no-files-found: ignore
