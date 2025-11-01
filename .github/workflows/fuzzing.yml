@@ -38,7 +38,7 @@ jobs:
           python -m pip install --require-hashes -r .github/requirements-pip.txt
           pip install --require-hashes -r .github/requirements-fuzz.txt
           # Install only minimal dependencies needed for fuzz targets
-          pip install --require-hashes -r requirements-hashed.txt || echo "Some dependencies may not install in CI - continuing"
+          pip install -r requirements.txt || echo "Some dependencies may not install in CI - continuing"
 
       - name: Run fuzzing - ${{ matrix.fuzz-target }}
         run: |
