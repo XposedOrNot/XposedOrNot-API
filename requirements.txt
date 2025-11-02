@@ -40,7 +40,7 @@ tld>=0.9.1
 typing-extensions>=4.0.0
 ua-parser
 user-agents
-urllib3>=2.2.3
+urllib3>=2.5.0
 uvicorn>=0.15.0
 validate-email
 validators
