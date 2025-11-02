@@ -1,4 +1,4 @@
-aiohttp>=3.12.14
+aiohttp>=3.10.11
 blinker
 bson
 cryptography>=46.0.0
