@@ -1,0 +1,9 @@
+# Development and Testing Dependencies
+# Install with: pip install -r requirements-dev.txt
+
+# First install production dependencies
+-r requirements.txt
+
+# Testing dependencies
+pytest>=7.4.0
+atheris>=2.3.0
