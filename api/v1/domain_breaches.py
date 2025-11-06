@@ -85,16 +85,63 @@ async def protected(
         # Instantiate a datastore client
         datastore_client = datastore.Client()
 
-        # Create a query against the kind 'xon_api_key'
+        # Try to find API key in xon_api_key table (existing users)
         query = datastore_client.query(kind="xon_api_key")
         query.add_filter("api_key", "=", x_api_key)
         results = list(query.fetch())
 
-        if not results:
-            raise HTTPException(status_code=401, detail="Invalid or missing API key")
+        email = None
 
-        # If the key is valid, return the associated email
-        email = results[0].key.name
+        if results:
+            # Found in xon_api_key - existing user flow
+            email = results[0].key.name
+        else:
+            # Try plus_api_key table (enterprise users)
+            query = datastore_client.query(kind="plus_api_key")
+            query.add_filter("api_key", "=", x_api_key)
+            plus_results = list(query.fetch())
+
+            if plus_results:
+                plus_key_entity = plus_results[0]
+
+                # Validate product_stream is xonEnterprise
+                if plus_key_entity.get("product_stream") != "xonEnterprise":
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Invalid product stream for API key",
+                    )
+
+                # Validate API key is active
+                if not plus_key_entity.get("is_active"):
+                    raise HTTPException(status_code=401, detail="API key is not active")
+
+                # Get customer ID and validate customer
+                custid = plus_key_entity.get("custid")
+                if not custid:
+                    raise HTTPException(status_code=401, detail="Invalid customer ID")
+
+                # Check customer exists and is active
+                customer_key = datastore_client.key("plus_customers", custid)
+                customer = datastore_client.get(customer_key)
+
+                if not customer:
+                    raise HTTPException(status_code=401, detail="Customer not found")
+
+                if not customer.get("is_active"):
+                    raise HTTPException(
+                        status_code=401, detail="Customer account is not active"
+                    )
+
+                # Get email from created_by field
+                email = plus_key_entity.get("created_by")
+                if not email:
+                    raise HTTPException(
+                        status_code=401, detail="Email not found for API key"
+                    )
+
+        # If email not found in either table, reject the request
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
         # Additional operations
         query = datastore_client.query(kind="xon_domains")
