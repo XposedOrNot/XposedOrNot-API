@@ -21,12 +21,10 @@ RUN apt-get update && \
 
 # Copy only essential files first to leverage Docker's caching
 COPY requirements.txt ./
-COPY .github/requirements-pip.txt ./.github/requirements-pip.txt
-COPY .github/requirements-hashed.txt ./.github/requirements-hashed.txt
 
 # Install dependencies efficiently
-RUN pip install --no-cache-dir -r .github/requirements-pip.txt && \
-    pip install --no-cache-dir -r .github/requirements-hashed.txt
+RUN pip install --no-cache-dir --upgrade pip==25.0.1 && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the app source code
 COPY . ./
