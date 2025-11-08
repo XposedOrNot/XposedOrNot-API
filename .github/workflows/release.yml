@@ -44,25 +44,4 @@ jobs:
     with:
       base64-subjects: "${{ needs.build.outputs.hashes }}"
       upload-assets: true
-
-  release:
-    needs: [build, provenance]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
-        with:
-          name: release-artifacts
-
-      - name: Create Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create ${{ github.ref_name }} \
-            --repo ${{ github.repository }} \
-            --title "${{ github.ref_name }}" \
-            --generate-notes \
-            XposedOrNot-API-*.tar.gz
+      upload-tag-name: ${{ github.ref_name }}
