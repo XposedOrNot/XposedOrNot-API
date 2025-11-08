@@ -10,7 +10,7 @@
 <img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pylint.yml/badge.svg" alt="Pylint">
  <a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/codeql.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
 <a href="https://securityscorecards.dev/viewer/?uri=github.com/XposedOrNot/XposedOrNot-API"><img src="https://api.securityscorecards.dev/projects/github.com/XposedOrNot/XposedOrNot-API/badge" alt="OpenSSF Scorecard"></a>
-<a href="https://www.bestpractices.dev/projects/11418"><img src="https://www.bestpractices.dev/projects/11418/badge" alt="OpenSSF Best Practices"></a>
+<a href="https://www.bestpractices.dev/projects/11418"><img src="https://www.bestpractices.dev/projects/11418/badge?v=1" alt="OpenSSF Best Practices"></a>
 
 <p align="center">     
     <a href="https://xposedornot.docs.apiary.io/" target="_blank">XposedOrNot API Playground</a>    ·
