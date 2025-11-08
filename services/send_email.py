@@ -636,7 +636,7 @@ async def send_domain_verification_admin_notification(
                         "Name": FROM_NAME,
                     },
                     "To": [{"Email": "deva@xposedornot.com"}],
-                    "TemplateID": 4318335,
+                    "TemplateID": 7472516,
                     "TemplateLanguage": True,
                     "Subject": "XON: Domain Successfully Verified",
                     "Variables": {
