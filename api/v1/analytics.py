@@ -16,6 +16,11 @@ from google.api_core import exceptions as google_exceptions
 
 # Local imports
 from models.responses import (
+    AlertDetail,
+    AlertManagement,
+    AlertStatusUpdateErrorResponse,
+    AlertStatusUpdateRequest,
+    AlertStatusUpdateResponse,
     BreachDetails,
     BreachHierarchyResponse,
     DetailedBreachInfo,
@@ -546,6 +551,90 @@ async def send_domain_breaches(
             sorted(breach_summary.items(), key=lambda x: x[1], reverse=True)[:5]
         )
 
+        # Query alerts for verified domains (last 6 months)
+        alert_time_threshold = datetime.datetime.utcnow().replace(
+            tzinfo=datetime.timezone.utc
+        ) - datetime.timedelta(days=183)
+
+        alert_query = client.query(kind="xon_alert_domains")
+        alert_query.add_filter("domain_owner_email", "=", email)
+        alert_query.add_filter("created_at", ">=", alert_time_threshold)
+        alert_query.order = ["-created_at"]
+
+        alerts_list = []
+        pending_count = 0
+        acknowledged_count = 0
+
+        for alert_entity in alert_query.fetch():
+            # Only include alerts for verified domains
+            if alert_entity.get("affected_domain") not in verified_domains:
+                continue
+
+            # Count by status
+            status = alert_entity.get("status", "Pending")
+            if status == "Pending":
+                pending_count += 1
+            elif status == "Acknowledged":
+                acknowledged_count += 1
+
+            # Parse exposed_fields
+            exposed_fields = alert_entity.get("exposed_fields", [])
+            if isinstance(exposed_fields, str):
+                try:
+                    import json
+
+                    exposed_fields = json.loads(exposed_fields)
+                except (json.JSONDecodeError, ValueError):
+                    exposed_fields = []
+
+            # Format timestamps
+            alert_time = alert_entity.get("created_at")
+            if alert_time:
+                if alert_time.tzinfo is None:
+                    alert_time = alert_time.replace(tzinfo=datetime.timezone.utc)
+                alert_time_str = alert_time.isoformat()
+            else:
+                alert_time_str = None
+
+            acknowledged_at = alert_entity.get("acknowledged_at")
+            if acknowledged_at:
+                if acknowledged_at.tzinfo is None:
+                    acknowledged_at = acknowledged_at.replace(
+                        tzinfo=datetime.timezone.utc
+                    )
+                acknowledged_at_str = acknowledged_at.isoformat()
+            else:
+                acknowledged_at_str = None
+
+            alert_detail = AlertDetail(
+                alert_id=alert_entity.key.name or str(alert_entity.key.id),
+                breach_id=alert_entity.get("breach_id", ""),
+                breach_name=alert_entity.get("breach_name", ""),
+                alert_time=alert_time_str,
+                severity=alert_entity.get("severity", "Unknown"),
+                status=status,
+                description=alert_entity.get("description", ""),
+                affected_domain=alert_entity.get("affected_domain", ""),
+                affected_email_count=alert_entity.get("affected_email_count", 0),
+                exposed_fields=exposed_fields,
+                password_type=alert_entity.get("password_type", ""),
+                acknowledged_at=acknowledged_at_str,
+                acknowledged_by=alert_entity.get("acknowledged_by"),
+                last_updated_by=alert_entity.get("last_updated_by"),
+            )
+            alerts_list.append(alert_detail)
+
+        # Create alert management structure
+        alert_management = AlertManagement(
+            summary={
+                "total_alerts": len(alerts_list),
+                "pending_count": pending_count,
+                "acknowledged_count": acknowledged_count,
+                "time_range": "Last 6 months",
+            },
+            alerts=alerts_list,
+        )
+
         # Prepare response
         response = DomainBreachesResponse(
             Yearly_Metrics=dict(yearly_summary),
@@ -557,6 +646,7 @@ async def send_domain_breaches(
             Verified_Domains=verified_domains,
             Seniority_Summary=seniority_summary,
             Yearly_Breach_Hierarchy=yearly_breach_hierarchy,
+            Alert_Management=alert_management,
         )
 
         return response
@@ -894,3 +984,230 @@ async def get_analytics(
             request_params=f"email={user_email}",
         )
         return JSONResponse(status_code=404, content={"Error": f"Error: {str(e)}"})
+
+
+@router.post(
+    "/update_alert_status",
+    response_model=Union[AlertStatusUpdateResponse, AlertStatusUpdateErrorResponse],
+    responses={
+        200: {"model": AlertStatusUpdateResponse},
+        400: {"model": AlertStatusUpdateErrorResponse},
+        401: {"model": AlertStatusUpdateErrorResponse},
+        403: {"model": AlertStatusUpdateErrorResponse},
+        404: {"model": AlertStatusUpdateErrorResponse},
+    },
+)
+@custom_rate_limiter("2 per second;50 per hour;200 per day")
+async def update_alert_status(
+    request: Request,
+    payload: AlertStatusUpdateRequest,
+    email: Optional[str] = Query(None),
+    token: Optional[str] = Query(None),
+) -> Union[AlertStatusUpdateResponse, AlertStatusUpdateErrorResponse]:
+    """
+    Update the status of a domain breach alert.
+
+    Allows users to toggle alert status between 'Pending' and 'Acknowledged'.
+
+    Args:
+        request: FastAPI request object
+        payload: Request body containing alert_id and status
+        email: User's email for authentication
+        token: Session token for validation
+
+    Returns:
+        AlertStatusUpdateResponse: Success response with status details
+        AlertStatusUpdateErrorResponse: Error response
+    """
+    try:
+        # Validate required parameters
+        if not email or not token:
+            raise HTTPException(
+                status_code=400,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="Missing email or token"
+                ).dict(),
+            )
+
+        if not payload.alert_id:
+            raise HTTPException(
+                status_code=400,
+                detail=AlertStatusUpdateErrorResponse(Error="Missing alert_id").dict(),
+            )
+
+        # Validate status value
+        if payload.status not in ["Pending", "Acknowledged"]:
+            raise HTTPException(
+                status_code=400,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="Invalid status. Must be 'Pending' or 'Acknowledged'"
+                ).dict(),
+            )
+
+        # Validate email and token format
+        if not validate_email_with_tld(email):
+            raise HTTPException(
+                status_code=400,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="Invalid email format"
+                ).dict(),
+            )
+
+        if not validate_token(token):
+            raise HTTPException(
+                status_code=400,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="Invalid token format"
+                ).dict(),
+            )
+
+        if not validate_url(request):
+            raise HTTPException(
+                status_code=400,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="Invalid request URL"
+                ).dict(),
+            )
+
+        # Check session authentication
+        client = datastore.Client()
+        alert_key = client.key("xon_domains_session", email)
+        alert_task = client.get(alert_key)
+
+        if not alert_task:
+            raise HTTPException(
+                status_code=401,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="Invalid or expired session"
+                ).dict(),
+            )
+
+        if alert_task.get("domain_magic") != token:
+            raise HTTPException(
+                status_code=401,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="Invalid or expired session"
+                ).dict(),
+            )
+
+        # Check session expiry (24 hours)
+        if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
+            tzinfo=None
+        ) > datetime.timedelta(hours=24):
+            raise HTTPException(
+                status_code=401,
+                detail=AlertStatusUpdateErrorResponse(Error="Session expired").dict(),
+            )
+
+        # Get user's verified domains
+        query = client.query(kind="xon_domains")
+        query.add_filter("email", "=", email)
+        verified_domains = [entity["domain"] for entity in query.fetch()]
+
+        # Fetch the alert
+        alert_entity_key = client.key("xon_alert_domains", payload.alert_id)
+        alert_entity = client.get(alert_entity_key)
+
+        if not alert_entity:
+            raise HTTPException(
+                status_code=404,
+                detail=AlertStatusUpdateErrorResponse(Error="Alert not found").dict(),
+            )
+
+        # Authorization: Check if alert belongs to user
+        if alert_entity.get("domain_owner_email") != email:
+            raise HTTPException(
+                status_code=403,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="You do not have permission to modify this alert"
+                ).dict(),
+            )
+
+        # Additional check: Alert's affected_domain must be in verified domains
+        if alert_entity.get("affected_domain") not in verified_domains:
+            raise HTTPException(
+                status_code=403,
+                detail=AlertStatusUpdateErrorResponse(
+                    Error="You do not have permission to modify this alert"
+                ).dict(),
+            )
+
+        # Get current status
+        previous_status = alert_entity.get("status", "Pending")
+
+        # Idempotency check
+        if previous_status == payload.status:
+            # Format acknowledged_at if exists
+            acknowledged_at = alert_entity.get("acknowledged_at")
+            if acknowledged_at:
+                if acknowledged_at.tzinfo is None:
+                    acknowledged_at = acknowledged_at.replace(
+                        tzinfo=datetime.timezone.utc
+                    )
+                acknowledged_at_str = acknowledged_at.isoformat()
+            else:
+                acknowledged_at_str = None
+
+            return AlertStatusUpdateResponse(
+                status="success",
+                message="Alert already in requested status",
+                alert_id=payload.alert_id,
+                previous_status=previous_status,
+                current_status=payload.status,
+                acknowledged_at=acknowledged_at_str,
+                acknowledged_by=alert_entity.get("acknowledged_by"),
+                last_updated_by=alert_entity.get("last_updated_by", email),
+            )
+
+        # Update status
+        current_time = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+
+        alert_entity["status"] = payload.status
+        alert_entity["updated_at"] = current_time
+        alert_entity["last_updated_by"] = email  # Always track who made the change
+
+        if payload.status == "Acknowledged":
+            # Update acknowledgment fields when acknowledging
+            alert_entity["acknowledged_at"] = current_time
+            alert_entity["acknowledged_by"] = email
+            acknowledged_at_str = current_time.isoformat()
+            acknowledged_by_str = email
+        else:  # Pending
+            # Preserve acknowledgment history when un-acknowledging
+            # Don't clear acknowledged_at and acknowledged_by
+            existing_acknowledged_at = alert_entity.get("acknowledged_at")
+            if existing_acknowledged_at:
+                if existing_acknowledged_at.tzinfo is None:
+                    existing_acknowledged_at = existing_acknowledged_at.replace(
+                        tzinfo=datetime.timezone.utc
+                    )
+                acknowledged_at_str = existing_acknowledged_at.isoformat()
+            else:
+                acknowledged_at_str = None
+            acknowledged_by_str = alert_entity.get("acknowledged_by")
+
+        # Save to datastore
+        client.put(alert_entity)
+
+        return AlertStatusUpdateResponse(
+            status="success",
+            message="Alert status updated successfully",
+            alert_id=payload.alert_id,
+            previous_status=previous_status,
+            current_status=payload.status,
+            acknowledged_at=acknowledged_at_str,
+            acknowledged_by=acknowledged_by_str,
+            last_updated_by=email,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await send_exception_email(
+            api_route="POST /v1/update_alert_status",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={email}, token={'provided' if token else 'not_provided'}, alert_id={payload.alert_id if payload else 'missing'}, status={payload.status if payload else 'missing'}",
+        )
+        return AlertStatusUpdateErrorResponse(Error=f"Internal error: {str(e)}")

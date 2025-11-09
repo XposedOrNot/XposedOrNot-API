@@ -292,6 +292,32 @@ class DetailedBreachInfo(BaseModel):
         }
 
 
+class AlertDetail(BaseModel):
+    """Model for individual alert details."""
+
+    alert_id: str
+    breach_id: str
+    breach_name: str
+    alert_time: str
+    severity: str
+    status: str
+    description: str
+    affected_domain: str
+    affected_email_count: int
+    exposed_fields: List[str]
+    password_type: str
+    acknowledged_at: Optional[str] = None
+    acknowledged_by: Optional[str] = None
+    last_updated_by: Optional[str] = None
+
+
+class AlertManagement(BaseModel):
+    """Model for alert management data."""
+
+    summary: Dict[str, Any]
+    alerts: List[AlertDetail] = []
+
+
 class DomainBreachesResponse(BaseModel):
     """Response model for domain breaches endpoint."""
 
@@ -304,6 +330,7 @@ class DomainBreachesResponse(BaseModel):
     Verified_Domains: List[str]
     Seniority_Summary: Dict[str, int]
     Yearly_Breach_Hierarchy: Dict[str, Any]
+    Alert_Management: Optional[AlertManagement] = None
 
 
 class DomainBreachesErrorResponse(BaseModel):
@@ -406,3 +433,29 @@ class UnsubscribeVerifyErrorResponse(BaseModel):
 
     html_content: str
     status: str = "error"
+
+
+class AlertStatusUpdateRequest(BaseModel):
+    """Request model for alert status update."""
+
+    alert_id: str
+    status: str
+
+
+class AlertStatusUpdateResponse(BaseModel):
+    """Response model for alert status update."""
+
+    status: str
+    message: str
+    alert_id: str
+    previous_status: str
+    current_status: str
+    acknowledged_at: Optional[str] = None
+    acknowledged_by: Optional[str] = None
+    last_updated_by: str
+
+
+class AlertStatusUpdateErrorResponse(BaseModel):
+    """Error response model for alert status update."""
+
+    Error: str
