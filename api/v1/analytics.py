@@ -556,73 +556,99 @@ async def send_domain_breaches(
             tzinfo=datetime.timezone.utc
         ) - datetime.timedelta(days=183)
 
-        alert_query = client.query(kind="xon_alert_domains")
-        alert_query.add_filter("domain_owner_email", "=", email)
-        alert_query.add_filter("created_at", ">=", alert_time_threshold)
-        alert_query.order = ["-created_at"]
+        try:
+            # Query only by domain_owner_email to avoid composite index requirement
+            alert_query = client.query(kind="xon_alert_domains")
+            alert_query.add_filter("domain_owner_email", "=", email)
 
-        alerts_list = []
-        pending_count = 0
-        acknowledged_count = 0
+            # Fetch all alerts for this user
+            all_alerts = list(alert_query.fetch())
 
-        for alert_entity in alert_query.fetch():
-            # Only include alerts for verified domains
-            if alert_entity.get("affected_domain") not in verified_domains:
-                continue
+            # Filter by time threshold in memory
+            filtered_alerts = []
+            for alert in all_alerts:
+                created_at = alert.get("created_at")
+                if created_at:
+                    # Ensure timezone aware for comparison
+                    if created_at.tzinfo is None:
+                        created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+                    if created_at >= alert_time_threshold:
+                        filtered_alerts.append(alert)
 
-            # Count by status
-            status = alert_entity.get("status", "Pending")
-            if status == "Pending":
-                pending_count += 1
-            elif status == "Acknowledged":
-                acknowledged_count += 1
-
-            # Parse exposed_fields
-            exposed_fields = alert_entity.get("exposed_fields", [])
-            if isinstance(exposed_fields, str):
-                try:
-                    import json
-
-                    exposed_fields = json.loads(exposed_fields)
-                except (json.JSONDecodeError, ValueError):
-                    exposed_fields = []
-
-            # Format timestamps
-            alert_time = alert_entity.get("created_at")
-            if alert_time:
-                if alert_time.tzinfo is None:
-                    alert_time = alert_time.replace(tzinfo=datetime.timezone.utc)
-                alert_time_str = alert_time.isoformat()
-            else:
-                alert_time_str = None
-
-            acknowledged_at = alert_entity.get("acknowledged_at")
-            if acknowledged_at:
-                if acknowledged_at.tzinfo is None:
-                    acknowledged_at = acknowledged_at.replace(
-                        tzinfo=datetime.timezone.utc
-                    )
-                acknowledged_at_str = acknowledged_at.isoformat()
-            else:
-                acknowledged_at_str = None
-
-            alert_detail = AlertDetail(
-                alert_id=alert_entity.key.name or str(alert_entity.key.id),
-                breach_id=alert_entity.get("breach_id", ""),
-                breach_name=alert_entity.get("breach_name", ""),
-                alert_time=alert_time_str,
-                severity=alert_entity.get("severity", "Unknown"),
-                status=status,
-                description=alert_entity.get("description", ""),
-                affected_domain=alert_entity.get("affected_domain", ""),
-                affected_email_count=alert_entity.get("affected_email_count", 0),
-                exposed_fields=exposed_fields,
-                password_type=alert_entity.get("password_type", ""),
-                acknowledged_at=acknowledged_at_str,
-                acknowledged_by=alert_entity.get("acknowledged_by"),
-                last_updated_by=alert_entity.get("last_updated_by"),
+            # Sort by created_at descending in memory
+            filtered_alerts.sort(
+                key=lambda x: x.get("created_at", datetime.datetime.min), reverse=True
             )
-            alerts_list.append(alert_detail)
+
+            alerts_list = []
+            pending_count = 0
+            acknowledged_count = 0
+
+            for alert_entity in filtered_alerts:
+                # Only include alerts for verified domains
+                if alert_entity.get("affected_domain") not in verified_domains:
+                    continue
+
+                # Count by status
+                status = alert_entity.get("status", "Pending")
+                if status == "Pending":
+                    pending_count += 1
+                elif status == "Acknowledged":
+                    acknowledged_count += 1
+
+                # Parse exposed_fields
+                exposed_fields = alert_entity.get("exposed_fields", [])
+                if isinstance(exposed_fields, str):
+                    try:
+                        import json
+
+                        exposed_fields = json.loads(exposed_fields)
+                    except (json.JSONDecodeError, ValueError):
+                        exposed_fields = []
+
+                # Format timestamps
+                alert_time = alert_entity.get("created_at")
+                if alert_time:
+                    if alert_time.tzinfo is None:
+                        alert_time = alert_time.replace(tzinfo=datetime.timezone.utc)
+                    alert_time_str = alert_time.isoformat()
+                else:
+                    alert_time_str = None
+
+                acknowledged_at = alert_entity.get("acknowledged_at")
+                if acknowledged_at:
+                    if acknowledged_at.tzinfo is None:
+                        acknowledged_at = acknowledged_at.replace(
+                            tzinfo=datetime.timezone.utc
+                        )
+                    acknowledged_at_str = acknowledged_at.isoformat()
+                else:
+                    acknowledged_at_str = None
+
+                alert_detail = AlertDetail(
+                    alert_id=alert_entity.key.name or str(alert_entity.key.id),
+                    breach_id=alert_entity.get("breach_id", ""),
+                    breach_name=alert_entity.get("breach_name", ""),
+                    alert_time=alert_time_str,
+                    severity=alert_entity.get("severity", "Unknown"),
+                    status=status,
+                    description=alert_entity.get("description", ""),
+                    affected_domain=alert_entity.get("affected_domain", ""),
+                    affected_email_count=alert_entity.get("affected_email_count", 0),
+                    exposed_fields=exposed_fields,
+                    password_type=alert_entity.get("password_type", ""),
+                    acknowledged_at=acknowledged_at_str,
+                    acknowledged_by=alert_entity.get("acknowledged_by"),
+                    last_updated_by=alert_entity.get("last_updated_by"),
+                )
+                alerts_list.append(alert_detail)
+
+        except Exception as alert_error:
+            # Continue without alerts instead of failing the entire request
+            logger.error(f"Alert query failed: {str(alert_error)}")
+            alerts_list = []
+            pending_count = 0
+            acknowledged_count = 0
 
         # Create alert management structure
         alert_management = AlertManagement(
