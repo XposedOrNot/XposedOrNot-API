@@ -26,11 +26,21 @@ class SeniorityLevel(str, Enum):
     ALL = "all"
 
 
+class BreachInfo(BaseModel):
+    """Model for breach information associated with a seniority record."""
+
+    breach_name: str
+    breach_date: Optional[str] = None  # Format: "Month Year" (e.g., "January 2020")
+    xposed_data: List[str] = Field(default_factory=list)
+
+
 class SeniorityRecord(BaseModel):
     """Model for individual seniority record."""
 
     email: str
+    domain: str
     seniority: str
+    breaches: List[BreachInfo] = Field(default_factory=list)
 
 
 class DomainSeniorityData(BaseModel):
@@ -92,6 +102,64 @@ VALID_SENIORITY_LEVELS = {
 }
 
 
+async def get_breach_info_for_email(
+    datastore_client: datastore.Client,
+    email: str,
+    domain: str,
+    breach_cache: Dict[str, dict],
+) -> List[BreachInfo]:
+    """Get breach information for a specific email and domain."""
+    breaches = []
+
+    # Query xon_domains_details to get breaches for this email
+    query = datastore_client.query(kind="xon_domains_details")
+    query.add_filter("email", "=", email.lower())
+    query.add_filter("domain", "=", domain.lower())
+
+    for entity in query.fetch():
+        breach_name = entity.get("breach", "")
+        if not breach_name or breach_name == "No_Breaches":
+            continue
+
+        # Get breach details from cache or fetch from datastore
+        if breach_name not in breach_cache:
+            breach_key = datastore_client.key("xon_breaches", breach_name)
+            breach_entity = datastore_client.get(breach_key)
+            if breach_entity:
+                breach_cache[breach_name] = {
+                    "breached_date": breach_entity.get("breached_date"),
+                    "xposed_data": breach_entity.get("xposed_data", ""),
+                }
+            else:
+                breach_cache[breach_name] = None
+
+        breach_data = breach_cache.get(breach_name)
+        breach_date = None
+        xposed_data = []
+
+        if breach_data:
+            # Format breach date as "Month Year"
+            if breach_data.get("breached_date"):
+                breach_date = breach_data["breached_date"].strftime("%B %Y")
+
+            # Parse xposed_data (semicolon-separated string)
+            xposed_data_raw = breach_data.get("xposed_data", "")
+            if isinstance(xposed_data_raw, str) and xposed_data_raw:
+                xposed_data = [item.strip() for item in xposed_data_raw.split(";")]
+            elif isinstance(xposed_data_raw, list):
+                xposed_data = xposed_data_raw
+
+        breaches.append(
+            BreachInfo(
+                breach_name=breach_name,
+                breach_date=breach_date,
+                xposed_data=xposed_data,
+            )
+        )
+
+    return breaches
+
+
 async def get_seniority_data(
     domain: str, seniority_filter: SeniorityLevel
 ) -> DomainSeniorityData:
@@ -105,18 +173,27 @@ async def get_seniority_data(
 
     seniority_records = []
     counts = defaultdict(int)
+    breach_cache: Dict[str, dict] = {}  # Cache breach details to avoid repeated lookups
 
     for entity in query.fetch():
         entity_seniority = entity.get("seniority", "")
+        entity_email = entity.get("email", "")
 
         # For "all" filter, only include valid seniority levels (c_suite, vp, director)
         if seniority_filter == SeniorityLevel.ALL:
             if entity_seniority not in VALID_SENIORITY_LEVELS:
                 continue
 
+        # Get breach information for this email
+        breaches = await get_breach_info_for_email(
+            datastore_client, entity_email, domain, breach_cache
+        )
+
         record = SeniorityRecord(
-            email=entity.get("email", ""),
+            email=entity_email,
+            domain=domain,
             seniority=entity_seniority,
+            breaches=breaches,
         )
         seniority_records.append(record)
         counts[entity_seniority] += 1
@@ -142,8 +219,30 @@ async def get_seniority_data(
                         "status": "success",
                         "domain": "example.com",
                         "seniority_data": [
-                            {"email": "ceo@example.com", "seniority": "c_suite"},
-                            {"email": "vp.sales@example.com", "seniority": "vp"},
+                            {
+                                "email": "ceo@example.com",
+                                "domain": "example.com",
+                                "seniority": "c_suite",
+                                "breaches": [
+                                    {
+                                        "breach_name": "ExampleBreach",
+                                        "breach_date": "January 2020",
+                                        "xposed_data": ["Email", "Password", "Name"],
+                                    }
+                                ],
+                            },
+                            {
+                                "email": "vp.sales@example.com",
+                                "domain": "example.com",
+                                "seniority": "vp",
+                                "breaches": [
+                                    {
+                                        "breach_name": "AnotherBreach",
+                                        "breach_date": "March 2021",
+                                        "xposed_data": ["Email", "Phone"],
+                                    }
+                                ],
+                            },
                         ],
                         "counts": {"c_suite": 1, "vp": 1, "total": 2},
                     }
