@@ -34,6 +34,7 @@ from api.v1 import (
     breaches,
     domain_breaches,
     domain_phishing,
+    domain_seniority,
     domain_verification,
     enterprise_validation,
     feeds,
@@ -357,6 +358,12 @@ app.include_router(
     domain_phishing.router,
     prefix="/v1",
     tags=["domain_phishing"],
+    include_in_schema=False,
+)
+app.include_router(
+    domain_seniority.router,
+    prefix="/v1",
+    tags=["domain_seniority"],
     include_in_schema=False,
 )
 app.include_router(
