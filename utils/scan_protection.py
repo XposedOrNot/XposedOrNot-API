@@ -26,7 +26,6 @@ LEGITIMATE_PATH_PREFIXES = {
     "/openapi.json",  # OpenAPI spec
     "/robots.txt",  # Robots file
     "/mcp",  # MCP endpoints
-    "/_health",  # Health check
 }
 
 
@@ -35,7 +34,7 @@ def is_legitimate_path(path: str) -> bool:
     path = path.lower()
 
     # Check exact matches
-    if path in {"/docs", "/openapi.json", "/robots.txt", "/mcp", "/_health", "/"}:
+    if path in {"/docs", "/openapi.json", "/robots.txt", "/mcp", "/"}:
         return True
 
     # Check prefixes

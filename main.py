@@ -450,22 +450,6 @@ async def get_openapi_json():
     )
 
 
-@app.get("/_health", include_in_schema=False)
-async def health_check():
-    """Internal health check endpoint to verify Redis connectivity."""
-    try:
-        await asyncio.wait_for(redis_pool.ping(), timeout=2.0)
-        return {"status": "healthy", "redis": "connected"}
-    except asyncio.TimeoutError:
-        return {
-            "status": "unhealthy",
-            "redis": "timeout",
-            "error": "Redis ping timed out",
-        }
-    except Exception as e:
-        return {"status": "unhealthy", "redis": "disconnected", "error": str(e)}
-
-
 @app.get("/v1/unblock_cf/{token}", include_in_schema=False)
 @custom_rate_limiter(RATE_LIMIT_UNBLOCK)
 async def unblock_cloudflare(
