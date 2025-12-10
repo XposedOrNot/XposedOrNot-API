@@ -18,7 +18,7 @@ def setup_middleware(app: FastAPI) -> None:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
-        allow_credentials=True,
+        allow_credentials=False,  # Not needed for token-based auth (uses query params & headers)
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
         expose_headers=["*"],
