@@ -161,7 +161,9 @@ async def alert_me_verification(verification_token: str, request: Request):
                 with datastore_client.transaction():
                     # Fetch inside transaction to ensure we have current data
                     alert_task = datastore_client.get(alert_key)
-                    if alert_task["verified"]:
+                    if not alert_task:
+                        raise HTTPException(status_code=404, detail="Not found")
+                    if alert_task.get("verified"):
                         alert_task["recent_timestamp"] = datetime.now()
                         alert_task["token"] = verification_token
                     else:
@@ -232,7 +234,10 @@ async def send_verification(
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
-        if alert_task["verified"] and alert_task["token"] == token:
+        if not alert_task:
+            return VerificationResponse(status="Failed")
+
+        if alert_task.get("verified") and alert_task.get("token") == token:
             now = datetime.now()
             verification_timestamp = alert_task["verify_timestamp"]
 
