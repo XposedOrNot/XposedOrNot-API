@@ -30,9 +30,13 @@ async def generate_confirmation_token(email: str) -> str:
         ) from e
 
 
-async def confirm_token(token: str, expiration: int = 1296000) -> Optional[str]:
+async def confirm_token(token: str, expiration: int = 604800) -> Optional[str]:
     """
     Verify and decode a confirmation token.
+
+    Args:
+        token: The token to verify
+        expiration: Token expiration in seconds (default: 7 days)
     """
     try:
         logger.debug("[TOKEN] Verifying token with expiration: %s", expiration)
