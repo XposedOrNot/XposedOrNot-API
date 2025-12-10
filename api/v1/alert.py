@@ -308,7 +308,7 @@ async def unsubscribe(user_email: str, request: Request):
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
-        if alert_task and alert_task.get("verified", True):
+        if alert_task and alert_task.get("verified", False):
             # Generate unsubscribe token
             unsubscribe_token = await generate_confirmation_token(user_email)
             base_url = str(request.base_url)
