@@ -149,53 +149,37 @@ async def alert_me_verification(verification_token: str, request: Request):
         if not user_email:
             raise HTTPException(status_code=404, detail="Not found")
 
-        # Datastore operations
+        # Datastore operations with transaction to prevent race conditions
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", user_email)
-        alert_task = datastore_client.get(alert_key)
 
-        # Update alert task
-        if alert_task["verified"]:
-            max_retries = 5
-            retry_count = 0
-            while retry_count < max_retries:
-                try:
-                    with datastore_client.transaction():
+        # Update alert task inside transaction to prevent TOCTOU race condition
+        max_retries = 5
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                with datastore_client.transaction():
+                    # Fetch inside transaction to ensure we have current data
+                    alert_task = datastore_client.get(alert_key)
+                    if alert_task["verified"]:
                         alert_task["recent_timestamp"] = datetime.now()
                         alert_task["token"] = verification_token
-                        datastore_client.put(alert_task)
-                    break
-                except (
-                    google_exceptions.GoogleAPIError,
-                    ValueError,
-                    RuntimeError,
-                ) as e:
-                    retry_count += 1
-                    if retry_count >= max_retries:
-                        raise
-                    wait_time = 2**retry_count * 0.1  # Exponential backoff
-                    time.sleep(wait_time)
-        else:
-            max_retries = 5
-            retry_count = 0
-            while retry_count < max_retries:
-                try:
-                    with datastore_client.transaction():
+                    else:
                         alert_task["verify_timestamp"] = datetime.now()
                         alert_task["verified"] = True
                         alert_task["token"] = verification_token
-                        datastore_client.put(alert_task)
-                    break
-                except (
-                    google_exceptions.GoogleAPIError,
-                    ValueError,
-                    RuntimeError,
-                ) as e:
-                    retry_count += 1
-                    if retry_count >= max_retries:
-                        raise
-                    wait_time = 2**retry_count * 0.1  # Exponential backoff
-                    time.sleep(wait_time)
+                    datastore_client.put(alert_task)
+                break
+            except (
+                google_exceptions.GoogleAPIError,
+                ValueError,
+                RuntimeError,
+            ) as e:
+                retry_count += 1
+                if retry_count >= max_retries:
+                    raise
+                wait_time = 2**retry_count * 0.1  # Exponential backoff
+                time.sleep(wait_time)
 
         exposure_info = await get_exposure(user_email)
         sensitive_exposure_info = await get_sensitive_exposure(user_email)
