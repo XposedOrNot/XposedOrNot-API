@@ -229,7 +229,7 @@ async def verify_email(
                 "contactEmail", "No email found. Try DNS/HTML Verifications"
             )
 
-            if email == registrant_email:
+            if email.lower() == registrant_email.lower():
                 datastore_client = datastore.Client()
                 domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
                 domain_record = datastore_client.get(domain_key)
