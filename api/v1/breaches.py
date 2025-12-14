@@ -208,6 +208,8 @@ async def search_data_breaches_v2(
         ai_summary = get_ai_summary(breach_data)
         return BreachAnalyticsV2Response(AI_Summary=ai_summary)
 
+    except HTTPException:
+        raise
     except Exception as exc:
         await send_exception_email(
             api_route="GET /v1/v2/breach-analytics",
@@ -306,6 +308,8 @@ async def search_data_breaches(
             PasteMetrics=None,
         )
 
+    except HTTPException:
+        raise
     except Exception as exc:
         await send_exception_email(
             api_route="GET /v1/breach-analytics",
