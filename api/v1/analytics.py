@@ -375,7 +375,7 @@ async def send_domain_breaches(
 
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
             tzinfo=None
-        ) > datetime.timedelta(hours=24):
+        ) > datetime.timedelta(hours=12):
             raise HTTPException(
                 status_code=401,
                 detail=DomainBreachesErrorResponse(Error="Session expired").dict(),
@@ -1122,10 +1122,10 @@ async def update_alert_status(
                 ).dict(),
             )
 
-        # Check session expiry (24 hours)
+        # Check session expiry (12 hours)
         if datetime.datetime.utcnow() - alert_task.get("magic_timestamp").replace(
             tzinfo=None
-        ) > datetime.timedelta(hours=24):
+        ) > datetime.timedelta(hours=12):
             raise HTTPException(
                 status_code=401,
                 detail=AlertStatusUpdateErrorResponse(Error="Session expired").dict(),
