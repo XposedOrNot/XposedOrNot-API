@@ -49,6 +49,11 @@ from utils.validation import (
     validate_url,
     validate_variables,
 )
+from utils.safe_encoding import (
+    build_safe_url,
+    escape_html_attr,
+    escape_url_fragment,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -230,7 +235,8 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
             )
 
         user_email = await confirm_token(verification_token)
-        if not user_email:
+        # Re-validate email from token for defense-in-depth
+        if not user_email or not validate_email_with_tld(user_email):
             return HTMLResponse(
                 content=templates.TemplateResponse(
                     "domain_dashboard_error.html", {"request": request}
@@ -254,11 +260,11 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
         except Exception as e:
             raise
 
-        # Generate dashboard link
-        base_url = "https://xposedornot.com/"
-        email_param = f"email={user_email}"
-        token_param = f"token={verification_token}"
-        dashboard_link = f"{base_url}breach-dashboard.html?{email_param}&{token_param}"
+        # Generate dashboard link with properly encoded parameters
+        dashboard_link = build_safe_url(
+            "https://xposedornot.com/breach-dashboard.html",
+            {"email": user_email, "token": verification_token},
+        )
 
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -534,8 +540,8 @@ async def send_domain_breaches(
             for breach_name in breaches:
                 breach_logo = all_breaches_logo.get(breach_name, "")
                 details = (
-                    f"<img src='{breach_logo}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{breach_name}'>"
+                    f"<img src='{escape_html_attr(breach_logo)}' style='height:40px;width:65px;' />"
+                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{escape_url_fragment(breach_name)}'>"
                     " &nbsp;Details</a>"
                 )
                 breach_node = {
@@ -890,8 +896,8 @@ async def get_breach_hierarchy_analytics(
                 logo = query.get("logo", "default_logo.jpg")
 
                 details = (
-                    f"<img src='{logo}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{bid}'>"
+                    f"<img src='{escape_html_attr(logo)}' style='height:40px;width:65px;' />"
+                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{escape_url_fragment(bid)}'>"
                     " &nbsp;Details</a>"
                 )
 
@@ -927,8 +933,8 @@ async def get_breach_hierarchy_analytics(
                 logo = query.get("logo", "default_logo.jpg")
 
                 details = (
-                    f"<img src='{logo}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{bid}'>"
+                    f"<img src='{escape_html_attr(logo)}' style='height:40px;width:65px;' />"
+                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{escape_url_fragment(bid)}'>"
                     " &nbsp;Details</a>"
                 )
 

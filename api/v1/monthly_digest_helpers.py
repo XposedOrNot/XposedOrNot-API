@@ -5,6 +5,7 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from google.cloud import datastore
+from utils.safe_encoding import escape_html, build_safe_url
 
 logger = logging.getLogger(__name__)
 
@@ -259,14 +260,14 @@ def generate_mobile_exposure_cards(user_exposures: list) -> str:
         cards += f"""
                     <div class="mobile-card">
                         <div style="font-weight: bold; color: #e74c3c; font-size: 16px; margin-bottom: 8px;">
-                            🚨 {exposure.get('breach_name', 'Unknown')}
+                            🚨 {escape_html(exposure.get('breach_name', 'Unknown'))}
                         </div>
                         <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                            <div style="margin: 4px 0;"><strong>Breached:</strong> {exposure.get('breach_date', 'Unknown')}</div>
-                            <div style="margin: 4px 0;"><strong>Added:</strong> {exposure.get('added_date', 'Unknown')}</div>
+                            <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(exposure.get('breach_date', 'Unknown'))}</div>
+                            <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(exposure.get('added_date', 'Unknown'))}</div>
                             <div style="margin: 4px 0;"><strong>Records:</strong> {exposure.get('records_count', 0):,}</div>
                             <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                <strong>Data Exposed:</strong><br>{exposure.get('data_exposed', 'Unknown')}
+                                <strong>Data Exposed:</strong><br>{escape_html(exposure.get('data_exposed', 'Unknown'))}
                             </div>
                         </div>
                     </div>"""
@@ -286,14 +287,14 @@ def generate_mobile_breach_cards(new_breaches: list) -> str:
         cards += f"""
                     <div class="mobile-card">
                         <div style="font-weight: bold; color: #f39c12; font-size: 16px; margin-bottom: 8px;">
-                            🚨 {breach.get('breach_name', 'Unknown')}
+                            🚨 {escape_html(breach.get('breach_name', 'Unknown'))}
                         </div>
                         <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                            <div style="margin: 4px 0;"><strong>Breached:</strong> {breach.get('breach_date', 'Unknown')}</div>
-                            <div style="margin: 4px 0;"><strong>Added:</strong> {breach.get('added_date', 'Unknown')}</div>
+                            <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(breach.get('breach_date', 'Unknown'))}</div>
+                            <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(breach.get('added_date', 'Unknown'))}</div>
                             <div style="margin: 4px 0;"><strong>Records:</strong> {breach.get('records_count', 0):,}</div>
                             <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                <strong>Data Exposed:</strong><br>{breach.get('data_exposed', 'Unknown')}
+                                <strong>Data Exposed:</strong><br>{escape_html(breach.get('data_exposed', 'Unknown'))}
                             </div>
                         </div>
                     </div>"""
@@ -318,15 +319,22 @@ async def generate_html_template(
     # Use the verified domains passed to the function (not derived from exposures)
     # user_domains parameter already contains the verified domains for this user
 
-    # Summary info
-    domains_text = ", ".join(user_domains) if user_domains else "No verified domains"
+    # Summary info (escape domains for safe HTML display)
+    domains_text = (
+        ", ".join(escape_html(d) for d in user_domains)
+        if user_domains
+        else "No verified domains"
+    )
     summary_info = (
         "Your summary: <strong>{} verified domains</strong> ({}) • "
         "<strong>{} exposures</strong> • <strong>{} new breaches</strong> this month"
     ).format(len(user_domains), domains_text, len(user_exposures), len(new_breaches))
 
-    # Dashboard URL
-    dashboard_url = f"https://xposedornot.com/breach-dashboard?email={email}&token={dashboard_token}"
+    # Dashboard URL with properly encoded parameters
+    dashboard_url = build_safe_url(
+        "https://xposedornot.com/breach-dashboard",
+        {"email": email, "token": dashboard_token},
+    )
 
     # Build mobile-friendly cards instead of table rows
     exposure_cards = ""
@@ -335,14 +343,14 @@ async def generate_html_template(
             exposure_cards += f"""
                         <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin: 8px 0; background-color: #fff;">
                             <div style="font-weight: bold; color: #e74c3c; font-size: 16px; margin-bottom: 8px;">
-                                🚨 {exposure.get('breach_name', 'Unknown')}
+                                🚨 {escape_html(exposure.get('breach_name', 'Unknown'))}
                             </div>
                             <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                                <div style="margin: 4px 0;"><strong>Breached:</strong> {exposure.get('breach_date', 'Unknown')}</div>
-                                <div style="margin: 4px 0;"><strong>Added:</strong> {exposure.get('added_date', 'Unknown')}</div>
+                                <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(exposure.get('breach_date', 'Unknown'))}</div>
+                                <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(exposure.get('added_date', 'Unknown'))}</div>
                                 <div style="margin: 4px 0;"><strong>Records:</strong> {exposure.get('records_count', 0):,}</div>
                                 <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                    <strong>Data Exposed:</strong><br>{exposure.get('data_exposed', 'Unknown')}
+                                    <strong>Data Exposed:</strong><br>{escape_html(exposure.get('data_exposed', 'Unknown'))}
                                 </div>
                             </div>
                         </div>"""
@@ -360,14 +368,14 @@ async def generate_html_template(
             breach_cards += f"""
                         <div style="border: 1px solid #dee2e6; border-radius: 6px; padding: 12px; margin: 8px 0; background-color: #fff;">
                             <div style="font-weight: bold; color: #f39c12; font-size: 16px; margin-bottom: 8px;">
-                                🚨 {breach.get('breach_name', 'Unknown')}
+                                🚨 {escape_html(breach.get('breach_name', 'Unknown'))}
                             </div>
                             <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                                <div style="margin: 4px 0;"><strong>Breached:</strong> {breach.get('breach_date', 'Unknown')}</div>
-                                <div style="margin: 4px 0;"><strong>Added:</strong> {breach.get('added_date', 'Unknown')}</div>
+                                <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(breach.get('breach_date', 'Unknown'))}</div>
+                                <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(breach.get('added_date', 'Unknown'))}</div>
                                 <div style="margin: 4px 0;"><strong>Records:</strong> {breach.get('records_count', 0):,}</div>
                                 <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                    <strong>Data Exposed:</strong><br>{breach.get('data_exposed', 'Unknown')}
+                                    <strong>Data Exposed:</strong><br>{escape_html(breach.get('data_exposed', 'Unknown'))}
                                 </div>
                             </div>
                         </div>"""
@@ -448,7 +456,7 @@ async def generate_html_template(
 
             <!-- Email Footer -->
             <div style="background-color: #f8f9fa; padding: 20px; margin-top: 30px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
-                <p style="margin: 0 0 10px 0;">This email was sent to <strong>{email}</strong> because of monthly breach notifications in XposedOrNot.com.</p>
+                <p style="margin: 0 0 10px 0;">This email was sent to <strong>{escape_html(email)}</strong> because of monthly breach notifications in XposedOrNot.com.</p>
                 <p style="margin: 0;">© 2025 XposedOrNot. All rights reserved. | <a href="https://xposedornot.com/dashboard" style="color: #6c757d;">Visit Website</a></p>
             </div>
 

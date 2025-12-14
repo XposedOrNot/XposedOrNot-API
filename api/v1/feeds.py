@@ -9,6 +9,7 @@ from feedgen.feed import FeedGenerator
 from models.base import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
+from utils.safe_encoding import escape_rss_content, escape_url_fragment
 
 router = APIRouter()
 
@@ -87,12 +88,14 @@ async def rss_feed(request: Request):
 
             feed_entry.id(entity_key)
             feed_entry.title(entity_key)
-            feed_entry.link(href="https://xposedornot.com/xposed#" + entity_key)
+            feed_entry.link(
+                href="https://xposedornot.com/xposed#" + escape_url_fragment(entity_key)
+            )
 
             description = (
-                str(entity["xposure_desc"])
+                escape_rss_content(entity["xposure_desc"])
                 + ". Exposed data: "
-                + str(entity["xposed_data"])
+                + escape_rss_content(entity["xposed_data"])
             )
             feed_entry.description(description=description)
             feed_entry.pubDate(entity["timestamp"])

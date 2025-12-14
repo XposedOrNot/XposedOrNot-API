@@ -29,6 +29,7 @@ from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.token import confirm_token, generate_confirmation_token
 from utils.validation import validate_email_with_tld, validate_url, validate_variables
+from utils.safe_encoding import build_safe_url
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -192,11 +193,11 @@ async def alert_me_verification(verification_token: str, request: Request):
         if not has_exposure and not has_sensitive_exposure:
             return templates.TemplateResponse("email_verify.html", {"request": request})
 
-        # If exposures are found
-        base_url = "https://xposedornot.com/"
-        email_param = f"email={user_email}"
-        token_param = f"&token={verification_token}"
-        breaches_link = f"{base_url}data-breaches-risks.html?{email_param}{token_param}"
+        # If exposures are found, generate link with properly encoded parameters
+        breaches_link = build_safe_url(
+            "https://xposedornot.com/data-breaches-risks.html",
+            {"email": user_email, "token": verification_token},
+        )
         return templates.TemplateResponse(
             "email_success.html",
             {"request": request, "breaches_link": breaches_link},
