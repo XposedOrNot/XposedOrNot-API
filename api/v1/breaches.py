@@ -4,6 +4,7 @@
 import json
 from datetime import datetime
 from typing import Optional, Union
+from urllib.parse import urlparse
 
 # Third-party imports
 from fastapi import APIRouter, Header, HTTPException, Path, Query, Request
@@ -62,8 +63,14 @@ async def get_xposed_breaches(
                 raise HTTPException(status_code=400, detail="Invalid Breach ID")
             query.key_filter(client.key("xon_breaches", breach_id), "=")
         elif domain:
+            # Try to extract domain from URL if a full URL is provided
             if not validate_domain(domain):
-                raise HTTPException(status_code=400, detail="Invalid Domain")
+                parsed = urlparse(domain)
+                extracted = parsed.netloc or parsed.path.strip("/")
+                if extracted and validate_domain(extracted):
+                    domain = extracted
+                else:
+                    raise HTTPException(status_code=400, detail="Invalid Domain")
             query.add_filter("domain", "=", domain)
         else:
             query.order = ["-timestamp"]
@@ -131,6 +138,8 @@ async def get_xposed_breaches(
 
         return BreachListResponse(status="success", exposedBreaches=breach_details)
 
+    except HTTPException:
+        raise
     except Exception as e:
         await send_exception_email(
             api_route="GET /v1/breaches",
