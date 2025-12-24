@@ -119,9 +119,53 @@ async def get_metrics(request: Request) -> DetailedMetricsResponse:
 
         # Cache miss - fetch from service
         metrics = await get_detailed_metrics()
-        cache_analytics(cache_key, metrics)
 
-        return DetailedMetricsResponse(**metrics)
+        # Process top breaches (convert Entity objects to dicts)
+        top_breaches = []
+        for breach in metrics["top_breaches"]:
+            top_breaches.append(
+                {
+                    "breachid": breach.key.id_or_name,
+                    "logo": breach.get("logo"),
+                    "description": breach.get("xposure_desc"),
+                    "count": breach.get("xposed_records"),
+                }
+            )
+
+        # Process recent breaches (convert Entity objects to dicts)
+        recent_breaches = []
+        for breach in metrics["recent_breaches"]:
+            timestamp = breach.get("timestamp")
+            if hasattr(timestamp, "strftime"):
+                formatted_timestamp = timestamp.strftime("%a, %d %b %Y %H:%M:%S GMT")
+            else:
+                formatted_timestamp = datetime.datetime.utcnow().strftime(
+                    "%a, %d %b %Y %H:%M:%S GMT"
+                )
+            recent_breaches.append(
+                {
+                    "breachid": breach.key.id_or_name,
+                    "timestamp": formatted_timestamp,
+                    "logo": breach.get("logo"),
+                    "description": breach.get("xposure_desc"),
+                    "count": breach.get("xposed_records"),
+                }
+            )
+
+        # Transform to response format before caching
+        response_data = {
+            "Breaches_Count": metrics["breaches_count"],
+            "Breaches_Records": metrics["breaches_total_records"],
+            "Pastes_Count": str(metrics["pastes_count"]),
+            "Pastes_Records": metrics["pastes_total_records"],
+            "Yearly_Breaches_Count": metrics["yearly_count"],
+            "Industry_Breaches_Count": metrics["industry_breaches_count"],
+            "Top_Breaches": top_breaches,
+            "Recent_Breaches": recent_breaches,
+        }
+        cache_analytics(cache_key, response_data)
+
+        return DetailedMetricsResponse(**response_data)
     except Exception as e:
         await send_exception_email(
             api_route="GET /v1/analytics/metrics",
