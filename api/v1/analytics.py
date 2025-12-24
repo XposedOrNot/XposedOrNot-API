@@ -2,6 +2,7 @@
 
 # Standard library imports
 import datetime
+import hashlib
 import html
 import json
 import logging
@@ -92,6 +93,11 @@ def cache_analytics(
         redis_client.setex(cache_key, timedelta(hours=expiry_hours), json.dumps(result))
     except Exception:
         pass
+
+
+def hash_email(email: str) -> str:
+    """Hash email for privacy-safe cache keys."""
+    return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 
 class ShieldOnException(Exception):
@@ -1050,12 +1056,20 @@ async def get_analytics(
         alert_key = data_store.key("xon_alert", user_email)
         alert_record = data_store.get(alert_key)
 
+        # Always check shieldOn first (privacy - can't cache this)
         if alert_record and alert_record.get("shieldOn"):
             raise ShieldOnException("Shield is on")
+
+        # Check cache after shieldOn validation
+        cache_key = f"analytics-hierarchy:{hash_email(user_email)}"
+        cached_result = get_cached_analytics(cache_key)
+        if cached_result:
+            return BreachHierarchyResponse(**cached_result)
 
         if xon_record:
             site = str(xon_record["site"])
             breach_hierarchy = await get_breach_hierarchy_analytics(site, "")
+            cache_analytics(cache_key, breach_hierarchy)
             return BreachHierarchyResponse(**breach_hierarchy)
 
         return JSONResponse(content=None)
