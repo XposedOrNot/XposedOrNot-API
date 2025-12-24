@@ -59,7 +59,7 @@ The XON API provides comprehensive data breach detection and monitoring services
 # Rate Limiting
 RATE_LIMIT_DEFAULT = "2 per second;50 per hour;100 per day"
 RATE_LIMIT_ANALYTICS = "5 per minute;100 per hour;500 per day"
-RATE_LIMIT_DOMAIN = "2 per second;10 per hour;50 per day"
+RATE_LIMIT_DOMAIN = "2 per second;25 per hour;50 per day"
 
 # Security
 MAX_EMAIL_LENGTH = 254

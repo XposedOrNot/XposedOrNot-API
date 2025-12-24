@@ -72,7 +72,7 @@ class DomainBreachesResponse(BaseResponse):
     response_model=DomainBreachesResponse,
     dependencies=[Depends(csrf_exempt)],
 )
-@custom_rate_limiter("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
 async def protected(
     request: Request,
     x_api_key: str = Header(..., description="API key for authentication"),

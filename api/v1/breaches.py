@@ -43,7 +43,7 @@ router = APIRouter()
 
 
 @router.get("/breaches", response_model=BreachListResponse)
-@custom_rate_limiter("2 per second;5 per hour;100 per day")
+@custom_rate_limiter("2 per second;50 per hour;100 per day")
 async def get_xposed_breaches(
     request: Request,
     domain: Optional[str] = None,
@@ -482,7 +482,7 @@ async def search_email(
 
 
 @router.get("/domain-breach-summary", response_model=DomainBreachSummaryResponse)
-@custom_rate_limiter("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
 async def get_domain_breach_summary(
     request: Request,
     d: Optional[str] = Query(None, description="Domain to search for breaches"),

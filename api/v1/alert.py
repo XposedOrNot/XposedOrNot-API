@@ -36,7 +36,7 @@ templates = Jinja2Templates(directory="templates")
 
 
 @router.get("/alertme/{user_email}", response_model=AlertResponse)
-@custom_rate_limiter("50 per day;5 per hour;2 per second")
+@custom_rate_limiter("50 per day;25 per hour;2 per second")
 async def subscribe_to_alert_me(
     user_email: str,
     request: Request,
@@ -135,7 +135,7 @@ async def subscribe_to_alert_me(
 
 
 @router.get("/verifyme/{verification_token}")
-@custom_rate_limiter("50 per day;5 per hour;2 per second")
+@custom_rate_limiter("50 per day;25 per hour;2 per second")
 async def alert_me_verification(verification_token: str, request: Request):
     """Verify alert-me subscription and send initial leaks if any."""
     try:
@@ -215,7 +215,7 @@ async def alert_me_verification(verification_token: str, request: Request):
 
 
 @router.get("/send_verification", response_model=VerificationResponse)
-@custom_rate_limiter("50 per day;10 per hour;2 per second")
+@custom_rate_limiter("50 per day;25 per hour;2 per second")
 async def send_verification(
     token: str = "None", email: str = None, request: Request = None
 ):

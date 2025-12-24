@@ -438,7 +438,7 @@ async def debug_redis_state(
 
 @router.post("/debug/redis-clear")
 @custom_rate_limiter(
-    "2 per minute;10 per hour", message="Redis clear endpoint is rate limited"
+    "2 per minute;25 per hour", message="Redis clear endpoint is rate limited"
 )
 async def debug_clear_redis(
     request: Request,  # pylint: disable=unused-argument

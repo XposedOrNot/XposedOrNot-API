@@ -110,7 +110,7 @@ async def get_news_feed(request: Request) -> PulseNewsResponse:
         404: {"model": DomainAlertErrorResponse},
     },
 )
-@custom_rate_limiter("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
 async def domain_alert(
     request: Request, user_email: str
 ) -> Union[DomainAlertResponse, DomainAlertErrorResponse]:
@@ -215,7 +215,7 @@ async def domain_alert(
         404: {"content": {"text/html": {}}},
     },
 )
-@custom_rate_limiter("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
 async def domain_verify(request: Request, verification_token: str) -> HTMLResponse:
     """
     Verify domain alerts using token and return dashboard access.
@@ -703,7 +703,7 @@ async def send_domain_breaches(
         404: {"model": ShieldActivationErrorResponse},
     },
 )
-@custom_rate_limiter("50 per day;10 per hour;2 per second")
+@custom_rate_limiter("50 per day;25 per hour;2 per second")
 async def activate_shield(
     request: Request, email: str
 ) -> Union[ShieldActivationResponse, ShieldActivationErrorResponse]:
@@ -794,7 +794,7 @@ async def activate_shield(
         404: {"content": {"text/html": {}}},
     },
 )
-@custom_rate_limiter("50 per day;10 per hour;2 per second")
+@custom_rate_limiter("50 per day;25 per hour;2 per second")
 async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
     """
     Verify privacy shield for public searches and return status.

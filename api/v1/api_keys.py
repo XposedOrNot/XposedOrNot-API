@@ -23,7 +23,7 @@ class APIKeyResponse(BaseResponse):
 
 
 @router.get("/create-api-key/{token}", response_model=APIKeyResponse)
-@custom_rate_limiter("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
 async def create_api_key(token: str, request: Request):
     """Generates or renews an API key for a user identified by a provided token."""
     try:

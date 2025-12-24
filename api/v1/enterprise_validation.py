@@ -20,7 +20,7 @@ router = APIRouter()
 
 
 @router.post("/validate-enterprise-key", response_model=EnterpriseValidationResponse)
-@custom_rate_limiter("2 per second;10 per hour;50 per day")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
 async def validate_enterprise_key(
     request: Request,
     x_api_key: str = Header(..., description="Enterprise API key"),
