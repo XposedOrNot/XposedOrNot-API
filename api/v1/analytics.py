@@ -3,16 +3,21 @@
 # Standard library imports
 import datetime
 import html
+import json
 import logging
 from collections import defaultdict
+from datetime import timedelta
 from typing import Any, Dict, Optional, Union
 
 # Third-party imports
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from google.cloud import datastore
 from google.api_core import exceptions as google_exceptions
+from google.cloud import datastore
+from redis import Redis
+
+from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
 
 # Local imports
 from models.responses import (
@@ -59,6 +64,35 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 logger = logging.getLogger(__name__)
 
+# Redis client for caching
+redis_client = Redis(
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+)
+
+# Cache TTL: 24 hours
+ANALYTICS_CACHE_TTL_HOURS = 24
+
+
+def get_cached_analytics(cache_key: str) -> Optional[Dict]:
+    """Retrieve cached analytics from Redis."""
+    try:
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+    except Exception:
+        pass
+    return None
+
+
+def cache_analytics(
+    cache_key: str, result: Dict, expiry_hours: int = ANALYTICS_CACHE_TTL_HOURS
+) -> None:
+    """Cache analytics in Redis."""
+    try:
+        redis_client.setex(cache_key, timedelta(hours=expiry_hours), json.dumps(result))
+    except Exception:
+        pass
+
 
 class ShieldOnException(Exception):
     """Exception raised when shield is on."""
@@ -71,7 +105,16 @@ class ShieldOnException(Exception):
 async def get_metrics(request: Request) -> DetailedMetricsResponse:
     """Returns detailed metrics about breaches."""
     try:
+        # Check cache first
+        cache_key = "analytics:metrics"
+        cached_result = get_cached_analytics(cache_key)
+        if cached_result:
+            return DetailedMetricsResponse(**cached_result)
+
+        # Cache miss - fetch from service
         metrics = await get_detailed_metrics()
+        cache_analytics(cache_key, metrics)
+
         return DetailedMetricsResponse(**metrics)
     except Exception as e:
         await send_exception_email(
@@ -89,7 +132,20 @@ async def get_metrics(request: Request) -> DetailedMetricsResponse:
 async def get_news_feed(request: Request) -> PulseNewsResponse:
     """Returns news feed for data breaches."""
     try:
+        # Check cache first
+        cache_key = "analytics:pulse"
+        cached_result = get_cached_analytics(cache_key)
+        if cached_result:
+            return PulseNewsResponse(**cached_result)
+
+        # Cache miss - fetch from service
         news_items = await get_pulse_news()
+        response_data = {
+            "status": "success",
+            "data": [item.model_dump() for item in news_items],
+        }
+        cache_analytics(cache_key, response_data)
+
         return PulseNewsResponse(status="success", data=news_items)
     except Exception as e:
         await send_exception_email(
