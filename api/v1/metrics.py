@@ -95,6 +95,13 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")
 
+        # Check cache first
+        cache_key = "metrics:detailed"
+        cached_result = get_cached_metrics(cache_key)
+        if cached_result:
+            return DetailedMetricsResponse(**cached_result)
+
+        # Cache miss - fetch and process
         metrics = await get_detailed_metrics()
 
         # Process top breaches
@@ -129,6 +136,19 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
                     "count": breach.get("xposed_records"),
                 }
             )
+
+        # Build response and cache it
+        response_data = {
+            "Breaches_Count": metrics["breaches_count"],
+            "Breaches_Records": metrics["breaches_total_records"],
+            "Pastes_Count": str(metrics["pastes_count"]),
+            "Pastes_Records": metrics["pastes_total_records"],
+            "Yearly_Breaches_Count": metrics["yearly_count"],
+            "Industry_Breaches_Count": metrics["industry_breaches_count"],
+            "Top_Breaches": top_breaches,
+            "Recent_Breaches": recent_breaches,
+        }
+        cache_metrics(cache_key, response_data)
 
         return DetailedMetricsResponse(
             Breaches_Count=metrics["breaches_count"],
