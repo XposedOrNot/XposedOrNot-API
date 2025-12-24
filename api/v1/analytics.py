@@ -190,9 +190,14 @@ async def get_news_feed(request: Request) -> PulseNewsResponse:
 
         # Cache miss - fetch from service
         news_items = await get_pulse_news()
+        # Handle both dict and Pydantic model items
+        data_items = [
+            item.model_dump() if hasattr(item, "model_dump") else item
+            for item in news_items
+        ]
         response_data = {
             "status": "success",
-            "data": [item.model_dump() for item in news_items],
+            "data": data_items,
         }
         cache_analytics(cache_key, response_data)
 
