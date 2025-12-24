@@ -547,7 +547,13 @@ async def get_domain_breach_summary(
     try:
         domain = d.lower().strip()
 
-        # Initialize datastores
+        # Check cache first
+        cache_key = f"domain-breach-summary:{domain}"
+        cached_result = get_cached_breaches(cache_key)
+        if cached_result:
+            return DomainBreachSummaryResponse(**cached_result)
+
+        # Cache miss - query Datastore
         ds_xon = datastore.Client()
 
         # Query xon records for domain
@@ -612,6 +618,10 @@ async def get_domain_breach_summary(
                 }
             ]
         }
+
+        # Cache the response
+        response_data = {"sendDomains": breaches_dict, "SearchStatus": "Success"}
+        cache_breaches(cache_key, response_data)
 
         return DomainBreachSummaryResponse(
             sendDomains=breaches_dict, SearchStatus="Success"
