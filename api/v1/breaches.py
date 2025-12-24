@@ -2,17 +2,18 @@
 
 # Standard library imports
 import json
-from datetime import datetime
-from typing import Optional, Union
+from datetime import datetime, timedelta
+from typing import Dict, Optional, Union
 from urllib.parse import urlparse
 
 # Third-party imports
 from fastapi import APIRouter, Header, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, Response
 from google.cloud import datastore
+from redis import Redis
 
 # Local imports
-from config.settings import MAX_EMAIL_LENGTH
+from config.settings import MAX_EMAIL_LENGTH, REDIS_DB, REDIS_HOST, REDIS_PORT
 from models.responses import (
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
@@ -41,6 +42,44 @@ from utils.validation import validate_variables
 
 router = APIRouter()
 
+# Redis client for caching
+redis_client = Redis(
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+)
+
+# Cache TTL: 24 hours
+BREACH_CACHE_TTL_HOURS = 24
+
+
+def get_breach_cache_key(breach_id: Optional[str], domain: Optional[str]) -> str:
+    """Generate cache key based on query parameters."""
+    if breach_id:
+        return f"breaches:id:{breach_id.lower()}"
+    elif domain:
+        return f"breaches:domain:{domain.lower()}"
+    return "breaches:all"
+
+
+def get_cached_breaches(cache_key: str) -> Optional[Dict]:
+    """Retrieve cached breach results from Redis."""
+    try:
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+    except Exception:
+        pass
+    return None
+
+
+def cache_breaches(
+    cache_key: str, result: Dict, expiry_hours: int = BREACH_CACHE_TTL_HOURS
+) -> None:
+    """Cache breach results in Redis."""
+    try:
+        redis_client.setex(cache_key, timedelta(hours=expiry_hours), json.dumps(result))
+    except Exception:
+        pass
+
 
 @router.get("/breaches", response_model=BreachListResponse)
 @custom_rate_limiter("2 per second;50 per hour;100 per day")
@@ -55,13 +94,10 @@ async def get_xposed_breaches(
     or for all domains if no domain is specified.
     """
     try:
-        client = datastore.Client()
-        query = client.query(kind="xon_breaches")
-
+        # Validate inputs first
         if breach_id:
             if not validate_variables([breach_id]):
                 raise HTTPException(status_code=400, detail="Invalid Breach ID")
-            query.key_filter(client.key("xon_breaches", breach_id), "=")
         elif domain:
             # Try to extract domain from URL if a full URL is provided
             if not validate_domain(domain):
@@ -71,22 +107,23 @@ async def get_xposed_breaches(
                     domain = extracted
                 else:
                     raise HTTPException(status_code=400, detail="Invalid Domain")
+
+        # Check cache first
+        cache_key = get_breach_cache_key(breach_id, domain)
+        cached_result = get_cached_breaches(cache_key)
+        if cached_result:
+            return BreachListResponse(**cached_result)
+
+        # Cache miss - query Datastore
+        client = datastore.Client()
+        query = client.query(kind="xon_breaches")
+
+        if breach_id:
+            query.key_filter(client.key("xon_breaches", breach_id), "=")
+        elif domain:
             query.add_filter("domain", "=", domain)
         else:
             query.order = ["-timestamp"]
-
-        # Check if-modified-since header
-        latest_entity = list(query.fetch(limit=1))
-        if latest_entity and if_modified_since:
-            latest_timestamp = latest_entity[0]["timestamp"]
-            try:
-                if_modified_dt = datetime.strptime(
-                    if_modified_since, "%a, %d %b %Y %H:%M:%S GMT"
-                )
-                if latest_timestamp.replace(tzinfo=None) <= if_modified_dt:
-                    return Response(status_code=304)
-            except ValueError:
-                pass
 
         entities = list(query.fetch())
         if not entities:
@@ -135,6 +172,13 @@ async def get_xposed_breaches(
             return BreachListResponse(
                 status="notFound", message=f"No breaches found for domain {domain}"
             )
+
+        # Build response and cache it
+        response_data = {
+            "status": "success",
+            "exposedBreaches": [breach.model_dump() for breach in breach_details],
+        }
+        cache_breaches(cache_key, response_data)
 
         return BreachListResponse(status="success", exposedBreaches=breach_details)
 

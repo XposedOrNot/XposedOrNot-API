@@ -1,17 +1,50 @@
 """Metrics-related API endpoints."""
 
-from datetime import datetime
+import json
+from datetime import datetime, timedelta
+from typing import Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
+from redis import Redis
 
-from utils.custom_limiter import custom_rate_limiter
-from models.responses import MetricsResponse, DetailedMetricsResponse
+from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
+from models.responses import DetailedMetricsResponse, MetricsResponse
 from services.analytics import get_detailed_metrics
 from services.send_email import send_exception_email
+from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import validate_url
 
 router = APIRouter()
+
+# Redis client for caching
+redis_client = Redis(
+    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
+)
+
+# Cache TTL: 24 hours
+METRICS_CACHE_TTL_HOURS = 24
+
+
+def get_cached_metrics(cache_key: str) -> Optional[Dict]:
+    """Retrieve cached metrics from Redis."""
+    try:
+        cached_data = redis_client.get(cache_key)
+        if cached_data:
+            return json.loads(cached_data)
+    except Exception:
+        pass
+    return None
+
+
+def cache_metrics(
+    cache_key: str, result: Dict, expiry_hours: int = METRICS_CACHE_TTL_HOURS
+) -> None:
+    """Cache metrics in Redis."""
+    try:
+        redis_client.setex(cache_key, timedelta(hours=expiry_hours), json.dumps(result))
+    except Exception:
+        pass
 
 
 @router.get("/metrics", response_model=MetricsResponse)
@@ -22,13 +55,23 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")
 
+        # Check cache first
+        cache_key = "metrics:basic"
+        cached_result = get_cached_metrics(cache_key)
+        if cached_result:
+            return MetricsResponse(**cached_result)
+
+        # Cache miss - fetch from service
         metrics = await get_detailed_metrics()
-        return MetricsResponse(
-            Breaches_Count=metrics["breaches_count"],
-            Breaches_Records=metrics["breaches_total_records"],
-            Pastes_Count=str(metrics["pastes_count"]),
-            Pastes_Records=metrics["pastes_total_records"],
-        )
+        response_data = {
+            "Breaches_Count": metrics["breaches_count"],
+            "Breaches_Records": metrics["breaches_total_records"],
+            "Pastes_Count": str(metrics["pastes_count"]),
+            "Pastes_Records": metrics["pastes_total_records"],
+        }
+        cache_metrics(cache_key, response_data)
+
+        return MetricsResponse(**response_data)
 
     except Exception as e:
         await send_exception_email(
