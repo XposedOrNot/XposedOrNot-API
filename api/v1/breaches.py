@@ -300,6 +300,7 @@ async def search_data_breaches(
         alert_key = datastore_client.key("xon_alert", email)
         alert_record = datastore_client.get(alert_key)
 
+        # Always check shieldOn first (privacy - can't cache this)
         if alert_record and alert_record.get("shieldOn", False):
             raise HTTPException(status_code=404, detail="Not found")
 
@@ -308,6 +309,13 @@ async def search_data_breaches(
             token_valid = bool(alert_record and alert_record.get("token") == token)
             if not token_valid:
                 raise HTTPException(status_code=403, detail="Invalid token")
+
+        # Check cache (after shieldOn/token validation)
+        has_token = "with_token" if token else "no_token"
+        cache_key = f"breach-analytics:{hash_email(email)}:{has_token}"
+        cached_result = get_cached_breaches(cache_key)
+        if cached_result:
+            return BreachAnalyticsResponse(**cached_result)
 
         breach_data = await get_exposure(email)
         sensitive_data = await get_sensitive_exposure(email) if token else None
@@ -348,24 +356,28 @@ async def search_data_breaches(
         ) = summary_result
 
         if breach_summary or paste_summary:
-            return BreachAnalyticsResponse(
-                ExposedBreaches=exposed_breaches,
-                BreachesSummary=breach_summary
+            response_data = {
+                "ExposedBreaches": exposed_breaches,
+                "BreachesSummary": breach_summary
                 or {"domain": "", "site": "", "tmpstmp": ""},
-                BreachMetrics=breach_metrics,
-                PastesSummary=paste_summary or {"cnt": 0, "domain": "", "tmpstmp": ""},
-                ExposedPastes=exposed_pastes,
-                PasteMetrics=paste_metrics,
-            )
+                "BreachMetrics": breach_metrics,
+                "PastesSummary": paste_summary
+                or {"cnt": 0, "domain": "", "tmpstmp": ""},
+                "ExposedPastes": exposed_pastes,
+                "PasteMetrics": paste_metrics,
+            }
+            cache_breaches(cache_key, response_data)
+            return BreachAnalyticsResponse(**response_data)
 
-        return BreachAnalyticsResponse(
-            BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
-            PastesSummary={"cnt": 0, "domain": "", "tmpstmp": ""},
-            ExposedBreaches=None,
-            ExposedPastes=None,
-            BreachMetrics=None,
-            PasteMetrics=None,
-        )
+        empty_response = {
+            "BreachesSummary": {"domain": "", "site": "", "tmpstmp": ""},
+            "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
+            "ExposedBreaches": None,
+            "ExposedPastes": None,
+            "BreachMetrics": None,
+            "PasteMetrics": None,
+        }
+        return BreachAnalyticsResponse(**empty_response)
 
     except HTTPException:
         raise
