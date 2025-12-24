@@ -180,6 +180,13 @@ async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")
 
+        # Check cache first
+        cache_key = f"metrics:domain:{domain.lower()}"
+        cached_result = get_cached_metrics(cache_key)
+        if cached_result:
+            return JSONResponse(content=cached_result)
+
+        # Cache miss - build response
         domain_metrics = {
             "status": "success",
             "message": "Domain metrics retrieved successfully",
@@ -194,6 +201,8 @@ async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
                 },
             },
         }
+
+        cache_metrics(cache_key, domain_metrics)
 
         return JSONResponse(content=domain_metrics)
 

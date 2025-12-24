@@ -1,6 +1,7 @@
 """Breach-related API endpoints."""
 
 # Standard library imports
+import hashlib
 import json
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Union
@@ -79,6 +80,11 @@ def cache_breaches(
         redis_client.setex(cache_key, timedelta(hours=expiry_hours), json.dumps(result))
     except Exception:
         pass
+
+
+def hash_email(email: str) -> str:
+    """Hash email for privacy-safe cache keys."""
+    return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 
 @router.get("/breaches", response_model=BreachListResponse)
@@ -436,11 +442,8 @@ async def search_email(
             return EmailBreachErrorResponse(Error="Not found")
 
         email = email.lower()
-        breach_data = await get_exposure(email)
 
-        if not breach_data:
-            return EmailBreachErrorResponse(Error="Not found")
-
+        # Always check shieldOn first (privacy - can't cache this)
         data_store = datastore.Client()
         alert_key = data_store.key("xon_alert", email)
         alert_record = data_store.get(alert_key)
@@ -454,6 +457,19 @@ async def search_email(
                     "status": "failed",
                 },
             )
+
+        # Check cache (after shieldOn check passes)
+        cache_key = f"check-email:{hash_email(email)}:{details}"
+        cached_result = get_cached_breaches(cache_key)
+        if cached_result:
+            # Replace hashed email with actual email in response
+            cached_result["email"] = email
+            return JSONResponse(status_code=200, content=cached_result)
+
+        breach_data = await get_exposure(email)
+
+        if not breach_data:
+            return EmailBreachErrorResponse(Error="Not found")
 
         xon_key = data_store.key("xon", email)
         xon_record = data_store.get(xon_key)
@@ -502,6 +518,11 @@ async def search_email(
                         formatted_breaches.append(formatted_breach)
 
                     response_content["breach_details"] = formatted_breaches
+
+                # Cache the response (use placeholder for email to avoid storing PII)
+                cache_content = response_content.copy()
+                cache_content["email"] = "__cached__"
+                cache_breaches(cache_key, cache_content)
 
                 return JSONResponse(status_code=200, content=response_content)
 
