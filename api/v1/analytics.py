@@ -1127,6 +1127,7 @@ async def get_analytics(
         return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        print(f"GET /v1/analytics/{user_email} error: {e}")
         await send_exception_email(
             api_route=f"GET /v1/analytics/{user_email}",
             error_message=str(e),
@@ -1134,7 +1135,7 @@ async def get_analytics(
             user_agent=request.headers.get("User-Agent"),
             request_params=f"email={user_email}",
         )
-        return JSONResponse(status_code=404, content={"Error": f"Error: {str(e)}"})
+        return JSONResponse(status_code=404, content={"Error": "Failed to retrieve analytics"})
 
 
 @router.post(
