@@ -470,7 +470,8 @@ async def debug_clear_redis(
             "message": "All Redis locks cleared for testing - scheduler instances can now start",
         }
     except Exception as e:
-        return {"error": str(e)}
+        print(f"debug_clear_redis error: {e}")
+        return {"error": "Failed to clear Redis locks"}
 
 
 @router.post("/trigger-manual", response_model=MonthlyDigestResponse)
