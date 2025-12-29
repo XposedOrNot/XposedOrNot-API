@@ -433,7 +433,8 @@ async def debug_redis_state(
             ),
         }
     except Exception as e:
-        return {"error": str(e)}
+        print(f"debug_redis_state error: {e}")
+        return {"error": "Failed to retrieve Redis state"}
 
 
 @router.post("/debug/redis-clear")

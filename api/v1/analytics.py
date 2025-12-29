@@ -1135,7 +1135,9 @@ async def get_analytics(
             user_agent=request.headers.get("User-Agent"),
             request_params=f"email={user_email}",
         )
-        return JSONResponse(status_code=404, content={"Error": "Failed to retrieve analytics"})
+        return JSONResponse(
+            status_code=404, content={"Error": "Failed to retrieve analytics"}
+        )
 
 
 @router.post(
