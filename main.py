@@ -254,12 +254,13 @@ async def mcp_post_handler(fastapi_request: Request):
                         },
                     }
                 except Exception as e:
+                    print(f"MCP get_breach_analytics error: {e}")
                     return {
                         "jsonrpc": "2.0",
                         "id": request_body.get("id"),
                         "error": {
                             "code": -32603,
-                            "message": f"Internal error: {str(e)}",
+                            "message": "Internal error: Failed to get breach analytics",
                         },
                     }
             else:
