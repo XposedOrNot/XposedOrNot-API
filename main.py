@@ -299,10 +299,11 @@ async def mcp_post_handler(fastapi_request: Request):
                     },
                 }
             except Exception as e:
+                print(f"MCP list_breaches error: {e}")
                 return {
                     "jsonrpc": "2.0",
                     "id": request_body.get("id"),
-                    "error": {"code": -32603, "message": f"Internal error: {str(e)}"},
+                    "error": {"code": -32603, "message": "Internal error: Failed to list breaches"},
                 }
 
     # Default response for unsupported methods
