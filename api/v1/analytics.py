@@ -523,6 +523,7 @@ async def send_domain_breaches(
         detailed_breach_info = {}
         all_breaches_logo = {}
         seniority_summary = {"manager": 0, "c_suite": 0, "director": 0, "vp": 0}
+        time_filtered_breaches = set()  # Track breaches that pass time filter
 
         # Process each verified domain
         for domain in verified_domains:
@@ -552,6 +553,9 @@ async def send_domain_breaches(
 
                         if breach_timestamp < time_threshold:
                             continue  # Skip this breach if it's outside the time filter
+
+                    # Track this breach as passing the time filter (for filtering breach_details and seniority)
+                    time_filtered_breaches.add(entity["breach"])
 
                     default_breach_info = {
                         "breached_date": None,
@@ -623,25 +627,33 @@ async def send_domain_breaches(
                         added=added,
                     )
 
-            # Get breach details
+            # Get breach details (filtered by time if time_threshold is set)
             query = client.query(kind="xon_domains_details")
             query.add_filter("domain", "=", domain)
             for entity in query.fetch():
-                breach_details.append(
-                    BreachDetails(
-                        email=entity["email"],
-                        domain=entity["domain"],
-                        breach=entity["breach"],
+                # Only include breach details for breaches that pass the time filter
+                if time_threshold is None or entity["breach"] in time_filtered_breaches:
+                    breach_details.append(
+                        BreachDetails(
+                            email=entity["email"],
+                            domain=entity["domain"],
+                            breach=entity["breach"],
+                        )
                     )
-                )
 
-        # Get seniority information
+        # Collect emails from filtered breach_details for seniority filtering
+        filtered_emails = {bd.email for bd in breach_details}
+
+        # Get seniority information (filtered by emails in time-filtered breaches)
         query = client.query(kind="xon_domains_seniority")
         query.add_filter("domain", "IN", verified_domains)
         for entity in query.fetch():
-            seniority = entity.get("seniority", "").lower()
-            if seniority in seniority_summary:
-                seniority_summary[seniority] += 1
+            # Only count seniority for emails that are in the filtered breach details
+            entity_email = entity.get("email", "")
+            if time_threshold is None or entity_email in filtered_emails:
+                seniority = entity.get("seniority", "").lower()
+                if seniority in seniority_summary:
+                    seniority_summary[seniority] += 1
 
         # Build yearly breach hierarchy
         yearly_breach_hierarchy = {"description": "Data Breaches", "children": []}
