@@ -806,7 +806,9 @@ async def send_domain_breaches(
 
         return response
 
-    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+    except HTTPException:
+        raise
+    except (ValueError, google_exceptions.GoogleAPIError) as e:
         await send_exception_email(
             api_route="GET /v1/send_domain_breaches",
             error_message=str(e),
