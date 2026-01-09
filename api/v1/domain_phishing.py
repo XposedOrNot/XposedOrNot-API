@@ -1,8 +1,10 @@
 """Domain phishing check router module."""
 
+import asyncio
+import concurrent.futures
 import json
-import socket
 from datetime import datetime, timedelta
+from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -28,6 +30,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 STATIC_DIR = BASE_DIR / "static" / "static"
 DICTIONARY_FILE = STATIC_DIR / "dictionary.txt"
 TLD_FILE = STATIC_DIR / "tld.txt"
+
+# Timeout for dnstwist operations (in seconds)
+DNSTWIST_TIMEOUT_SECONDS = 60
 
 if not DICTIONARY_FILE.exists():
     raise FileNotFoundError(f"Dictionary file not found at {DICTIONARY_FILE}")
@@ -77,7 +82,9 @@ class DomainPhishingSummaryResponse(BaseResponse):
     total_scanned: int
     total_live: int = 0
     unique_fuzzers: int = 0
+    live_domains: List[str] = []
     last_checked: Optional[str] = None
+    timed_out: bool = False
 
 
 class DomainPhishingResponse(BaseResponse):
@@ -89,15 +96,39 @@ class DomainPhishingResponse(BaseResponse):
     live_domains: List[str] = []
     raw_results: List[Dict[str, Any]]
     last_checked: Optional[str] = None
+    timed_out: bool = False
 
 
-def is_domain_live(domain: str) -> bool:
-    """Check if a domain is live by resolving its IP address."""
-    try:
-        socket.gethostbyname(domain)
-        return True
-    except socket.error:
-        return False
+def run_dnstwist_sync(domain: str, options: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Run dnstwist synchronously (for use in thread pool)."""
+    return dnstwist.run(domain=domain, **options)
+
+
+def extract_live_domains(results: List[Dict[str, Any]]) -> List[str]:
+    """Extract live domains from dnstwist results using DNS fields."""
+    live_domains = []
+    # dnstwist uses various field names for DNS records
+    dns_fields = [
+        "dns-a",
+        "dns_a",
+        "dns-aaaa",
+        "dns_aaaa",
+        "dns-ns",
+        "dns_ns",
+        "dns-mx",
+        "dns_mx",
+    ]
+    for result in results:
+        # Skip the original domain entry
+        if result.get("fuzzer") == "*original":
+            continue
+        # Check if any DNS field is populated (indicates domain is live/registered)
+        is_live = any(result.get(field) for field in dns_fields)
+        if is_live:
+            domain_name = result.get("domain-name") or result.get("domain")
+            if domain_name:
+                live_domains.append(domain_name)
+    return live_domains
 
 
 def get_cached_result(domain: str) -> Optional[Dict]:
@@ -228,32 +259,52 @@ async def check_domain_phishing(
                 total_scanned=cached_result["total_scanned"],
                 total_live=cached_result["total_live"],
                 unique_fuzzers=cached_result.get("unique_fuzzers", 0),
+                live_domains=cached_result.get("live_domains", []),
                 last_checked=cached_result["last_checked"],
             )
             return response
         try:
+            # Build options - whois only for authenticated users
             options = {
                 "registered": True,
                 "format": "json",
-                "threads": 8,
+                "threads": 16,
                 "all": True,
                 "mxcheck": True,
-                "whois": True,
+                "whois": is_authenticated,  # Only run whois for authenticated users
                 "dictionary": str(DICTIONARY_FILE),
                 "tld": str(TLD_FILE),
             }
-            twist_results = dnstwist.run(domain=domain, **options)
+
+            # Run dnstwist with timeout
+            timed_out = False
+            twist_results = []
+            loop = asyncio.get_event_loop()
+
+            try:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = loop.run_in_executor(
+                        executor,
+                        partial(run_dnstwist_sync, domain, options),
+                    )
+                    twist_results = await asyncio.wait_for(
+                        future, timeout=DNSTWIST_TIMEOUT_SECONDS
+                    )
+            except asyncio.TimeoutError:
+                timed_out = True
+                # Results will be empty or partial - dnstwist doesn't support
+                # partial results, so we return what we have (empty list)
+
             twist_results.sort(
                 key=lambda x: (
                     x.get("fuzzer", "") != "*original",
                     x.get("domain-name", "") or x.get("domain", ""),
                 )
             )
-            live_domains = []
-            for result in twist_results:
-                domain_to_check = result.get("domain-name") or result.get("domain")
-                if domain_to_check and is_domain_live(domain_to_check):
-                    live_domains.append(domain_to_check)
+
+            # Extract live domains from dnstwist dns-a field (no extra lookups)
+            live_domains = extract_live_domains(twist_results)
+
             unique_fuzzers = len(
                 set(
                     r.get("fuzzer", "")
@@ -262,26 +313,44 @@ async def check_domain_phishing(
                 )
             )
             response_data = {
-                "status": "success",
+                "status": "success" if not timed_out else "partial",
                 "total_scanned": len(twist_results),
                 "total_live": len(live_domains),
                 "unique_fuzzers": unique_fuzzers,
                 "live_domains": live_domains,
                 "raw_results": twist_results,
                 "last_checked": datetime.utcnow().isoformat(),
+                "timed_out": timed_out,
             }
-            cache_result(domain, response_data)
+
+            # Only cache complete results
+            if not timed_out:
+                cache_result(domain, response_data)
+
             if is_authenticated:
                 response = DomainPhishingResponse(**response_data)
                 return response
             response = DomainPhishingSummaryResponse(
-                status="success",
+                status=response_data["status"],
                 total_scanned=response_data["total_scanned"],
                 total_live=response_data["total_live"],
                 unique_fuzzers=response_data["unique_fuzzers"],
+                live_domains=live_domains,
                 last_checked=response_data["last_checked"],
+                timed_out=timed_out,
             )
             return response
+        except asyncio.TimeoutError:
+            # Fallback timeout handler
+            return DomainPhishingSummaryResponse(
+                status="partial",
+                total_scanned=0,
+                total_live=0,
+                unique_fuzzers=0,
+                live_domains=[],
+                last_checked=datetime.utcnow().isoformat(),
+                timed_out=True,
+            )
         except Exception as e:
             raise HTTPException(
                 status_code=500, detail=f"Error running domain check: {str(e)}"
