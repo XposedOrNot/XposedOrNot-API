@@ -267,7 +267,6 @@ async def check_domain_phishing(
             # Build options - whois only for authenticated users
             options = {
                 "registered": True,
-                "format": "json",
                 "threads": 16,
                 "all": True,
                 "mxcheck": True,
@@ -355,6 +354,8 @@ async def check_domain_phishing(
             raise HTTPException(
                 status_code=500, detail=f"Error running domain check: {str(e)}"
             )
+    except HTTPException:
+        raise
     except Exception as e:
         await send_exception_email(
             api_route=f"GET /v1/domain-phishing/{domain}",
