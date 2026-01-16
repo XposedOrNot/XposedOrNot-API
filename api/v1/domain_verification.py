@@ -471,6 +471,8 @@ async def domain_verification(
 
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
+    except HTTPException:
+        raise
     except Exception as e:
         await send_exception_email(
             api_route="GET /v1/domain_verification",
