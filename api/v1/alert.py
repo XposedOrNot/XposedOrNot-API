@@ -28,7 +28,12 @@ from services.send_email import (
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.token import confirm_token, generate_confirmation_token
-from utils.validation import validate_email_with_tld, validate_url, validate_variables
+from utils.validation import (
+    validate_email_deliverable,
+    validate_email_with_tld,
+    validate_url,
+    validate_variables,
+)
 from utils.safe_encoding import build_safe_url
 
 router = APIRouter()
@@ -46,14 +51,21 @@ async def subscribe_to_alert_me(
         user_email = user_email.lower()
 
         # Validation checks
-        email_valid = validate_email_with_tld(user_email)
         url_valid = validate_url(request)
-
-        if not user_email or not email_valid or not url_valid:
+        if not user_email or not url_valid:
             return JSONResponse(
                 status_code=400,
                 content={"status": "Error", "message": "Invalid request"},
             )
+
+        # Validate email format, TLD, and domain is live
+        is_deliverable, validated_email = validate_email_deliverable(user_email)
+        if not is_deliverable:
+            return JSONResponse(
+                status_code=400,
+                content={"status": "Error", "message": validated_email},
+            )
+        user_email = validated_email
 
         # Datastore operations
         datastore_client = datastore.Client()

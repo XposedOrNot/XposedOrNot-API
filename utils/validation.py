@@ -3,6 +3,7 @@
 import re
 from urllib.parse import urlparse
 from fastapi import Request
+from email_validator import validate_email, EmailNotValidError
 
 
 def validate_variables(variables_to_validate: list) -> bool:
@@ -47,3 +48,20 @@ def validate_token(token: str) -> bool:
         return bool(re.match(pattern, token))
     except Exception:
         return False
+
+
+def validate_email_deliverable(email: str) -> tuple[bool, str]:
+    """
+    Validate email format, TLD, and check if domain is live (has MX/A records).
+
+    Args:
+        email: The email address to validate
+
+    Returns:
+        tuple: (is_valid, normalized_email_or_error_message)
+    """
+    try:
+        result = validate_email(email, check_deliverability=True)
+        return True, result.normalized
+    except EmailNotValidError:
+        return False, "Unable to deliver email to this address"
