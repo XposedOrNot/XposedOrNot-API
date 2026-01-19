@@ -63,5 +63,5 @@ def validate_email_deliverable(email: str) -> tuple[bool, str]:
     try:
         result = validate_email(email, check_deliverability=True)
         return True, result.normalized
-    except EmailNotValidError:
+    except Exception:
         return False, "Unable to deliver email to this address"

@@ -50,6 +50,7 @@ from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.request import get_client_ip, get_user_agent_info
 from utils.token import confirm_token, generate_confirmation_token
 from utils.validation import (
+    validate_email_deliverable,
     validate_email_with_tld,
     validate_token,
     validate_url,
@@ -247,13 +248,17 @@ async def domain_alert(
         if not user_email:
             return DomainAlertErrorResponse(Error="Invalid email", email=user_email)
 
-        if not validate_email_with_tld(user_email):
-            return DomainAlertErrorResponse(
-                Error="Invalid email format", email=user_email
-            )
-
         if not validate_url(request):
             return DomainAlertErrorResponse(Error="Invalid request", email=user_email)
+
+        # Validate email format, TLD, and domain is live
+        is_deliverable, validated_email = validate_email_deliverable(user_email)
+        if not is_deliverable:
+            return JSONResponse(
+                status_code=400,
+                content={"Error": "Unable to deliver email to this address"},
+            )
+        user_email = validated_email
 
         datastore_client = datastore.Client()
 
