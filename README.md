@@ -36,20 +36,34 @@ The API was built and is maintained by Devanand Premkumar.
 [![Twitter](https://img.shields.io/badge/Twitter-blue?style=flat-square&logo=twitter&logoColor=white&url=https%3A%2F%2Ftwitter.com%2Fdevaonbreaches)](https://twitter.com/devaonbreaches)
 [![Mastodon](https://img.shields.io/badge/-Mastodon-blue?style=flat-square&logo=mastodon&logoColor=white&link=https://infosec.exchange/@DevaOnBreaches)](https://infosec.exchange/@DevaOnBreaches)
 
+## Quick Example
 
+Check if an email has been exposed in data breaches:
 
-## Show Your Support!
+```bash
+curl https://api.xposedornot.com/v1/check-email/test@example.com
+```
 
-🌟 Give us a star if you like what we're doing!
+Response:
+```json
+{
+  "breaches": [["Adobe"], ["LinkedIn"]],
+  "email": "test@example.com"
+}
+```
 
-🍴 Fork it and make it your own!
+Get detailed breach analytics:
+```bash
+curl "https://api.xposedornot.com/v1/breach-analytics?email=test@example.com"
+```
 
-🤝 And hey, why not contribute? We love seeing what you can add to the mix!
+## Rate Limits & API Access
 
-## How to Use XposedOrNot API (documentation)
+- **No API key required** for basic endpoints (`/v1/check-email`, `/v1/breach-analytics`, `/v1/breaches`)
+- **Rate limits**: 2 requests/second, 100 requests/day per IP
+- **API key required** for domain breach monitoring (enterprise feature)
 
-
-If you want to get more details, you can check out our full [documentation](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
+For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
 
 ## Why use XposedOrNot API?
 
@@ -64,23 +78,18 @@ This API is your go-to for all information related to data breaches that XposedO
 If you'd rather skip the API and check data breach info directly, you can do that on our website at : https://XposedOrNot.com.
 
 
-## How secure is XposedOrNot API?
+## Security
 
-Is XposedOrNot API safe to use? Absolutely.
+This project is fully open-source and uses automated security tooling (Black, Pylint, CodeQL, OpenSSF Scorecard). For security details, see [SECURITY.md](SECURITY.md).
 
-You see, the whole issue of data breaches has come from places that aren't secure. So, we've made sure everything is open-source, including the API and all related files on Github. We trust in the power of open source tools to make our digital world safer.
+## Prerequisites
 
-Everything we run, from the app to the website, is built on open source - from the operating system (Linux) to the API script (Python), and even the web files (HTML). We believe in improving services through collaboration, and open source makes that possible.
-
-We've designed the XposedOrNot API with safety at its core because we're dealing with sensitive data breach information. Tools like Black, Pylint, and SonarQube Community Edition support the security of our code and design elements.
-
-If you spot any problems or have suggestions for improvements, please raise an issue on GitHub.
-
-And if you want to contribute, we welcome your pull requests. We'll gladly consider any changes or fixes you suggest.
+- **Docker** (recommended): Docker 20.10+ and Docker Compose V2
+- **Local install**: Python 3.9+, Google Cloud SDK
 
 ## Quick Start for Local Development
 
-### Using Docker-Compose
+### Using Docker Compose (Recommended)
 
 1. **Clone the Repository:**
 
@@ -161,4 +170,12 @@ Please do not report security vulnerabilities through public GitHub issues. Inst
 * Big shout-out to Python and all the people looking after the modules we've used. You guys rock!
 
 * And a round of applause for everyone who's reviewed our code. Your eyes make all the difference.
+
+## Show Your Support
+
+If you find this project useful:
+
+- Star the repository
+- Fork it and contribute
+- Share it with others
 
