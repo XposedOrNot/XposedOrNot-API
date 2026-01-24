@@ -1,13 +1,13 @@
-<p align="center"><h1 align="center">XposedOrNot API </p></h1>
+<h1 align="center">XposedOrNot API</h1>
  
 <p align="center">
 🎉 Your free API for real-time data breach monitoring and analytics. <br>
 <a href="https://github.com/XposedOrNot/XposedOrNot-API/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue"></a>
 <a href="https://github.com/psf/black"><img src="https://img.shields.io/static/v1?label=code%20style&message=black&color=blue"></a>
-<a href=""><img src="https://img.shields.io/badge/code%20style-pep8-blue.svg"></a>
+<img src="https://img.shields.io/badge/code%20style-pep8-blue.svg">
 <a href="https://github.com/XposedOrNot/XposedOrNot-API/blob/master/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributions-Welcome-brightgreen"></a>
-<img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/black.yml/badge.svg" alt="Black">
-<img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pylint.yml/badge.svg" alt="Pylint">
+<a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/black.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/black.yml/badge.svg" alt="Black"></a>
+<a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pylint.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pylint.yml/badge.svg" alt="Pylint"></a>
  <a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/codeql.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
 <a href="https://securityscorecards.dev/viewer/?uri=github.com/XposedOrNot/XposedOrNot-API"><img src="https://api.securityscorecards.dev/projects/github.com/XposedOrNot/XposedOrNot-API/badge" alt="OpenSSF Scorecard"></a>
 <a href="https://www.bestpractices.dev/projects/11418"><img src="https://www.bestpractices.dev/projects/11418/badge?v=1" alt="OpenSSF Best Practices"></a>
@@ -92,7 +92,7 @@ And if you want to contribute, we welcome your pull requests. We'll gladly consi
 
 
     ```shell
-    docker-compose up
+    docker compose up
     ```
 
     This command will build API and Datastore Docker images. Note that the project source directory is mapped in the Docker container, so any changes in the source code won't require rebuilding the Docker image.
@@ -108,7 +108,7 @@ And if you want to contribute, we welcome your pull requests. We'll gladly consi
 2. **Install Required Packages**
 
     ```shell
-    sudo apt-get install -y google-cloud-sdk google-cloud-sdk-app-engine-python python3-pip google-cloud-sdk-app-engine-python build-essential libffi-dev python-dev 
+    sudo apt-get install -y google-cloud-sdk google-cloud-sdk-app-engine-python python3-pip build-essential libffi-dev python3-dev 
     ```
 
 3. **Install Python Libraries**
@@ -153,7 +153,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Security Vulnerability Reporting
 
-Please do not report security vulnerabilities through public GitHub issues. Instead, refer to our [Responsible Disclosure Guidelines](https://beta.xposedornot.com/responsible-disclosure) for reporting these issues in a secure manner.
+Please do not report security vulnerabilities through public GitHub issues. Instead, refer to our [Responsible Disclosure Guidelines](https://xposedornot.com/responsible-disclosure) for reporting these issues in a secure manner.
 
 
 ## Acknowledgments
@@ -162,8 +162,3 @@ Please do not report security vulnerabilities through public GitHub issues. Inst
 
 * And a round of applause for everyone who's reviewed our code. Your eyes make all the difference.
 
-## Support! :star:
-
-:star2: Star it
-:fork_and_knife:Fork it
-:handshake: Contribute to it!
