@@ -1003,10 +1003,10 @@ async def get_breach_hierarchy_analytics(
         ds_client = datastore.Client()
         get_details = {"children": [], "description": "Data Breaches"}
 
-        # Create year dictionaries dynamically from 2025 down to 2007
+        # Create year dictionaries dynamically from 2026 down to 2007
         year_dicts = {
             str(year): {"children": [], "description": str(year)}
-            for year in range(2025, 2006, -1)
+            for year in range(2026, 2006, -1)
         }
 
         # Process regular breaches

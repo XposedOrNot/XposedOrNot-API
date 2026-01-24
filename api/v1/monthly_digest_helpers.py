@@ -457,7 +457,7 @@ async def generate_html_template(
             <!-- Email Footer -->
             <div style="background-color: #f8f9fa; padding: 20px; margin-top: 30px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
                 <p style="margin: 0 0 10px 0;">This email was sent to <strong>{escape_html(email)}</strong> because of monthly breach notifications in XposedOrNot.com.</p>
-                <p style="margin: 0;">© 2025 XposedOrNot. All rights reserved. | <a href="https://xposedornot.com/dashboard" style="color: #6c757d;">Visit Website</a></p>
+                <p style="margin: 0;">© 2026 XposedOrNot. All rights reserved. | <a href="https://xposedornot.com/dashboard" style="color: #6c757d;">Visit Website</a></p>
             </div>
 
         </div>

@@ -483,6 +483,7 @@ def get_breaches_data(breaches: str) -> dict:
                     "y2023": 0,
                     "y2024": 0,
                     "y2025": 0,
+                    "y2026": 0,
                 }
             ],
         }
@@ -513,7 +514,7 @@ def get_breaches_data(breaches: str) -> dict:
                     if breach_date := query_result.get("breached_date"):
                         date_list.append(breach_date.date())
                         year = breach_date.year
-                        if 2007 <= year <= 2025:
+                        if 2007 <= year <= 2026:
                             metrics["yearwise_details"][0][f"y{year}"] += 1
 
                     # Update password strength counters
@@ -534,7 +535,7 @@ def get_breaches_data(breaches: str) -> dict:
                     # Update yearwise details and collect breach dates
                     if breach_date := query_result.get("breached_date"):
                         year = breach_date.year
-                        if 2007 <= year <= 2025:
+                        if 2007 <= year <= 2026:
                             metrics["yearwise_details"][0][f"y{year}"] += 1
                         date_list.append(breach_date.date())
 
