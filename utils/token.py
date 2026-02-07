@@ -45,7 +45,7 @@ async def confirm_token(token: str, expiration: int = 604800) -> Optional[str]:
         logger.debug("[TOKEN] Successfully verified token for email: %s", email)
         return email
     except SignatureExpired:
-        logger.error("[TOKEN] Token expired", exc_info=True)
+        logger.warning("[TOKEN] Token expired")
         return None
     except BadSignature:
         logger.error("[TOKEN] Invalid token signature", exc_info=True)
