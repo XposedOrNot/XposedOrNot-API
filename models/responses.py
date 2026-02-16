@@ -202,6 +202,7 @@ class BreachDetailResponse(BaseModel):
 
     breachID: str
     breachedDate: str
+    addedDate: Optional[str] = None
     domain: str
     industry: str
     logo: str

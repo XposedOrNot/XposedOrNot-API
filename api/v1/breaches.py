@@ -157,9 +157,15 @@ async def get_xposed_breaches(
             if breach_date:
                 breach_date = breach_date.replace(microsecond=0).isoformat()
 
+            # Format added date (timestamp)
+            added_date = entity.get("timestamp")
+            if added_date:
+                added_date = added_date.replace(microsecond=0).isoformat()
+
             breach_detail = BreachDetailResponse(
                 breachID=entity.key.name or str(entity.key.id),
                 breachedDate=breach_date,
+                addedDate=added_date,
                 domain=entity.get("domain", ""),
                 industry=entity.get("industry", ""),
                 logo=entity.get("logo", ""),
