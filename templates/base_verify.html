@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{% block title %}XposedOrNot{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, maximum-scale=5.0, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#3f71f3" />
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="shortcut icon" type="image/ico" href="https://xposedornot.com/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/css/bootstrap.min.css"
+      integrity="sha512-rt/SrQ4UNIaGfDyEXZtNcyWvQeOq0QLygHluFQcSjaGB04IxWhal71tKuzP6K8eYXYB6vJV4pHkXcmFGGQ1/0w=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css"
+      integrity="sha256-BtbhCIbtfeVWGsqxk1vOHEYXS6qcvQvLMZqjtpWUEx8="
+      crossorigin="anonymous"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css"
+        integrity="sha256-BtbhCIbtfeVWGsqxk1vOHEYXS6qcvQvLMZqjtpWUEx8="
+        crossorigin="anonymous"
+      />
+    </noscript>
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700;900&display=swap"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700;900&display=swap"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700;900&display=swap"
+      />
+    </noscript>
+    <style>
+      /* Base */
+      * { box-sizing: border-box; }
+
+      body {
+        font-family: 'Poppins', sans-serif;
+        color: #2c3e50;
+        background: #f8f9fa;
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      /* Navbar */
+      .xon-navbar {
+        background: #fff;
+        border-bottom: 1px solid #ebedef;
+        padding: 16px 0;
+      }
+
+      .xon-navbar .brand {
+        font-size: 1.5em;
+        font-weight: 700;
+        color: #3f71f3;
+        text-decoration: none;
+      }
+
+      .xon-navbar .brand:hover {
+        color: #2d5cd4;
+        text-decoration: none;
+      }
+
+      /* Main content area */
+      .verify-wrapper {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+      }
+
+      .verify-card {
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+        max-width: 560px;
+        width: 100%;
+        padding: 48px 40px;
+        text-align: center;
+      }
+
+      .verify-card .icon-circle {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 24px;
+      }
+
+      .verify-card .icon-circle.success {
+        background: rgba(40, 167, 69, 0.1);
+        color: #28a745;
+      }
+
+      .verify-card .icon-circle.error {
+        background: rgba(220, 53, 69, 0.1);
+        color: #dc3545;
+      }
+
+      .verify-card .icon-circle i {
+        font-size: 36px;
+      }
+
+      .verify-card h1 {
+        font-family: 'Montserrat', 'Poppins', sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+
+      .verify-card p {
+        font-size: 15px;
+        color: #4a5568;
+        line-height: 1.6;
+        margin-bottom: 8px;
+      }
+
+      .verify-card .expiry-note {
+        font-size: 13px;
+        color: #718096;
+        margin-bottom: 28px;
+      }
+
+      /* CTA button — matches main site */
+      .cta-button {
+        display: inline-block;
+        background: linear-gradient(135deg, #3f71f3, #5b8aff);
+        color: #fff !important;
+        padding: 14px 32px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 16px;
+        text-decoration: none !important;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(63, 113, 243, 0.3);
+        border: none;
+        cursor: pointer;
+      }
+
+      .cta-button:hover {
+        background: linear-gradient(135deg, #2d5cd4, #3f71f3);
+        box-shadow: 0 6px 20px rgba(63, 113, 243, 0.4);
+        transform: translateY(-2px);
+        color: #fff !important;
+        text-decoration: none !important;
+      }
+
+      .cta-button:focus {
+        outline: 2px solid #3f71f3;
+        outline-offset: 2px;
+      }
+
+      .cta-button i {
+        margin-right: 8px;
+      }
+
+      /* Footer */
+      .xon-footer {
+        background: #fff;
+        border-top: 1px solid #ebedef;
+        padding: 24px 0;
+        text-align: center;
+      }
+
+      .social-links {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .social-links a {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        color: #4a5568;
+        font-size: 14px;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.3s ease;
+      }
+
+      .social-links a:hover {
+        background: rgba(63, 113, 243, 0.1);
+        color: #3f71f3;
+        text-decoration: none;
+      }
+
+      .social-links a:focus {
+        outline: 2px solid #3f71f3;
+        outline-offset: 2px;
+      }
+
+      .social-icon {
+        width: 16px;
+        height: 16px;
+        fill: currentColor;
+        flex-shrink: 0;
+      }
+
+      .xon-footer .copyright {
+        font-size: 13px;
+        color: #718096;
+        margin: 0;
+      }
+
+      .xon-footer .copyright a {
+        color: #3f71f3;
+        text-decoration: none;
+      }
+
+      .xon-footer .copyright a:hover {
+        text-decoration: underline;
+      }
+
+      /* Responsive */
+      @media (max-width: 576px) {
+        .verify-card {
+          padding: 32px 24px;
+        }
+
+        .verify-card h1 {
+          font-size: 19px;
+        }
+
+        .social-links {
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+        }
+      }
+
+      {% block extra_styles %}{% endblock %}
+    </style>
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="xon-navbar" role="navigation" aria-label="Main navigation">
+      <div class="container">
+        <a class="brand" href="https://xposedornot.com">XposedOrNot</a>
+      </div>
+    </nav>
+
+    <!-- Main content -->
+    <main class="verify-wrapper" role="main">
+      {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="xon-footer" role="contentinfo">
+      <div class="container">
+        <h2 class="sr-only">Follow Us</h2>
+        <div class="social-links">
+          <a href="https://twitter.com/xposedornot" target="_blank" rel="noopener" aria-label="Follow XposedOrNot on Twitter (X)">
+            <svg class="social-icon" aria-hidden="true" viewBox="0 0 512 512"><path d="M389.2 48h70.6L305.6 224.2 487 464H345L233.7 318.6 106.5 464H35.8L200.7 275.5 26.8 48H172.4L272.9 180.9 389.2 48zM364.4 421.8h39.1L151.1 88h-42L364.4 421.8z"/></svg>
+            Twitter (X)<span class="sr-only"> (opens in new tab)</span>
+          </a>
+          <a href="https://facebook.com/xposedornot" target="_blank" rel="noopener" aria-label="Follow XposedOrNot on Facebook">
+            <svg class="social-icon" aria-hidden="true" viewBox="0 0 512 512"><path d="M512 256C512 114.6 397.4 0 256 0S0 114.6 0 256C0 376 82.7 476.8 194.2 504.5V334.2H141.4V256h52.8V222.3c0-87.1 39.4-127.5 125-127.5c16.2 0 44.2 3.2 55.7 6.4V172c-6-.6-16.5-1-29.6-1c-42 0-58.2 15.9-58.2 57.2V256h83.6l-14.4 78.2H287V510.1C413.8 494.8 512 386.9 512 256z"/></svg>
+            Facebook<span class="sr-only"> (opens in new tab)</span>
+          </a>
+          <a href="https://infosec.exchange/@XposedOrNot" target="_blank" rel="noopener" aria-label="Follow XposedOrNot on Mastodon">
+            <svg class="social-icon" aria-hidden="true" viewBox="0 0 448 512"><path d="M433 179.1c0-97.2-63.7-125.7-63.7-125.7-62.5-28.7-228.6-28.4-290.5 0 0 0-63.7 28.5-63.7 125.7 0 115.7-6.6 259.4 105.6 289.1 40.5 10.7 75.3 13 103.3 11.4 50.8-2.8 79.3-18.1 79.3-18.1l-1.7-36.9s-36.3 11.4-77.1 10.1c-40.4-1.4-83-4.4-89.6-54a102.5 102.5 0 0 1 -.9-13.9c85.6 20.9 158.7 9.1 178.8 6.7 56.1-6.7 105-41.3 111.2-72.9 9.8-49.8 9-121.5 9-121.5zm-75.1 125.2h-46.6v-114.2c0-49.7-64-51.6-64 6.9v62.5h-46.3V197c0-58.5-64-56.6-64-6.9v114.2H90.2c0-122.1-5.2-147.9 18.4-175 25.9-28.9 79.8-30.8 103.8 6.1l23.6 39.5 23.6-39.5c24-37.1 78.1-34.8 103.8-6.1 23.7 27.3 18.4 53 18.4 175z"/></svg>
+            Mastodon<span class="sr-only"> (opens in new tab)</span>
+          </a>
+        </div>
+        <p class="copyright">&copy; <a href="https://xposedornot.com">XposedOrNot</a></p>
+      </div>
+    </footer>
+
+    <!-- Google Analytics -->
+    <script defer async src="https://www.googletagmanager.com/gtag/js?id=UA-108891851-1"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() { dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'UA-108891851-1');
+    </script>
+  </body>
+</html>
