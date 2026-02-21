@@ -844,7 +844,10 @@ async def activate_shield(
     try:
         email = email.lower()
         if not email or not validate_email_with_tld(email) or not validate_url(request):
-            return ShieldActivationErrorResponse(Error="Not found")
+            return JSONResponse(
+                status_code=404,
+                content={"Error": "Not found"},
+            )
 
         datastore_client = datastore.Client()
         alert_key = datastore_client.key("xon_alert", email)
@@ -901,7 +904,10 @@ async def activate_shield(
         if alert_task.get("shieldOn", False):
             return ShieldActivationResponse(Success="AlreadyOn")
 
-        return ShieldActivationErrorResponse(Error="Unexpected state")
+        return JSONResponse(
+            status_code=404,
+            content={"Error": "Unexpected state"},
+        )
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
         await send_exception_email(
@@ -911,8 +917,9 @@ async def activate_shield(
             user_agent=request.headers.get("User-Agent"),
             request_params=f"email={email}",
         )
-        return ShieldActivationErrorResponse(
-            Error=f"Internal error: {str(e)}", email=email
+        return JSONResponse(
+            status_code=404,
+            content={"Error": f"Internal error: {str(e)}"},
         )
 
 
