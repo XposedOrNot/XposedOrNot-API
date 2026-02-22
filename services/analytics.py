@@ -2,6 +2,7 @@
 
 # Standard library imports
 import json
+import logging
 import os
 from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional, Set
@@ -15,6 +16,9 @@ from openai import OpenAIError
 
 # Initialize OpenAI client
 ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+# Logger
+logger = logging.getLogger(__name__)
 
 # Constants
 TEMPERATURE = 0.7  # OpenAI temperature parameter
@@ -186,6 +190,19 @@ data_categories = {
     "Flight Details": {"category": "Transport and Travel", "group": "L"},
     "Public Transport Details": {"category": "Transport and Travel", "group": "L"},
     "Shipping Details": {"category": "Transport and Travel", "group": "L"},
+    # Additional types found in real breach data
+    "Social security numbers": {"category": "👤 Personal Identification", "group": "A"},
+    "Government IDs": {"category": "👤 Personal Identification", "group": "A"},
+    "Government issued IDs": {"category": "👤 Personal Identification", "group": "A"},
+    "Passport numbers": {"category": "👤 Personal Identification", "group": "A"},
+    "Mothers maiden names": {"category": "🔒 Security Practices", "group": "D"},
+    "Account balances": {"category": "💳 Financial Details", "group": "B"},
+    "Credit cards": {"category": "💳 Financial Details", "group": "B"},
+    "Partial credit card data": {"category": "💳 Financial Details", "group": "B"},
+    "Spouses details": {"category": "👥 Demographics", "group": "I"},
+    "Years of birth": {"category": "👥 Demographics", "group": "I"},
+    "Sexual preferences": {"category": "🩺 Health Information", "group": "H"},
+    "Browsers": {"category": "🖥️ Device and Network Information", "group": "G"},
 }
 
 # AI prompts for breach data analysis
@@ -217,48 +234,141 @@ AI_USER_PROMPT_TEMPLATE = (
 )
 
 
-def calculate_data_sensitivity_score(exposed_data_types: Set[str]) -> float:
+# Data type normalization for handling typos, variants, and compound entries
+DATA_TYPE_ALIASES = {
+    "Name": "Names",
+    "Username": "Usernames",
+    "User names": "Usernames",
+    "Email addresse": "Email addresses",
+    "Drink habits": "Drinking Habits",
+    "Passwords history": "Historical Passwords",
+    "Sexual preferences": "Sexual Orientations",
+}
+
+# Known compound entries that need special splitting
+COMPOUND_FIXES = {
+    "GendersDates of birth": ["Genders", "Dates of birth"],
+}
+
+# Risk tier definitions
+# CRITICAL: Direct account takeover or financial fraud
+_CRITICAL_TYPES = {
+    "Passwords",
+    "Historical Passwords",
+    "Credit Card Info",
+    "Credit card details",
+    "Credit cards",
+    "Bank Account Numbers",
+    "Account balances",
+    "Social security numbers",
+    "Government IDs",
+    "Government issued IDs",
+    "Passport numbers",
+    "Mothers maiden names",
+    "Security Questions and Answers",
+    "Security questions and answers",
+    "Auth Tokens",
+    "Mnemonic Phrases",
+}
+
+# HIGH: Identity theft enablers, SIM swap risk
+_HIGH_TYPES = {
+    "Phone numbers",
+    "Physical addresses",
+    "Dates of birth",
+    "Years of birth",
+    "Income levels",
+    "Private Messages",
+    "Sexual Orientations",
+    "Sexual Fetishes",
+    "Partial credit card data",
+    "Encrypted Keys",
+    "Password Hints",
+    "Personal Health Data",
+    "HIV Statuses",
+    "Medical Conditions",
+    "Medications",
+    "Psychological Conditions",
+    "Physical Disabilities",
+    "Email Messages",
+    "Chat Logs",
+    "GPS Coordinates",
+}
+
+# MEDIUM: Useful for social engineering
+_MEDIUM_TYPES = {
+    "Names",
+    "Usernames",
+    "Email addresses",
+    "IP addresses",
+    "Employers",
+    "Occupations",
+    "Nationalities",
+    "Ethnicities",
+    "Education Levels",
+    "Marital statuses",
+    "Vehicle Details",
+    "Vehicle Identification Numbers",
+    "Licence Plates",
+    "Ages",
+    "Religions",
+    "Political Views",
+    "Races",
+    "Spouses details",
+    "MAC Addresses",
+    "IMEI Numbers",
+    "IMSI Numbers",
+    "Social connections",
+    "Instant Messenger Identities",
+    "Instant messenger identities",
+    "Employment Statuses",
+    "Job titles",
+    "Password Strengths",
+}
+
+# Points per tier
+TIER_POINTS = {"CRITICAL": 10, "HIGH": 7, "MEDIUM": 4, "LOW": 1}
+DEFAULT_TIER_POINTS = TIER_POINTS["MEDIUM"]
+
+
+def normalize_data_types(raw_data: str) -> Set[str]:
     """
-    Calculate sensitivity score based on exposed data types.
-    Returns a score between 0-25
+    Normalize raw xposed_data string into a set of canonical data type names.
+    Handles semicolon/comma delimiters, compound entries, typos, and aliases.
     """
-    # Define risk weights for different categories
-    category_weights = {
-        "🔒 Security Practices": 5.0,  # Highest risk - passwords, security questions
-        "💳 Financial Details": 5.0,  # Highest risk - credit cards, bank accounts
-        "🩺 Health Information": 4.0,  # Very high risk - medical data, conditions
-        "👤 Personal Identification": 3.0,  # High risk - identity data
-        "👥 Demographics": 2.0,  # Medium risk - demographic info
-        "📞 Communication and Social Interactions": 2.0,  # Medium risk - contact info
-        "🖥️ Device and Network Information": 1.5,  # Lower risk - technical data
-        "🎓 Employment and Education": 1.5,  # Lower risk - professional info
-        "🍔 Personal Habits and Lifestyle": 1.0,  # Low risk - lifestyle data
-        "Arts and Entertainment": 0.5,  # Very low risk
-        "Transport and Travel": 0.5,  # Very low risk
-        "Science and Technology": 0.5,  # Very low risk
-    }
+    normalized = set()
+    parts = [p.strip() for p in raw_data.split(";") if p.strip()]
 
-    # Track which categories have exposed data
-    exposed_categories = set()
-    category_data_counts = {}
+    for part in parts:
+        # Check for known compound fixes (no separator)
+        if part in COMPOUND_FIXES:
+            for fixed in COMPOUND_FIXES[part]:
+                normalized.add(DATA_TYPE_ALIASES.get(fixed, fixed))
+            continue
 
-    # Count exposed data types per category
-    for data_type in exposed_data_types:
-        if data_type in data_categories:
-            category = data_categories[data_type]["category"]
-            exposed_categories.add(category)
-            category_data_counts[category] = category_data_counts.get(category, 0) + 1
+        # Split on commas (secondary delimiter for compound entries)
+        sub_parts = [s.strip() for s in part.split(",") if s.strip()]
 
-    # Calculate weighted score
-    sensitivity_score = 0
-    for category in exposed_categories:
-        if category in category_weights:
-            # More exposed data types in a category increases the risk
-            data_count_multiplier = min(category_data_counts[category] / 2, 2)
-            sensitivity_score += category_weights[category] * data_count_multiplier
+        for sub in sub_parts:
+            canonical = DATA_TYPE_ALIASES.get(sub, sub)
+            normalized.add(canonical)
 
-    # Normalize to 0-25 range
-    return min(25, sensitivity_score)
+    return normalized
+
+
+def get_tier_points(data_type: str) -> int:
+    """Get risk tier points for a data type."""
+    if data_type in _CRITICAL_TYPES:
+        return TIER_POINTS["CRITICAL"]
+    if data_type in _HIGH_TYPES:
+        return TIER_POINTS["HIGH"]
+    if data_type in _MEDIUM_TYPES:
+        return TIER_POINTS["MEDIUM"]
+    if data_type in data_categories:
+        return TIER_POINTS["LOW"]
+    # Unknown type - log and default to MEDIUM
+    logger.info("Unmapped data type encountered: '%s'", data_type)
+    return DEFAULT_TIER_POINTS
 
 
 def calculate_risk_score(
@@ -268,75 +378,59 @@ def calculate_risk_score(
     exposed_data_types: Set[str],
 ) -> Tuple[int, str]:
     """
-    Calculate normalized risk score (0-100) based on multiple factors.
+    Calculate weighted exposure risk score (0-100).
+
+    Primary signal: per-data-type tier scoring (CRITICAL=10, HIGH=7, MEDIUM=4, LOW=1)
+    Modifiers: breach frequency, recency, plaintext passwords
+
+    Display zones:
+      0-25:  Low (green)
+      26-50: Moderate (yellow)
+      51-75: High (orange)
+      76-100: Critical (red)
+
     Returns tuple of (risk_score, risk_label)
     """
-    # Base score just for being in breaches (0-15)
-    base_score = min(15, total_breaches * 3)
+    # Step 1: Raw score from data type tiers
+    raw_score = sum(get_tier_points(dt) for dt in exposed_data_types)
 
-    # Password risk score (0-40)
-    password_risk = 0
-    total_passwords = sum(password_counts.values())
-    if total_passwords > 0:
-        # Weighted sum of different password types
-        password_risk = (
-            (password_counts.get("PlainText", 0) * 40)
-            + (password_counts.get("EasyToCrack", 0) * 30)
-            + (password_counts.get("Unknown", 0) * 20)
-            + (password_counts.get("StrongHash", 0) * 10)
-        ) / total_passwords
+    # Step 2: Modifiers
+    modifier = 1.0
 
-    # Recency score (0-25)
-    recency_score = 0
+    # Breach frequency: +1% per breach with plaintext/easytocrack beyond the first, cap +15%
+    critical_breach_count = password_counts.get("PlainText", 0) + password_counts.get(
+        "EasyToCrack", 0
+    )
+    if critical_breach_count > 1:
+        modifier += min(0.15, (critical_breach_count - 1) * 0.01)
+
+    # Recency: +15% if most recent breach ≤12 months, +8% if ≤24 months
     if breach_dates:
         most_recent = max(breach_dates)
         months_since = (datetime.now().date() - most_recent).days / 30
-        if months_since <= 3:
-            recency_score = 25
-        elif months_since <= 6:
-            recency_score = 20
-        elif months_since <= 12:
-            recency_score = 15
+        if months_since <= 12:
+            modifier += 0.15
         elif months_since <= 24:
-            recency_score = 10
-        else:
-            recency_score = 5
+            modifier += 0.08
 
-    # Sensitive data score (0-20)
-    sensitive_data_score = 0
-    high_risk_categories = {
-        "🔒 Security Practices",  # Passwords, security questions, etc.
-        "💳 Financial Details",  # Credit cards, bank accounts
-        "🩺 Health Information",  # Medical data, conditions
-        "👤 Personal Identification",  # Identity data
-    }
+    # Plaintext password penalty: +10%
+    if password_counts.get("PlainText", 0) > 0:
+        modifier += 0.10
 
-    # Count exposed data types in high-risk categories
-    high_risk_count = 0
-    for data_type in exposed_data_types:
-        if data_type in data_categories:
-            category = data_categories[data_type]["category"]
-            if category in high_risk_categories:
-                high_risk_count += 1
+    # Step 3: Final score
+    final_score = min(100, round(raw_score * modifier))
 
-    sensitive_data_score = min(
-        20, high_risk_count * 4
-    )  # 4 points per high-risk data type, max 20
-
-    # Calculate final score (0-100)
-    final_score = min(
-        100, base_score + password_risk + recency_score + sensitive_data_score
-    )
-
-    # Determine risk label
-    if final_score >= 70:
+    # Step 4: Risk label (4 zones)
+    if final_score >= 76:
+        risk_label = "Critical"
+    elif final_score >= 51:
         risk_label = "High"
-    elif final_score >= 40:
-        risk_label = "Medium"
+    elif final_score >= 26:
+        risk_label = "Moderate"
     else:
         risk_label = "Low"
 
-    return (round(final_score), risk_label)
+    return (final_score, risk_label)
 
 
 def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
@@ -532,17 +626,10 @@ def get_breaches_data(breaches: str) -> dict:
                         password_risk_counters["Unknown"] += 1
                         metrics["passwords_strength"][0]["Unknown"] += 1
 
-                    # Update yearwise details and collect breach dates
-                    if breach_date := query_result.get("breached_date"):
-                        year = breach_date.year
-                        if 2007 <= year <= 2026:
-                            metrics["yearwise_details"][0][f"y{year}"] += 1
-                        date_list.append(breach_date.date())
-
-                    # Collect exposed data types
+                    # Collect exposed data types (normalized)
                     if xposed_data := query_result.get("xposed_data"):
-                        data_types = {dt.strip() for dt in xposed_data.split(";")}
-                        exposed_data_types.update(data_types)
+                        normalized_types = normalize_data_types(xposed_data)
+                        exposed_data_types.update(normalized_types)
 
             except Exception as e:
                 continue
@@ -560,21 +647,21 @@ def get_breaches_data(breaches: str) -> dict:
         # Build exposed data hierarchy
         xposed_data_structure = {"children": []}
 
-        # Process exposed data from each breach
-        exposed_data_types = {}
+        # Process exposed data from each breach (normalized)
+        exposed_data_counts = {}
         for breach in breach_list:
             key = ds_client.key("xon_breaches", breach)
             query_result = ds_client.get(key)
             if query_result and "xposed_data" in query_result:
-                data_list = query_result["xposed_data"].split(";")
-                for data in data_list:
-                    data = data.strip()
-                    if data:
-                        exposed_data_types[data] = exposed_data_types.get(data, 0) + 1
+                normalized = normalize_data_types(query_result["xposed_data"])
+                for data_type in normalized:
+                    exposed_data_counts[data_type] = (
+                        exposed_data_counts.get(data_type, 0) + 1
+                    )
 
         # Map exposed data to categories
         category_dict = {}
-        for data_type, count in exposed_data_types.items():
+        for data_type, count in exposed_data_counts.items():
             if data_type in data_categories:
                 category = data_categories[data_type]["category"]
                 group = data_categories[data_type]["group"]
@@ -734,37 +821,31 @@ def _combine_metrics(regular_metrics: Dict, sensitive_metrics: Dict) -> Dict:
             # Add new category
             regular_data.append(sensitive_category)
 
-    # Recalculate risk score
-    total_breaches = sum(
-        1 for year in combined["yearwise_details"][0].values() if year > 0
+    # Recalculate risk score using unified formula
+    # Extract exposed types from combined xposed_data structure
+    exposed_types = set()
+    for cat in combined["xposed_data"][0].get("children", []):
+        for child in cat.get("children", []):
+            name = child.get("name", "")
+            if name.startswith("data_"):
+                exposed_types.add(name[5:])
+
+    # Approximate breach dates from yearwise (mid-year for recency check)
+    breach_dates = []
+    for year_key, count in combined["yearwise_details"][0].items():
+        if count > 0:
+            year = int(year_key[1:])
+            breach_dates.append(datetime(year, 7, 1).date())
+
+    total_breaches = sum(combined["yearwise_details"][0].values())
+
+    risk_score, risk_label = calculate_risk_score(
+        total_breaches=total_breaches,
+        password_counts=combined["passwords_strength"][0],
+        breach_dates=breach_dates,
+        exposed_data_types=exposed_types,
     )
-    plaintext_passwords = combined["passwords_strength"][0]["PlainText"]
-
-    # Use the same risk calculation logic as in get_breaches_data
-    if total_breaches > 0:
-        password_score = plaintext_passwords / total_breaches
-        if password_score <= 0.33:
-            password_strength = 1
-        elif password_score <= 0.66:
-            password_strength = 2
-        else:
-            password_strength = 3
-
-        risk_score = round(
-            (total_breaches * plaintext_passwords)
-            + (plaintext_passwords * 2)
-            + (1 / 12)  # Assuming worst case for last_breach_months
-            + (password_strength * 3)
-        )
-
-        if risk_score >= 61:
-            risk_label = "High"
-        elif risk_score >= 21:
-            risk_label = "Medium"
-        else:
-            risk_label = "Low"
-
-        combined["risk"] = [{"risk_label": risk_label, "risk_score": risk_score}]
+    combined["risk"] = [{"risk_label": risk_label, "risk_score": risk_score}]
 
     return combined
 
