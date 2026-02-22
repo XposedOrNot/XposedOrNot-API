@@ -678,7 +678,7 @@ def get_breaches_data(breaches: str) -> dict:
                         "colname": "level3",
                         "group": group,
                         "name": f"data_{data_type}",
-                        "value": 1,  # Count of occurrences
+                        "value": count,
                     }
                 )
 
