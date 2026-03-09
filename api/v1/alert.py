@@ -2,7 +2,7 @@
 
 # Standard library imports
 from datetime import datetime
-import time
+import asyncio
 
 # Third-party imports
 from fastapi import APIRouter, HTTPException, Request
@@ -194,7 +194,7 @@ async def alert_me_verification(verification_token: str, request: Request):
                 if retry_count >= max_retries:
                     raise
                 wait_time = 2**retry_count * 0.1  # Exponential backoff
-                time.sleep(wait_time)
+                await asyncio.sleep(wait_time)
 
         exposure_info = await get_exposure(user_email)
         sensitive_exposure_info = await get_sensitive_exposure(user_email)
