@@ -401,7 +401,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
-                "domain_dashboard_error.html", {"request": request}
+                request, "domain_dashboard_error.html"
             ).body.decode(),
             status_code=404,
         )
@@ -997,7 +997,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
-                "email_shield_error.html", {"request": request}
+                request, "email_shield_error.html"
             ).body.decode(),
             status_code=404,
         )
