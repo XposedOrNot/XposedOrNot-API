@@ -463,7 +463,7 @@ async def domain_verification(
         if z == "c":
             return await check_emails(d)
         elif z == "d":
-            return await verify_email(d, a)
+            return await verify_email(d, a, request)
         elif z == "e":
             return await verify_dns(d, a, v, prefix, request)
         elif z == "a":
