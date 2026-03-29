@@ -4,6 +4,7 @@
 """XposedOrNot Mailer Sub-module API module using Mailjet"""
 
 # Standard library imports
+import logging
 import os
 import time
 import socket
