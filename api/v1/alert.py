@@ -203,7 +203,7 @@ async def alert_me_verification(verification_token: str, request: Request):
         has_sensitive_exposure = bool(sensitive_exposure_info.get("site", ""))
 
         if not has_exposure and not has_sensitive_exposure:
-            return templates.TemplateResponse("email_verify.html", {"request": request})
+            return templates.TemplateResponse(request, "email_verify.html")
 
         # If exposures are found, generate link with properly encoded parameters
         breaches_link = build_safe_url(
@@ -211,8 +211,9 @@ async def alert_me_verification(verification_token: str, request: Request):
             {"email": user_email, "token": verification_token},
         )
         return templates.TemplateResponse(
+            request,
             "email_success.html",
-            {"request": request, "breaches_link": breaches_link},
+            context={"breaches_link": breaches_link},
         )
 
     except (google_exceptions.GoogleAPIError, ValueError, RuntimeError) as e:
@@ -223,7 +224,7 @@ async def alert_me_verification(verification_token: str, request: Request):
             user_agent=request.headers.get("User-Agent"),
             request_params=f"token={verification_token}",
         )
-        return templates.TemplateResponse("email_error.html", {"request": request})
+        return templates.TemplateResponse(request, "email_error.html")
 
 
 @router.get("/send_verification", response_model=VerificationResponse)
@@ -381,9 +382,7 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
             # Delete user record from datastore
             datastore_client.delete(alert_key)
 
-            return templates.TemplateResponse(
-                "unsubscribe_success.html", {"request": request}
-            )
+            return templates.TemplateResponse(request, "unsubscribe_success.html")
 
         raise HTTPException(status_code=404, detail="Not found")
 

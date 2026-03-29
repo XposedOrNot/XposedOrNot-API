@@ -434,9 +434,9 @@ async def custom_swagger_ui_html(request: Request):
     )
 
     return templates.TemplateResponse(
+        request,
         "swagger/custom_swagger.html",
-        {
-            "request": request,
+        context={
             "openapi_url": "/openapi.json",
             "title": f"{API_TITLE} - API Documentation",
             "swagger_js_url": swagger_js_url,
