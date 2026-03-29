@@ -1,7 +1,7 @@
 """Alert-related API endpoints."""
 
 # Standard library imports
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 # Third-party imports
@@ -252,8 +252,10 @@ async def send_verification(
             return VerificationResponse(status="Failed")
 
         if alert_task.get("verified") and alert_task.get("token") == token:
-            now = datetime.now()
-            verification_timestamp = alert_task["verify_timestamp"]
+            now = datetime.now(timezone.utc)
+            verification_timestamp = alert_task.get(
+                "recent_timestamp", alert_task["verify_timestamp"]
+            )
 
             time_diff_hours = (now - verification_timestamp).total_seconds() / 3600
 
@@ -272,17 +274,17 @@ async def send_verification(
                         sensitive_site_breaches = (
                             get_breaches(sensitive_site) if sensitive_site else ""
                         )
+                        all_breaches = ";".join(filter(None, [site, sensitive_site]))
                         breach_metrics = (
-                            await get_breaches_analytics(site, sensitive_site)
-                            if site or sensitive_site
+                            await get_breaches_analytics(all_breaches)
+                            if all_breaches
                             else {}
                         )
 
                     return VerificationResponse(
                         status="Success",
-                        breaches=site,
-                        breaches_details=sensitive_site_breaches,
-                        breach_metrics=breach_metrics,
+                        sensitive_breach_details=sensitive_site_breaches,
+                        BreachMetrics=breach_metrics,
                     )
 
             return VerificationResponse(status="Failed")

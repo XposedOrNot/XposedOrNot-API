@@ -377,7 +377,7 @@ class VerificationResponse(BaseModel):
     """Response model for verification operations."""
 
     status: str
-    sensitive_breach_details: Optional[str] = None
+    sensitive_breach_details: Optional[Dict] = None
     BreachMetrics: Optional[Dict] = None
 
 
