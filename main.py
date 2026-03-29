@@ -2,6 +2,7 @@
 
 # Third-party imports
 import asyncio
+import time
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
@@ -390,6 +391,47 @@ async def startup_event():
     # else:
     #     print("Scheduler disabled via DISABLE_SCHEDULER environment variable")
     print("Scheduler disabled - using external Google Cloud Scheduler")
+
+
+_health_requests = {}  # {ip: [timestamps]}
+_HEALTH_LIMIT = 10  # max requests per minute
+
+
+@app.get("/v1/health", include_in_schema=False)
+async def health_check(request: Request, token: str = None):
+    """Health check endpoint — reports Redis and app status. Requires magic token."""
+    if not token or token != CF_UNBLOCK_MAGIC:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    timestamps = _health_requests.get(client_ip, [])
+    timestamps = [t for t in timestamps if now - t < 60]
+    if len(timestamps) >= _HEALTH_LIMIT:
+        raise HTTPException(status_code=429, detail="Too many requests")
+    timestamps.append(now)
+    _health_requests[client_ip] = timestamps
+
+    from utils.custom_limiter import redis_pool
+
+    redis_status = "healthy"
+    try:
+        await redis_pool.ping()
+    except Exception:
+        redis_status = "unhealthy"
+
+    status = "healthy" if redis_status == "healthy" else "degraded"
+    status_code = 200 if status == "healthy" else 503
+
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": status,
+            "services": {"redis": redis_status, "app": "healthy"},
+        },
+    )
 
 
 @app.get("/", include_in_schema=False)

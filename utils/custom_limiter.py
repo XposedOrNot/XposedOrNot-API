@@ -1,3 +1,4 @@
+import logging
 import time
 import redis.asyncio as redis
 import random
@@ -9,6 +10,12 @@ from datetime import datetime, timedelta
 
 from config.settings import REDIS_URL
 from utils.helpers import get_client_ip
+
+logger = logging.getLogger(__name__)
+
+# Redis health tracking — dedup alert logging
+_last_redis_alert_time = 0.0
+_REDIS_ALERT_INTERVAL = 300  # Log Redis failures at most once per 5 minutes
 
 redis_pool = redis.from_url(
     REDIS_URL,
@@ -64,6 +71,17 @@ async def get_healthy_redis_connection():
                     continue
 
     return redis_pool
+
+
+def _log_redis_failure(context: str, error: Exception):
+    """Log Redis failures with dedup to avoid log spam."""
+    global _last_redis_alert_time
+    now = time.time()
+    if now - _last_redis_alert_time > _REDIS_ALERT_INTERVAL:
+        _last_redis_alert_time = now
+        logger.error(
+            "Redis failure in %s: %s — rate limiting bypassed", context, str(error)
+        )
 
 
 def parse_rate_limit(rate_limit_str: str) -> List[Tuple[int, int]]:
@@ -144,6 +162,7 @@ async def is_rate_limited(
 
         return False, 0
     except Exception as e:
+        _log_redis_failure("is_rate_limited", e)
         return False, 0
 
 
@@ -162,6 +181,7 @@ async def get_violation_count(client_ip: str, redis_conn: redis.Redis = None) ->
         count = await redis_conn.zcard(violation_key)
         return count
     except Exception as e:
+        _log_redis_failure("get_violation_count", e)
         return 0
 
 
@@ -179,7 +199,7 @@ async def increment_violation(client_ip: str, redis_conn: redis.Redis = None):
         await redis_conn.zadd(violation_key, {str(now): now})
         await redis_conn.expire(violation_key, 7200)
     except Exception as e:
-        pass
+        _log_redis_failure("increment_violation", e)
 
 
 def get_drop_percentage(violation_count: int) -> float:
