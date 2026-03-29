@@ -136,9 +136,9 @@ async def batch_create_sessions(client, email_tokens: dict):
 
     for i in range(0, len(session_entities), batch_size):
         batch = session_entities[i : i + batch_size]
+        batch_num = (i // batch_size) + 1
         try:
             client.put_multi(batch)
-            batch_num = (i // batch_size) + 1
             logger.info(
                 (
                     f"[MONTHLY-DIGEST] 📝 SESSION BATCH {batch_num}/{total_batches}: "
