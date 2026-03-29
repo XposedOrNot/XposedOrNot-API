@@ -91,6 +91,7 @@ async def protected(
         results = list(query.fetch())
 
         email = None
+        custid = None
 
         if results:
             # Found in xon_api_key - existing user flow
@@ -143,9 +144,12 @@ async def protected(
         if not email:
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
-        # Additional operations
+        # Fetch verified domains - enterprise uses custid, regular uses email
         query = datastore_client.query(kind="xon_domains")
-        query.add_filter("email", "=", email)
+        if custid:
+            query.add_filter("custid", "=", custid)
+        else:
+            query.add_filter("email", "=", email)
         verified_domains = [entity["domain"] for entity in query.fetch()]
 
         current_year = datetime.utcnow().year
