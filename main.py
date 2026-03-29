@@ -183,11 +183,12 @@ async def mcp_post_handler(fastapi_request: Request):
                         f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
                     )
 
-                    response = httpx.get(
-                        f"{base_url}/v1/check-email/{email}",
-                        follow_redirects=True,
-                        timeout=30.0,
-                    )
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(
+                            f"{base_url}/v1/check-email/{email}",
+                            follow_redirects=True,
+                            timeout=30.0,
+                        )
                     response.raise_for_status()
                     result = response.json()
 
@@ -233,12 +234,13 @@ async def mcp_post_handler(fastapi_request: Request):
                     if token:
                         params["token"] = token
 
-                    response = httpx.get(
-                        f"{base_url}/v1/breach-analytics",
-                        params=params,
-                        follow_redirects=True,
-                        timeout=30.0,
-                    )
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(
+                            f"{base_url}/v1/breach-analytics",
+                            params=params,
+                            follow_redirects=True,
+                            timeout=30.0,
+                        )
                     response.raise_for_status()
                     result = response.json()
 
@@ -283,12 +285,13 @@ async def mcp_post_handler(fastapi_request: Request):
                 if tool_args.get("breach_id"):
                     params["breach_id"] = tool_args.get("breach_id")
 
-                response = httpx.get(
-                    f"{base_url}/v1/breaches",
-                    params=params if params else None,
-                    follow_redirects=True,
-                    timeout=30.0,
-                )
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"{base_url}/v1/breaches",
+                        params=params if params else None,
+                        follow_redirects=True,
+                        timeout=30.0,
+                    )
                 response.raise_for_status()
                 result = response.json()
 
