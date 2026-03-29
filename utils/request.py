@@ -1,5 +1,6 @@
 """Request-related utility functions."""
 
+import ipaddress
 from typing import Dict, Optional
 from fastapi import Request
 from user_agents import parse
