@@ -229,3 +229,23 @@ async def protected(
         raise HTTPException(
             status_code=500, detail="An error occurred during processing"
         ) from exception_details
+
+
+@router.get("/domain-breaches/")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
+async def domain_breaches_method_not_allowed(request: Request):
+    """Return 405 for GET requests to domain-breaches endpoint."""
+    raise HTTPException(
+        status_code=405,
+        detail="Method not allowed. Use POST with x-api-key header.",
+    )
+
+
+@router.get("/domain-breaches/{_:path}")
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
+async def domain_breaches_invalid_path(request: Request):
+    """Return 405 for GET requests with path appended to domain-breaches."""
+    raise HTTPException(
+        status_code=405,
+        detail="Method not allowed. Use POST /v1/domain-breaches/ with x-api-key header.",
+    )
