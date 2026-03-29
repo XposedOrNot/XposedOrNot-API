@@ -352,7 +352,7 @@ async def check_domain_phishing(
             )
         except Exception as e:
             raise HTTPException(
-                status_code=500, detail=f"Error running domain check: {str(e)}"
+                status_code=500, detail="An error occurred during processing"
             )
     except HTTPException:
         raise
@@ -365,5 +365,5 @@ async def check_domain_phishing(
             request_params=f"domain={domain}, email={'provided' if email else 'not_provided'}, token={'provided' if token else 'not_provided'}",
         )
         raise HTTPException(
-            status_code=500, detail=f"Error processing domain: {str(e)}"
+            status_code=500, detail="An error occurred during processing"
         )

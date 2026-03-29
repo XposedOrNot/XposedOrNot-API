@@ -518,7 +518,9 @@ async def unblock_cloudflare(
         return result
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(
+            status_code=404, detail="An error occurred during processing"
+        ) from e
 
 
 def custom_openapi():

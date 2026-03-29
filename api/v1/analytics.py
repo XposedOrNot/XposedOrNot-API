@@ -175,7 +175,9 @@ async def get_metrics(request: Request) -> DetailedMetricsResponse:
             user_agent=request.headers.get("User-Agent"),
             request_params="None",
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500, detail="An error occurred during processing"
+        ) from e
 
 
 @router.get("/analytics/pulse", response_model=PulseNewsResponse)
@@ -211,7 +213,9 @@ async def get_news_feed(request: Request) -> PulseNewsResponse:
             user_agent=request.headers.get("User-Agent"),
             request_params="None",
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500, detail="An error occurred during processing"
+        ) from e
 
 
 @router.get(

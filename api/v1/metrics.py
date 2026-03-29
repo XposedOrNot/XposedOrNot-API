@@ -81,7 +81,9 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
             user_agent=request.headers.get("User-Agent"),
             request_params="None",
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500, detail="An error occurred during processing"
+        ) from e
 
 
 @router.get("/metrics/detailed", response_model=DetailedMetricsResponse)
@@ -169,7 +171,9 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
             user_agent=request.headers.get("User-Agent"),
             request_params="None",
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500, detail="An error occurred during processing"
+        ) from e
 
 
 @router.get("/metrics/domain/{domain}", include_in_schema=False)
@@ -214,4 +218,6 @@ async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
             user_agent=request.headers.get("User-Agent"),
             request_params=f"domain={domain}",
         )
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(
+            status_code=500, detail="An error occurred during processing"
+        ) from e

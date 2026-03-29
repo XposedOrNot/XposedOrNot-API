@@ -503,7 +503,9 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                 raise HTTPException(status_code=404, detail="Breach not found")
 
         except Exception as e:
-            raise HTTPException(status_code=404, detail=str(e)) from e
+            raise HTTPException(
+                status_code=404, detail="An error occurred during processing"
+            ) from e
 
     # Sort breaches by 'added' timestamp in descending order (most recent first)
     breaches_output["breaches_details"].sort(
@@ -691,7 +693,9 @@ def get_breaches_data(breaches: str) -> dict:
         return metrics
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(
+            status_code=404, detail="An error occurred during processing"
+        ) from e
 
 
 async def get_summary_and_metrics(
@@ -933,7 +937,9 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(
+            status_code=404, detail="An error occurred during processing"
+        ) from e
 
 
 async def get_pulse_news() -> List[Dict[str, Any]]:
@@ -1006,4 +1012,6 @@ async def get_breaches_analytics(site: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(
+            status_code=404, detail="An error occurred during processing"
+        ) from e

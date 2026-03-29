@@ -556,4 +556,6 @@ async def trigger_manual_monthly_digest(
 
     except Exception as e:
         logger.error(f"Manual monthly digest trigger failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, detail="An error occurred during processing"
+        )

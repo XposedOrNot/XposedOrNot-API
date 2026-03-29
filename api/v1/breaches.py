@@ -207,7 +207,9 @@ async def get_xposed_breaches(
                 f"if_modified_since={'provided' if if_modified_since else 'not_provided'}"
             ),
         )
-        raise HTTPException(status_code=404, detail=str(e)) from e
+        raise HTTPException(
+            status_code=404, detail="An error occurred during processing"
+        ) from e
 
 
 @router.get("/v2/breach-analytics", response_model=BreachAnalyticsV2Response)
