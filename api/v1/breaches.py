@@ -309,7 +309,7 @@ async def search_data_breaches(
         alert_record = datastore_client.get(alert_key)
 
         # Always check shieldOn first (privacy - can't cache this)
-        if alert_record and alert_record.get("shieldOn", False):
+        if alert_record and alert_record.get("shieldOn", False) and not token:
             raise HTTPException(status_code=404, detail="Not found")
 
         # Validate token if provided
