@@ -19,7 +19,7 @@ idna>=3.7
 ipaddress
 itsdangerous
 jinja2>=3.1.6
-lxml>=4.9.1
+lxml>=6.1.0
 mailjet_rest
 openai
 ppdeep>=20260221
