@@ -1,6 +1,6 @@
 blinker
 bson
-cryptography>=46.0.6
+cryptography>=46.0.7
 dnspython>=2.8.0
 dnstwist
 domcheck
@@ -26,7 +26,7 @@ ppdeep>=20260221
 pydantic>=1.10.13
 python-dateutil
 python-jose>=3.5.0
-python-multipart>=0.0.22
+python-multipart>=0.0.26
 python-whois
 pyyaml>=6.0.3
 PySocks

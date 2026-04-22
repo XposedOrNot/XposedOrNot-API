@@ -5,5 +5,5 @@
 -r requirements.txt
 
 # Testing dependencies
-pytest>=7.4.0
+pytest>=9.0.3
 atheris>=2.3.0
