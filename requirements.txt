@@ -15,7 +15,7 @@ google-cloud-datastore
 google-cloud-pubsub
 gunicorn>=25.3.0
 httpx>=0.23.0
-idna>=3.7
+idna>=3.12
 ipaddress
 itsdangerous
 jinja2>=3.1.6
