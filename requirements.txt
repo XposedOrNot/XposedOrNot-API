@@ -13,7 +13,7 @@ gcloud
 geoip2
 google-cloud-datastore
 google-cloud-pubsub
-gunicorn>=22.0.0
+gunicorn>=25.3.0
 httpx>=0.23.0
 idna>=3.7
 ipaddress
