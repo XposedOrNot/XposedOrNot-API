@@ -1,7 +1,7 @@
 blinker
 bson
 cryptography>=46.0.6
-dnspython>=2.6.1
+dnspython>=2.8.0
 dnstwist
 domcheck
 email-validator
