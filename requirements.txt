@@ -25,7 +25,7 @@ openai
 ppdeep>=20260221
 pydantic>=1.10.13
 python-dateutil
-python-jose>=3.4.0
+python-jose>=3.5.0
 python-multipart>=0.0.22
 python-whois
 pyyaml>=6.0.2
