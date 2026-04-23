@@ -23,7 +23,7 @@ lxml>=6.1.0
 mailjet_rest
 openai
 ppdeep>=20260221
-pydantic>=1.10.13
+pydantic>=2.13.3
 python-dateutil
 python-jose>=3.5.0
 python-multipart>=0.0.26
