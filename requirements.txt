@@ -6,7 +6,7 @@ dnstwist
 domcheck
 email-validator
 email_split
-fastapi>=0.109.1
+fastapi>=0.136.0
 feedgen>=1.0.0
 feedgenerator
 gcloud
