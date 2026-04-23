@@ -30,7 +30,7 @@ python-multipart>=0.0.26
 python-whois
 pyyaml>=6.0.3
 PySocks
-redis>=4.5.4
+redis>=7.4.0
 requests>=2.33.1
 simplejson>=4.1.0
 slowapi
