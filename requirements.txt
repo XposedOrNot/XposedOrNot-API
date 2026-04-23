@@ -14,7 +14,7 @@ geoip2
 google-cloud-datastore
 google-cloud-pubsub
 gunicorn>=25.3.0
-httpx>=0.23.0
+httpx>=0.28.1
 idna>=3.12
 ipaddress
 itsdangerous
