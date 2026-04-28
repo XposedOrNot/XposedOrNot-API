@@ -32,7 +32,7 @@ pyyaml>=6.0.3
 PySocks
 redis>=7.4.0
 requests>=2.33.1
-simplejson>=4.1.0
+simplejson>=4.1.1
 slowapi
 starlette>=1.0.0
 tld>=0.13.2
