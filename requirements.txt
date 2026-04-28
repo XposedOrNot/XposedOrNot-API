@@ -1,6 +1,6 @@
 blinker
 bson
-cryptography>=46.0.7
+cryptography>=47.0.0
 dnspython>=2.8.0
 dnstwist
 domcheck
