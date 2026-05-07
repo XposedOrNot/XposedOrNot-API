@@ -483,7 +483,7 @@ async def custom_swagger_ui_html(request: Request):
         "swagger/custom_swagger.html",
         context={
             "openapi_url": "/openapi.json",
-            "title": f"{API_TITLE} - API Documentation",
+            "title": f"{API_TITLE} Documentation",
             "swagger_js_url": swagger_js_url,
             "swagger_css_url": swagger_css_url,
         },

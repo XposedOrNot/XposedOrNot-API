@@ -37,7 +37,7 @@ DEFAULT_TIMEOUT: int = 20
 """API configuration settings."""
 
 # API Configuration
-API_TITLE = "XON API"
+API_TITLE = "XposedOrNot API"
 API_VERSION = "2.0.0"
 API_DESCRIPTION = """
 The XON API provides comprehensive data breach detection and monitoring services. Use our API to:
