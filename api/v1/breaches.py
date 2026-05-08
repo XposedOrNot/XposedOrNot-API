@@ -228,6 +228,20 @@ async def search_data_breaches_v2(
 
     try:
         email = email.lower()
+        datastore_client = datastore.Client()
+        alert_key = datastore_client.key("xon_alert", email)
+        alert_record = datastore_client.get(alert_key)
+
+        # Privacy: shieldOn blocks unauthenticated access
+        if alert_record and alert_record.get("shieldOn", False) and not token:
+            raise HTTPException(status_code=404, detail="Not found")
+
+        # Validate token if provided
+        if token:
+            token_valid = bool(alert_record and alert_record.get("token") == token)
+            if not token_valid:
+                raise HTTPException(status_code=403, detail="Invalid token")
+
         breach_data = await get_exposure(email)
         sensitive_data = await get_sensitive_exposure(email) if token else None
 
@@ -285,7 +299,7 @@ async def search_data_breaches_v2(
             user_agent=request.headers.get("User-Agent"),
             request_params=f"email={email}, token={'provided' if token else 'not_provided'}",
         )
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail="Not found") from exc
 
 
 @router.get("/breach-analytics", response_model=BreachAnalyticsResponse)
