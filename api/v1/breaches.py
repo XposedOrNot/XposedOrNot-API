@@ -23,7 +23,6 @@ from models.responses import (
     DomainBreachSummaryResponse,
     EmailBreachErrorResponse,
     EmailBreachResponse,
-    EmptyBreachResponse,
 )
 from services.analytics import (
     get_ai_summary,
@@ -246,7 +245,7 @@ async def search_data_breaches_v2(
         sensitive_data = await get_sensitive_exposure(email) if token else None
 
         if not breach_data and not sensitive_data:
-            return EmptyBreachResponse(BreachesSummary={}, PastesSummary={})
+            return BreachAnalyticsV2Response(AI_Summary="")
 
         # Handle sensitive data if available
         if breach_data and sensitive_data and token:
@@ -275,7 +274,7 @@ async def search_data_breaches_v2(
         ) = await get_summary_and_metrics(breach_data, sensitive_data)
 
         if not (breach_summary or paste_summary):
-            return EmptyBreachResponse(BreachesSummary={}, PastesSummary={})
+            return BreachAnalyticsV2Response(AI_Summary="")
 
         breach_data = {
             "ExposedBreaches": exposed_breaches,
