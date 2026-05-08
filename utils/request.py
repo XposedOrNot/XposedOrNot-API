@@ -39,8 +39,14 @@ def get_client_ip(request: Request) -> str:
     if headers.get("X-Forwarded-For"):
         # Get the leftmost IP which is typically the client
         ips = [ip.strip() for ip in headers["X-Forwarded-For"].split(",")]
-        # Filter out private and reserved IPs
-        public_ips = [ip for ip in ips if not ipaddress.ip_address(ip).is_private]
+        # Filter out private and reserved IPs (skip malformed entries)
+        public_ips = []
+        for ip in ips:
+            try:
+                if not ipaddress.ip_address(ip).is_private:
+                    public_ips.append(ip)
+            except ValueError:
+                continue
         if public_ips:
             client_ip = public_ips[0]
 
