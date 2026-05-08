@@ -38,7 +38,7 @@ tld>=0.13.2
 typing-extensions>=4.15.0
 ua-parser
 user-agents
-urllib3>=2.6.3
+urllib3>=2.7.0
 uvicorn>=0.46.0
 validate-email
 validators
