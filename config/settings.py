@@ -18,6 +18,8 @@ TOPIC_ID: Optional[str] = os.environ.get("TOPIC_ID")
 WTF_CSRF_SECRET_KEY: str = os.environ["WTF_CSRF_SECRET_KEY"]
 XMLAPI_KEY: str = os.environ["XMLAPI_KEY"]
 BASE_URL: str = os.environ.get("BASE_URL", "https://api.xposedornot.com")
+SENIORITY_ENRICH_URL: Optional[str] = os.environ.get("SENIORITY_ENRICH_URL")
+SENIORITY_ENRICH_SECRET: Optional[str] = os.environ.get("SENIORITY_ENRICH_SECRET")
 
 # Redis Configuration
 REDIS_HOST: str = os.environ.get("REDIS_HOST", "localhost")

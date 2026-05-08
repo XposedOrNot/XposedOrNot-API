@@ -26,6 +26,7 @@ from services.send_email import (
     send_exception_email,
     send_domain_verification_admin_notification,
 )
+from services.seniority_enrichment import enrich_domain_seniority
 from utils.custom_limiter import custom_rate_limiter
 from utils.request import get_client_ip, get_user_agent_info
 from utils.token import generate_confirmation_token
@@ -152,6 +153,8 @@ def process_single_domain(domain: str):
 
     if summary_entities:
         client.put_multi(list(summary_entities.values()))
+
+    enrich_domain_seniority(domain)
 
 
 async def check_emails(domain: str) -> DomainVerificationResponse:
