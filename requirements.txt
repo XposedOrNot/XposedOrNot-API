@@ -30,7 +30,7 @@ python-whois
 pyyaml>=6.0.3
 PySocks
 redis>=7.4.0
-requests>=2.34.1
+requests>=2.34.2
 simplejson>=4.1.1
 slowapi
 starlette>=1.0.0
