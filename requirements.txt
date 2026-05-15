@@ -39,7 +39,7 @@ typing-extensions>=4.15.0
 ua-parser
 user-agents
 urllib3>=2.7.0
-uvicorn>=0.46.0
+uvicorn>=0.47.0
 validate-email
 validators
 whois
