@@ -33,7 +33,7 @@ redis>=8.0.0
 requests>=2.34.2
 simplejson>=4.1.1
 slowapi
-starlette>=1.1.0
+starlette>=1.2.0
 tld>=0.13.2
 typing-extensions>=4.15.0
 ua-parser
