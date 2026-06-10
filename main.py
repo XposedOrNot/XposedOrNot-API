@@ -103,9 +103,7 @@ async def mcp_get_handler():
 _MCP_TOOLS = [
     {
         "name": "check_email_breaches",
-        "description": (
-            "Check if an email address appears in any known data breaches"
-        ),
+        "description": ("Check if an email address appears in any known data breaches"),
         "inputSchema": {
             "type": "object",
             "properties": {
