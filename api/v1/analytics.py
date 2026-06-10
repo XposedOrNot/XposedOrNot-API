@@ -323,7 +323,7 @@ async def domain_alert(
             request_params=f"email={user_email}",
         )
         return DomainAlertErrorResponse(
-            Error=f"Internal error: {str(e)}", email=user_email
+            Error="An error occurred during processing", email=user_email
         )
 
 
@@ -826,8 +826,7 @@ async def send_domain_breaches(
             user_agent=request.headers.get("User-Agent"),
             request_params=f"email={email}, token={'provided' if token else 'not_provided'}, time_filter={time_filter}",
         )
-        error_detail = f"Error: {str(e)}"
-        return DomainBreachesErrorResponse(Error=error_detail)
+        return DomainBreachesErrorResponse(Error="An error occurred during processing")
 
 
 @router.get(
@@ -924,7 +923,7 @@ async def activate_shield(
         )
         return JSONResponse(
             status_code=404,
-            content={"Error": f"Internal error: {str(e)}"},
+            content={"Error": "An error occurred during processing"},
         )
 
 
@@ -1394,4 +1393,6 @@ async def update_alert_status(
             user_agent=request.headers.get("User-Agent"),
             request_params=f"email={email}, token={'provided' if token else 'not_provided'}, alert_id={payload.alert_id if payload else 'missing'}, status={payload.status if payload else 'missing'}",
         )
-        return AlertStatusUpdateErrorResponse(Error=f"Internal error: {str(e)}")
+        return AlertStatusUpdateErrorResponse(
+            Error="An error occurred during processing"
+        )
