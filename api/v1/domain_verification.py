@@ -339,9 +339,36 @@ async def verify_html(
     return DomainVerificationResponse(status="error", domainVerification="Failure")
 
 
+def _is_safe_public_ip(ip) -> bool:
+    """
+    Return True only for routable public IPs (IPv4 or IPv6).
+
+    IPv4-mapped IPv6 addresses (e.g. ``::ffff:127.0.0.1``) are unwrapped and the
+    embedded IPv4 is validated, so they cannot be used to smuggle an internal
+    target past the IPv4 checks.
+    """
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
 def get_safe_domain_ip(domain: str) -> Union[str, None]:
     """
-    Resolve domain and return a safe IP address if validation passes.
+    Resolve a domain (IPv4 and IPv6) and return a safe public IP to pin to.
+
+    Strict policy: every resolved address across both families must be
+    public/safe, otherwise the domain is rejected (prevents SSRF and
+    DNS-rebinding via a mixed public/private record set). IPv4 is preferred
+    when both families are available, falling back to IPv6.
 
     Args:
         domain: The domain to check
@@ -350,32 +377,36 @@ def get_safe_domain_ip(domain: str) -> Union[str, None]:
         str: A validated public IP address, or None if domain is unsafe
     """
     try:
-        # Resolve domain to IP addresses
-        ip_addresses = socket.getaddrinfo(domain, None, socket.AF_INET)
+        # Dual-stack resolve (A + AAAA records)
+        ip_addresses = socket.getaddrinfo(
+            domain, 443, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
+        )
 
         if not ip_addresses:
             return None
 
-        # Check all resolved IPs - ALL must be safe
-        validated_ips = []
+        ipv4_safe = []
+        ipv6_safe = []
         for result in ip_addresses:
             ip_str = result[4][0]
-            ip = ipaddress.ip_address(ip_str)
+            # Strip any IPv6 scope id (e.g. fe80::1%eth0) before parsing
+            ip = ipaddress.ip_address(ip_str.split("%")[0])
 
-            # Check if IP is private, loopback, link-local, multicast, or reserved
-            if (
-                ip.is_private
-                or ip.is_loopback
-                or ip.is_link_local
-                or ip.is_multicast
-                or ip.is_reserved
-            ):
+            # Strict: a single unsafe address rejects the whole domain
+            if not _is_safe_public_ip(ip):
                 return None
 
-            validated_ips.append(ip_str)
+            if ip.version == 4:
+                ipv4_safe.append(ip_str)
+            else:
+                ipv6_safe.append(ip_str)
 
-        # Return the first validated IP
-        return validated_ips[0] if validated_ips else None
+        # Prefer IPv4, fall back to IPv6
+        if ipv4_safe:
+            return ipv4_safe[0]
+        if ipv6_safe:
+            return ipv6_safe[0]
+        return None
 
     except (socket.gaierror, ValueError, OSError):
         # DNS resolution failed or invalid IP
@@ -419,7 +450,9 @@ async def check_file(domain: str, prefix: str, code: str) -> bool:
     }
 
     # Use the validated IP directly in the URL to prevent DNS rebinding
-    url = f"https://{validated_ip}/{code}.html"
+    # (bracket IPv6 literals for a valid URL authority)
+    host = f"[{validated_ip}]" if ":" in validated_ip else validated_ip
+    url = f"https://{host}/{code}.html"
     token = f"{prefix}={code}"
 
     try:
