@@ -2,13 +2,15 @@
 
 # Third-party imports
 import asyncio
+import json
 import time
-import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from starlette.responses import Response
 
 # Local imports - Config
 from config.middleware import (
@@ -50,7 +52,14 @@ from services.cloudflare import unblock
 from models.responses import AlertResponse
 
 # Local imports - Utils
-from utils.custom_limiter import custom_rate_limiter, redis_pool
+from utils.custom_limiter import (
+    custom_rate_limiter,
+    get_healthy_redis_connection,
+    is_rate_limited,
+    parse_rate_limit,
+    redis_pool,
+)
+from utils.helpers import get_client_ip
 from utils.scan_protection import handle_404_with_protection
 
 # Initialize FastAPI app
@@ -90,235 +99,244 @@ async def mcp_get_handler():
     }
 
 
+# MCP tool definitions (advertised via tools/list)
+_MCP_TOOLS = [
+    {
+        "name": "check_email_breaches",
+        "description": (
+            "Check if an email address appears in any known data breaches"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "description": "Email address to check for breaches",
+                }
+            },
+            "required": ["email"],
+        },
+    },
+    {
+        "name": "get_breach_analytics",
+        "description": (
+            "Get detailed analytics and statistics about breaches "
+            "for a specific email address"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "description": "Email address to get analytics for",
+                },
+                "token": {
+                    "type": "string",
+                    "description": "Optional token for accessing sensitive data",
+                    "default": "",
+                },
+            },
+            "required": ["email"],
+        },
+    },
+    {
+        "name": "list_breaches",
+        "description": "Get a list of all known data breaches in the system",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Optional domain to filter breaches",
+                },
+                "breach_id": {
+                    "type": "string",
+                    "description": "Optional specific breach ID to get",
+                },
+            },
+            "required": [],
+        },
+    },
+]
+
+# Light rate limit for cheap MCP envelope methods (initialize / tools/list),
+# keyed on the real caller IP. tools/call is throttled by the underlying
+# route's own @custom_rate_limiter when called in-process.
+_MCP_ENVELOPE_LIMIT = parse_rate_limit("5 per second;300 per hour")
+
+
+def _mcp_error(request_id, code, message, data=None):
+    """Build a JSON-RPC error envelope."""
+    err = {"code": code, "message": message}
+    if data is not None:
+        err["data"] = data
+    return {"jsonrpc": "2.0", "id": request_id, "error": err}
+
+
+def _normalize_route_result(result):
+    """Convert an in-process route return value into a JSON-serializable object."""
+    if isinstance(result, BaseModel):
+        return result.model_dump()
+    if isinstance(result, Response):  # JSONResponse / HTMLResponse / etc.
+        try:
+            return json.loads(result.body)
+        except Exception:  # pylint: disable=broad-except
+            return {"detail": result.body.decode("utf-8", "replace")}
+    return result  # already a dict/list
+
+
+async def _mcp_envelope_limited(request: Request):
+    """Apply a light per-IP rate limit to cheap MCP envelope methods."""
+    try:
+        client_ip = get_client_ip(request)
+        redis_conn = await get_healthy_redis_connection()
+        key = f"rate-limit:/mcp-envelope:{client_ip}"
+        return await is_rate_limited(key, _MCP_ENVELOPE_LIMIT, redis_conn)
+    except Exception:  # pylint: disable=broad-except
+        # Never let limiter infrastructure errors break the envelope
+        return False, 0
+
+
+async def _run_mcp_tool(request_id, coro, label, email=None):
+    """
+    Run an in-process route coroutine and wrap it as a JSON-RPC response.
+
+    The route's own @custom_rate_limiter executes here, keyed on the real
+    caller's IP (from the original /mcp request), so MCP traffic is throttled
+    per-client using each route's configured limits. "Not found" (404) is
+    returned as a normal result; 429 and other failures become JSON-RPC errors.
+    """
+    try:
+        data = _normalize_route_result(await coro)
+    except HTTPException as exc:
+        if exc.status_code == 404:
+            data = (
+                exc.detail
+                if isinstance(exc.detail, (dict, list))
+                else {"detail": exc.detail}
+            )
+        elif exc.status_code == 429:
+            return _mcp_error(
+                request_id,
+                -32000,
+                "Rate limit exceeded",
+                data={"status": 429, "detail": exc.detail},
+            )
+        else:
+            return _mcp_error(
+                request_id,
+                -32603,
+                f"Failed to run {label}",
+                data={"status": exc.status_code},
+            )
+    except Exception as exc:  # pylint: disable=broad-except
+        print(f"MCP {label} error: {exc}")
+        return _mcp_error(request_id, -32603, f"Internal error: failed to run {label}")
+
+    prefix = f"{label} for {email}" if email else label
+    text = f"{prefix}: {json.dumps(data, default=str)}"
+    return {
+        "jsonrpc": "2.0",
+        "id": request_id,
+        "result": {"content": [{"type": "text", "text": text}]},
+    }
+
+
 @app.post("/mcp")
 async def mcp_post_handler(fastapi_request: Request):
     """Handle MCP protocol requests manually."""
-    # Get the JSON body from the request
-    request_body = await fastapi_request.json()
+    # Guard malformed JSON (previously raised an unhandled 500)
+    try:
+        request_body = await fastapi_request.json()
+    except Exception:  # pylint: disable=broad-except
+        return JSONResponse(
+            status_code=400,
+            content=_mcp_error(None, -32700, "Parse error: invalid JSON"),
+        )
+    if not isinstance(request_body, dict):
+        return JSONResponse(
+            status_code=400,
+            content=_mcp_error(None, -32600, "Invalid request"),
+        )
 
-    if request_body.get("method") == "initialize":
+    req_id = request_body.get("id")
+    method = request_body.get("method")
+
+    if method in ("initialize", "tools/list"):
+        limited, retry_after = await _mcp_envelope_limited(fastapi_request)
+        if limited:
+            return JSONResponse(
+                status_code=429,
+                content=_mcp_error(
+                    req_id,
+                    -32000,
+                    "Rate limit exceeded",
+                    data={"retry_after": retry_after},
+                ),
+            )
+        if method == "initialize":
+            return {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "XON_MCP", "version": "1.0.0"},
+                },
+            }
         return {
             "jsonrpc": "2.0",
-            "id": request_body.get("id"),
-            "result": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "XON_MCP", "version": "1.0.0"},
-            },
+            "id": req_id,
+            "result": {"tools": _MCP_TOOLS},
         }
-    elif request_body.get("method") == "tools/list":
-        return {
-            "jsonrpc": "2.0",
-            "id": request_body.get("id"),
-            "result": {
-                "tools": [
-                    {
-                        "name": "check_email_breaches",
-                        "description": (
-                            "Check if an email address appears in any known data breaches"
-                        ),
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "email": {
-                                    "type": "string",
-                                    "description": "Email address to check for breaches",
-                                }
-                            },
-                            "required": ["email"],
-                        },
-                    },
-                    {
-                        "name": "get_breach_analytics",
-                        "description": (
-                            "Get detailed analytics and statistics about breaches "
-                            "for a specific email address"
-                        ),
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "email": {
-                                    "type": "string",
-                                    "description": "Email address to get analytics for",
-                                },
-                                "token": {
-                                    "type": "string",
-                                    "description": "Optional token for accessing sensitive data",
-                                    "default": "",
-                                },
-                            },
-                            "required": ["email"],
-                        },
-                    },
-                    {
-                        "name": "list_breaches",
-                        "description": "Get a list of all known data breaches in the system",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "domain": {
-                                    "type": "string",
-                                    "description": "Optional domain to filter breaches",
-                                },
-                                "breach_id": {
-                                    "type": "string",
-                                    "description": "Optional specific breach ID to get",
-                                },
-                            },
-                            "required": [],
-                        },
-                    },
-                ]
-            },
-        }
-    elif request_body.get("method") == "tools/call":
-        tool_name = request_body.get("params", {}).get("name")
-        tool_args = request_body.get("params", {}).get("arguments", {})
+
+    if method == "tools/call":
+        params = request_body.get("params", {}) or {}
+        tool_name = params.get("name")
+        tool_args = params.get("arguments", {}) or {}
 
         if tool_name == "check_email_breaches":
             email = tool_args.get("email")
-            if email:
-                try:
-                    base_url = (
-                        f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
-                    )
+            if not email:
+                return _mcp_error(req_id, -32602, "Missing email parameter")
+            return await _run_mcp_tool(
+                req_id,
+                breaches.search_email(
+                    request=fastapi_request, email=email, details=False
+                ),
+                "Breach check results",
+                email=email,
+            )
 
-                    async with httpx.AsyncClient() as client:
-                        response = await client.get(
-                            f"{base_url}/v1/check-email/{email}",
-                            follow_redirects=True,
-                            timeout=30.0,
-                        )
-                    response.raise_for_status()
-                    result = response.json()
-
-                    return {
-                        "jsonrpc": "2.0",
-                        "id": request_body.get("id"),
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": f"Breach check results for {email}: {result}",
-                                }
-                            ]
-                        },
-                    }
-                except Exception as e:
-                    print(f"MCP check_email_breach error: {e}")
-                    return {
-                        "jsonrpc": "2.0",
-                        "id": request_body.get("id"),
-                        "error": {
-                            "code": -32603,
-                            "message": "Internal error: Failed to check email breach",
-                        },
-                    }
-            else:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_body.get("id"),
-                    "error": {"code": -32602, "message": "Missing email parameter"},
-                }
-
-        elif tool_name == "get_breach_analytics":
+        if tool_name == "get_breach_analytics":
             email = tool_args.get("email")
-            token = tool_args.get("token", "")
-            if email:
-                try:
-                    base_url = (
-                        f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
-                    )
+            if not email:
+                return _mcp_error(req_id, -32602, "Missing email parameter")
+            token = tool_args.get("token") or None
+            return await _run_mcp_tool(
+                req_id,
+                breaches.search_data_breaches(
+                    request=fastapi_request, email=email, token=token
+                ),
+                "Breach analytics",
+                email=email,
+            )
 
-                    params = {"email": email}
-                    if token:
-                        params["token"] = token
+        if tool_name == "list_breaches":
+            return await _run_mcp_tool(
+                req_id,
+                breaches.get_xposed_breaches(
+                    request=fastapi_request,
+                    domain=tool_args.get("domain") or None,
+                    breach_id=tool_args.get("breach_id") or None,
+                    if_modified_since=None,
+                ),
+                "Breach list",
+            )
 
-                    async with httpx.AsyncClient() as client:
-                        response = await client.get(
-                            f"{base_url}/v1/breach-analytics",
-                            params=params,
-                            follow_redirects=True,
-                            timeout=30.0,
-                        )
-                    response.raise_for_status()
-                    result = response.json()
+        return _mcp_error(req_id, -32601, f"Unknown tool: {tool_name}")
 
-                    return {
-                        "jsonrpc": "2.0",
-                        "id": request_body.get("id"),
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": f"Breach analytics for {email}: {result}",
-                                }
-                            ]
-                        },
-                    }
-                except Exception as e:
-                    print(f"MCP get_breach_analytics error: {e}")
-                    return {
-                        "jsonrpc": "2.0",
-                        "id": request_body.get("id"),
-                        "error": {
-                            "code": -32603,
-                            "message": "Internal error: Failed to get breach analytics",
-                        },
-                    }
-            else:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_body.get("id"),
-                    "error": {"code": -32602, "message": "Missing email parameter"},
-                }
-
-        elif tool_name == "list_breaches":
-            try:
-                base_url = (
-                    f"{fastapi_request.url.scheme}://{fastapi_request.url.netloc}"
-                )
-
-                params = {}
-                if tool_args.get("domain"):
-                    params["domain"] = tool_args.get("domain")
-                if tool_args.get("breach_id"):
-                    params["breach_id"] = tool_args.get("breach_id")
-
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{base_url}/v1/breaches",
-                        params=params if params else None,
-                        follow_redirects=True,
-                        timeout=30.0,
-                    )
-                response.raise_for_status()
-                result = response.json()
-
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_body.get("id"),
-                    "result": {
-                        "content": [{"type": "text", "text": f"Breach list: {result}"}]
-                    },
-                }
-            except Exception as e:
-                print(f"MCP list_breaches error: {e}")
-                return {
-                    "jsonrpc": "2.0",
-                    "id": request_body.get("id"),
-                    "error": {
-                        "code": -32603,
-                        "message": "Internal error: Failed to list breaches",
-                    },
-                }
-
-    # Default response for unsupported methods
-    return {
-        "jsonrpc": "2.0",
-        "id": request_body.get("id"),
-        "error": {"code": -32601, "message": "Method not found"},
-    }
+    return _mcp_error(req_id, -32601, "Method not found")
 
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
