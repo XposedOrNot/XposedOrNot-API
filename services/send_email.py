@@ -16,6 +16,9 @@ import httpx
 from fastapi import HTTPException
 from google.cloud import datastore
 
+# Local imports
+from utils.redaction import sanitize_log_text
+
 # Mailjet configuration
 MAILJET_API_KEY = os.environ.get("MAILJET_API_KEY")
 MAILJET_API_SECRET = os.environ.get("MAILJET_API_SECRET")
@@ -231,14 +234,14 @@ async def log_exception_to_db(
             exclude_from_indexes=["error", "user_agent", "request_params"],
         )
 
-        # Store exception details
+        # Store exception details (scrub PII/secrets before persisting)
         exception_entity.update(
             {
                 "api": api_route,
-                "error": error_message,
+                "error": sanitize_log_text(error_message),
                 "exception_type": exception_type or "Exception",
                 "user_agent": user_agent or "Unknown",
-                "request_params": request_params or "None",
+                "request_params": sanitize_log_text(request_params) or "None",
                 "timestamp": datetime.datetime.utcnow(),
             }
         )
@@ -311,10 +314,11 @@ async def send_exception_email(
                     "Subject": "Xonnie API exception",
                     "Variables": {
                         "api": api_route,
-                        "error_message": error_message or "No error message provided",
+                        "error_message": sanitize_log_text(error_message)
+                        or "No error message provided",
                         "exception_type": exception_type or "Exception",
                         "user_agent": user_agent or "Unknown",
-                        "request_params": request_params or "None",
+                        "request_params": sanitize_log_text(request_params) or "None",
                     },
                 }
             ]

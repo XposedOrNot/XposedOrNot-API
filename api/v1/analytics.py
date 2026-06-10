@@ -401,7 +401,7 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"token={verification_token}",
+            request_params=f"token={'provided' if verification_token else 'missing'}",
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -997,7 +997,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"token={token_shield}",
+            request_params=f"token={'provided' if token_shield else 'missing'}",
         )
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -1158,7 +1158,6 @@ async def get_analytics(
         return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
-        print(f"GET /v1/analytics/{user_email} error: {e}")
         await send_exception_email(
             api_route=f"GET /v1/analytics/{user_email}",
             error_message=str(e),

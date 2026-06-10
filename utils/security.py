@@ -24,8 +24,8 @@ def generate_confirmation_token(email: str) -> str:
     return serializer.dumps(email, salt=SECURITY_SALT)
 
 
-def confirm_token(token: str, expiration: int = 604800) -> str:
-    """Returns status of confirmation used for validation (default: 7 days)."""
+def confirm_token(token: str, expiration: int = 86400) -> str:
+    """Returns status of confirmation used for validation (default: 24 hours)."""
     try:
         serializer = URLSafeTimedSerializer(SECRET_APIKEY)
         return serializer.loads(token, salt=SECURITY_SALT, max_age=expiration)

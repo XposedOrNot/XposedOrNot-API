@@ -222,7 +222,7 @@ async def alert_me_verification(verification_token: str, request: Request):
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"token={verification_token}",
+            request_params=f"token={'provided' if verification_token else 'missing'}",
         )
         return templates.TemplateResponse(request, "email_error.html")
 
@@ -398,6 +398,6 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
             error_message=str(exception_details),
             exception_type=type(exception_details).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"token={unsubscribe_token}",
+            request_params=f"token={'provided' if unsubscribe_token else 'missing'}",
         )
         raise HTTPException(status_code=404, detail="Not found") from exception_details
