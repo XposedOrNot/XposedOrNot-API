@@ -210,6 +210,7 @@ class BreachDetailResponse(BaseModel):
     searchable: bool
     sensitive: bool
     verified: bool
+    breachType: str = ""
     exposedData: List[str]
     exposedRecords: int
     exposureDescription: str

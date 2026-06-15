@@ -172,6 +172,7 @@ async def get_xposed_breaches(
                 searchable=searchable,
                 sensitive=sensitive,
                 verified=verified,
+                breachType=entity.get("spam_collection", ""),
                 exposedData=exposed_data,
                 exposedRecords=entity.get("xposed_records", 0),
                 exposureDescription=entity.get("xposure_desc", ""),
