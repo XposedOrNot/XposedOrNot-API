@@ -73,7 +73,23 @@ async def publish_to_pubsub(data: Dict[str, Any]) -> None:
 
         # Publish message - note: pubsub client is synchronous but we wrap it in async
         message = json.dumps(data).encode("utf-8")
-        publisher.publish(topic_path, message)
+        future = publisher.publish(topic_path, message)
+
+        def _log_publish_result(fut):
+            try:
+                message_id = fut.result()
+                print(
+                    f"[GLOBE] publish OK ip={data.get('ip')} message_id={message_id}",
+                    flush=True,
+                )
+            except Exception as exc:  # pylint: disable=broad-except
+                print(
+                    f"[GLOBE] publish FAILED ip={data.get('ip')}: "
+                    f"{type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+
+        future.add_done_callback(_log_publish_result)
 
         # Store request hash with timestamp
         recent_requests[request_hash] = current_time

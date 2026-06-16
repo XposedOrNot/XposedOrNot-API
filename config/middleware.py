@@ -67,6 +67,9 @@ def setup_security_headers(app: FastAPI) -> None:
         return response
 
 
+_globe_tasks: "set[asyncio.Task]" = set()
+
+
 async def process_globe_request_background(client_ip: str) -> None:
     """Process the globe request in the background."""
     try:
@@ -86,7 +89,9 @@ def setup_globe_middleware(app: FastAPI) -> None:
         try:
             client_ip = get_client_ip(request)
 
-            asyncio.create_task(process_globe_request_background(client_ip))
+            task = asyncio.create_task(process_globe_request_background(client_ip))
+            _globe_tasks.add(task)
+            task.add_done_callback(_globe_tasks.discard)
         except (ValueError, KeyError) as e:
             pass
         except Exception as e:

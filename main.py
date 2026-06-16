@@ -17,6 +17,7 @@ from starlette.responses import Response
 from config.middleware import (
     setup_middleware,
     setup_security_headers,
+    setup_globe_middleware,
 )
 from config.settings import (
     API_VERSION,
@@ -85,6 +86,7 @@ app = FastAPI(
 # Setup middleware and security
 setup_middleware(app)
 setup_security_headers(app)
+setup_globe_middleware(app)
 
 
 # MCP Integration - Manual endpoint approach
