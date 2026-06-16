@@ -31,6 +31,7 @@ pyyaml>=6.0.3
 PySocks
 redis>=8.0.0
 requests>=2.34.2
+schedule>=1.2.2
 simplejson>=4.1.1
 slowapi
 starlette>=1.3.1

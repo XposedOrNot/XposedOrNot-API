@@ -146,6 +146,68 @@ async def send_alert_confirmation(
         ) from e
 
 
+async def send_alert_reminder(email: str, confirm_url: str) -> Dict[str, Any]:
+    """
+    Sends XposedOrNot Alert Me Confirmation Reminder Email
+
+    """
+    try:
+        if not API_KEY or not API_SECRET:
+            raise HTTPException(
+                status_code=500,
+                detail="Email service configuration error: API credentials not set",
+            )
+
+        data = {
+            "Messages": [
+                {
+                    "From": {
+                        "Email": FROM_EMAIL,
+                        "Name": FROM_NAME,
+                    },
+                    "To": [{"Email": email}],
+                    "TemplateID": 8115137,
+                    "TemplateLanguage": True,
+                    "Subject": "XposedOrNot: Reminder - confirm your breach alerts",
+                    "Variables": {
+                        "confirm_url": confirm_url,
+                    },
+                }
+            ]
+        }
+        async with httpx.AsyncClient() as client:
+            try:
+                try:
+                    socket.gethostbyname("api.mailjet.com")
+
+                except socket.gaierror as e:
+                    logging.error("Could not resolve api.mailjet.com: %s", str(e))
+
+                response = await client.post(
+                    MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
+                )
+
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=500, detail="Failed to send alert reminder"
+                    )
+                return response.json()
+            except httpx.ConnectError as e:
+                error_msg = "Unable to connect to email service. "
+                error_msg += "Check network connection and firewall settings."
+                raise HTTPException(status_code=500, detail=error_msg) from e
+            except httpx.TimeoutException as e:
+                raise HTTPException(
+                    status_code=500, detail="Email service timeout"
+                ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail="Failed to send alert reminder: " + str(e)
+        ) from e
+
+
 async def send_dashboard_email_confirmation(
     email: str, confirm_url: str, ip_address: str, browser: str, platform: str
 ) -> Dict[str, Any]:

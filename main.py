@@ -3,6 +3,7 @@
 # Third-party imports
 import asyncio
 import json
+import os
 import time
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
@@ -47,6 +48,7 @@ from api.v1 import (
 
 # Local imports - Services
 from services.cloudflare import unblock
+from services.scheduler import start_scheduler
 
 # Local imports - Models
 from models.responses import AlertResponse
@@ -403,13 +405,10 @@ app.include_router(
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup."""
-    # Scheduler disabled - using Google Cloud Scheduler + manual trigger instead
-    # import os
-    # if os.environ.get("DISABLE_SCHEDULER", "false").lower() != "true":
-    #     start_scheduler()
-    # else:
-    #     print("Scheduler disabled via DISABLE_SCHEDULER environment variable")
-    print("Scheduler disabled - using external Google Cloud Scheduler")
+    if os.environ.get("ENABLE_SCHEDULER", "false").lower() == "true":
+        start_scheduler()
+    else:
+        print("Scheduler disabled (set ENABLE_SCHEDULER=true to enable)")
 
 
 _health_requests = {}  # {ip: [timestamps]}

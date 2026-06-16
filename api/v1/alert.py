@@ -3,6 +3,7 @@
 # Standard library imports
 from datetime import datetime, timezone
 import asyncio
+import logging
 
 # Third-party imports
 from fastapi import APIRouter, HTTPException, Request
@@ -22,6 +23,7 @@ from services.analytics import get_breaches_analytics
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
 from services.send_email import (
     send_alert_confirmation,
+    send_alert_reminder,
     send_exception_email,
     send_unsub_email,
 )
@@ -35,9 +37,14 @@ from utils.validation import (
     validate_variables,
 )
 from utils.safe_encoding import build_safe_url
+from config.settings import BASE_URL
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+logger = logging.getLogger(__name__)
+
+REMINDER_SCHEDULE_DAYS = {0: 2, 1: 6}
+MAX_REMINDERS = 2
 
 
 @router.get("/alertme/{user_email}", response_model=AlertResponse)
@@ -87,6 +94,8 @@ async def subscribe_to_alert_me(
                     "verified",
                     "unSubscribeOn",
                     "shieldOn",
+                    "reminder_count",
+                    "last_reminder_at",
                 ],
             )
             if alert_task is None:
@@ -96,6 +105,8 @@ async def subscribe_to_alert_me(
                         "verified": False,
                         "unSubscribeOn": False,
                         "shieldOn": False,
+                        "reminder_eligible": True,
+                        "reminder_count": 0,
                     }
                 )
                 datastore_client.put(alert_task_data)
@@ -144,6 +155,78 @@ async def subscribe_to_alert_me(
             request_params=f"email={user_email}",
         )
         raise HTTPException(status_code=404) from exception_details
+
+
+async def process_alert_reminders():
+    """Send confirmation reminders to unconfirmed alert-me subscribers."""
+    datastore_client = datastore.Client()
+    now = datetime.now(timezone.utc)
+
+    query = datastore_client.query(kind="xon_alert")
+    query.add_filter("reminder_eligible", "=", True)
+    candidates = list(query.fetch())
+
+    reminders_sent = 0
+    for record in candidates:
+        try:
+            if record.get("verified") or record.get("unSubscribeOn"):
+                continue
+            reminder_count = record.get("reminder_count", 0) or 0
+            if reminder_count >= MAX_REMINDERS:
+                continue
+
+            insert_ts = record.get("insert_timestamp")
+            if not insert_ts:
+                continue
+            if insert_ts.tzinfo is None:
+                insert_ts = insert_ts.replace(tzinfo=timezone.utc)
+            age_days = (now - insert_ts).total_seconds() / 86400
+
+            due_after = REMINDER_SCHEDULE_DAYS.get(reminder_count)
+            if due_after is None or age_days < due_after:
+                continue
+
+            email = record.key.name
+            token = await generate_confirmation_token(email)
+            confirm_url = f"{BASE_URL}/v1/verifyme/{token}"
+
+            await send_alert_reminder(email, confirm_url)
+
+            with datastore_client.transaction():
+                fresh = datastore_client.get(record.key)
+                if (
+                    fresh
+                    and not fresh.get("verified")
+                    and not fresh.get("unSubscribeOn")
+                ):
+                    fresh["reminder_count"] = reminder_count + 1
+                    fresh["last_reminder_at"] = datetime.now()
+                    datastore_client.put(fresh)
+
+            reminders_sent += 1
+        except (
+            google_exceptions.GoogleAPIError,
+            ValueError,
+            RuntimeError,
+            HTTPException,
+        ) as exc:
+            logger.error(
+                "[ALERT-REMINDER] Failed for %s: %s",
+                record.key.name,
+                str(exc),
+            )
+            continue
+
+    logger.info(
+        "[ALERT-REMINDER] Completed: %s reminders sent across %s candidates",
+        reminders_sent,
+        len(candidates),
+    )
+    return {
+        "status": "success",
+        "reminders_sent": reminders_sent,
+        "candidates": len(candidates),
+    }
 
 
 @router.get("/verifyme/{verification_token}")

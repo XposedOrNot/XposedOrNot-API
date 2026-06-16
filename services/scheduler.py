@@ -102,6 +102,53 @@ class SchedulerService:
 
         return result
 
+    def schedule_alert_reminders(self):
+        """Schedule daily alert-confirmation reminders at 08:00 UTC."""
+        schedule.every().day.at("08:00").do(self._run_alert_reminders_trigger)
+        logger.info(
+            "📅 SCHEDULER: Alert confirmation reminders scheduled for 08:00 UTC daily"
+        )
+
+    def _run_alert_reminders_trigger(self):
+        """Sync wrapper to run the async alert reminder job."""
+        try:
+            asyncio.run(self._trigger_alert_reminders())
+        except Exception as e:
+            logger.error(
+                f"🔔 REMINDER_WRAPPER: ❌ Error running alert reminders: {str(e)}"
+            )
+
+    async def _trigger_alert_reminders(self):
+        """Run the alert confirmation reminder job at most once per day."""
+        now = datetime.now(timezone.utc)
+        today = now.strftime("%Y-%m-%d")
+        claim_key = f"{ENVIRONMENT}_alert_reminders_ran_{today}"
+
+        if redis_client:
+            try:
+                instance_id = f"{socket.gethostname()}_{os.getpid()}"
+                claimed = redis_client.set(claim_key, instance_id, nx=True, ex=172800)
+                if not claimed:
+                    logger.info(
+                        "🔔 REMINDER_TRIGGER: ❌ Already claimed today by another "
+                        "instance, skipping"
+                    )
+                    return
+            except Exception as e:
+                logger.error(
+                    f"🔔 REMINDER_TRIGGER: ⚠️ Redis claim failed: {str(e)}, "
+                    f"aborting to avoid duplicate sends"
+                )
+                return
+
+        try:
+            from api.v1.alert import process_alert_reminders
+
+            result = await process_alert_reminders()
+            logger.info(f"🔔 REMINDER_TRIGGER: ✅ Completed - {result}")
+        except Exception as e:
+            logger.error(f"🔔 REMINDER_TRIGGER: ❌ Job failed: {str(e)}")
+
     def _run_async_trigger(self):
         """Wrapper to run async trigger function in sync context."""
         try:
@@ -533,6 +580,7 @@ class SchedulerService:
         logger.info("🚀 SCHEDULER_START: Initializing monthly digest scheduler...")
         self.is_running = True
         self.schedule_monthly_digest()
+        self.schedule_alert_reminders()
 
         self.scheduler_thread = threading.Thread(
             target=self._run_scheduler, daemon=True
