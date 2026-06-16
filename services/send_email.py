@@ -100,7 +100,7 @@ async def send_alert_confirmation(
                         "Name": FROM_NAME,
                     },
                     "To": [{"Email": email}],
-                    "TemplateID": 275596,
+                    "TemplateID": 8115033,
                     "TemplateLanguage": True,
                     "Subject": "XposedOrNot: DataBreach Alert Me Confirmation",
                     "Variables": {
