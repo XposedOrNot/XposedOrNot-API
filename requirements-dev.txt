@@ -6,4 +6,4 @@
 
 # Testing dependencies
 pytest>=9.1.0
-atheris>=3.0.0
+atheris>=3.1.0
