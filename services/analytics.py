@@ -886,8 +886,6 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         if metrics_data is None:
             raise ValueError("Metrics not found")
 
-        breaches_count = metrics_data["breaches_count"]
-        breaches_total_records = metrics_data["breaches_records"]
         pastes_count = f"{metrics_data['pastes_count']:,}"
         pastes_total_records = metrics_data["pastes_records"]
 
@@ -895,11 +893,15 @@ async def get_detailed_metrics() -> Dict[str, Any]:
         query = datastore_client.query(kind="xon_breaches")
         breaches = list(query.fetch())
 
+        breaches_count = len(breaches)
+        breaches_total_records = 0
+
         yearly_count = {}
         industry_count = {}
 
         for breach in breaches:
-            # Get yearly counts
+            breaches_total_records += int(breach.get("xposed_records", 0) or 0)
+
             breach_date = breach["breached_date"]
             year = breach_date.year
             yearly_count[year] = yearly_count.get(year, 0) + 1
