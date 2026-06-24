@@ -78,8 +78,6 @@ def get_client_ip(request: Request) -> str:
 
     if client_ip == "unknown" or client_ip.startswith("169.254"):
         logger.warning(f"Potentially invalid IP address detected: {client_ip}")
-        # Try to get any other available IP information
-        logger.warning(f"All available headers: {dict(headers)}")
 
     return client_ip
 

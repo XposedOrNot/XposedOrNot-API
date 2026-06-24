@@ -141,8 +141,9 @@ async def send_alert_confirmation(
     except HTTPException:
         raise
     except Exception as e:
+        logging.error("send_alert_confirmation failed: %s", sanitize_log_text(str(e)))
         raise HTTPException(
-            status_code=500, detail="Failed to send alert confirmation: " + str(e)
+            status_code=500, detail="Failed to send alert confirmation"
         ) from e
 
 
@@ -203,8 +204,9 @@ async def send_alert_reminder(email: str, confirm_url: str) -> Dict[str, Any]:
     except HTTPException:
         raise
     except Exception as e:
+        logging.error("send_alert_reminder failed: %s", sanitize_log_text(str(e)))
         raise HTTPException(
-            status_code=500, detail="Failed to send alert reminder: " + str(e)
+            status_code=500, detail="Failed to send alert reminder"
         ) from e
 
 
