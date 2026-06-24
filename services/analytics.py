@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 # Constants
 TEMPERATURE = 0.7  # OpenAI temperature parameter
 
+# AI summary bounds (cost and context-limit protection)
+AI_MAX_INPUT_CHARS = 12000
+AI_MAX_OUTPUT_TOKENS = 800
+
 # Data categories mapping
 data_categories = {
     "Names": {"category": "👤 Personal Identification", "group": "A"},
@@ -859,9 +863,11 @@ def get_ai_summary(breach_data: Dict[str, Any]) -> str:
     try:
         system_prompt = AI_SYSTEM_PROMPT
 
-        user_prompt = AI_USER_PROMPT_TEMPLATE.format(
-            breach_data=json.dumps(breach_data, indent=2)
-        )
+        serialized = json.dumps(breach_data, indent=2)
+        if len(serialized) > AI_MAX_INPUT_CHARS:
+            serialized = serialized[:AI_MAX_INPUT_CHARS] + "\n... [truncated]"
+
+        user_prompt = AI_USER_PROMPT_TEMPLATE.format(breach_data=serialized)
 
         response = ai_client.chat.completions.create(
             messages=[
@@ -870,6 +876,7 @@ def get_ai_summary(breach_data: Dict[str, Any]) -> str:
             ],
             model="gpt-4",
             temperature=TEMPERATURE,
+            max_tokens=AI_MAX_OUTPUT_TOKENS,
         )
         return response.choices[0].message.content
     except (ValueError, KeyError, json.JSONDecodeError, OpenAIError) as e:
