@@ -24,15 +24,13 @@
 
 ## What is XposedOrNot API?
 
-XposedOrNot is like your personal guard against data breaches. It's a platform that warns you when your email account might be at risk because of a public data breach. Knowing about these breaches can help you reduce the chances of your data getting exposed. Plus, it's totally open-source so you can see exactly how it works.
+Data breaches happen constantly, and most people only find out long after their email and passwords are already circulating. I built XposedOrNot so you don't have to wonder. Check an email or domain and know right away whether it's turned up in a known breach.
 
-The XposedOrNot API is the heart of this system. It's what makes the checks for data breaches and sends you the alerts. 
+This repo is the API that powers it all: the breach lookups, the analytics, and the alerts. It's free to use, and it's open-source, so you can read exactly how every check works rather than taking my word for it.
 
-And guess what? It's FREE. 
+Give it a try below, and if you find it useful, I'd love for you to build something with it.
 
-It gives you all the details about any data breaches that it finds, plus some useful stats about an email.
-
-The API was built and is maintained by Devanand Premkumar.
+Devanand Premkumar, creator of XposedOrNot
 [![Twitter](https://img.shields.io/badge/Twitter-blue?style=flat-square&logo=twitter&logoColor=white&url=https%3A%2F%2Ftwitter.com%2Fdevaonbreaches)](https://twitter.com/devaonbreaches)
 [![Mastodon](https://img.shields.io/badge/-Mastodon-blue?style=flat-square&logo=mastodon&logoColor=white&link=https://infosec.exchange/@DevaOnBreaches)](https://infosec.exchange/@DevaOnBreaches)
 
@@ -47,8 +45,9 @@ curl https://api.xposedornot.com/v1/check-email/test@example.com
 Response:
 ```json
 {
-  "breaches": [["Adobe"], ["LinkedIn"]],
-  "email": "test@example.com"
+  "breaches": [["Adobe", "LinkedIn"]],
+  "email": "test@example.com",
+  "status": "success"
 }
 ```
 
@@ -65,17 +64,64 @@ curl "https://api.xposedornot.com/v1/breach-analytics?email=test@example.com"
 
 For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
 
+## API Endpoints
+
+The full, always-current spec lives at [`/docs`](https://api.xposedornot.com/docs)
+(Swagger) and [`/openapi.json`](https://api.xposedornot.com/openapi.json). The
+endpoints you'll reach for most:
+
+### Breach lookups
+| Method | Path | What it does |
+|--------|------|--------------|
+| GET | `/v1/check-email/{email}` | Quick check: is this email in a known breach? |
+| GET | `/v1/breach-analytics?email=` | Detailed breach analytics for an email |
+| GET | `/v2/breach-analytics?email=` | Newer v2 analytics response |
+| GET | `/v1/breaches` | List all known breaches (optional `?domain=`) |
+| GET | `/v1/domain-breach-summary` | Summary of breaches for a domain |
+
+### Stats & feeds
+| Method | Path | What it does |
+|--------|------|--------------|
+| GET | `/v1/metrics` | Top-level breach metrics |
+| GET | `/v1/metrics/detailed` | Expanded metrics |
+| GET | `/v1/metrics/domain/{domain}` | Metrics for a single domain |
+| GET | `/v1/analytics/pulse` | Recent breach activity pulse |
+| GET | `/v1/xon-pulse` | XposedOrNot activity feed |
+| GET | `/v1/rss` | Breach updates as an RSS feed |
+
+### Domain monitoring (API key required)
+Domain-level breach monitoring, verification, and alerting are available with an
+API key. See the [API docs](https://XposedOrNot.com/api_doc) for the domain
+verification and alert-subscription flows.
+
+## Use it from your AI tools (MCP)
+
+XposedOrNot ships a built-in [Model Context Protocol](https://modelcontextprotocol.io)
+server, so AI assistants can check breaches directly. Point your MCP client at
+`https://api.xposedornot.com/mcp` (JSON-RPC 2.0 over HTTP).
+
+Tools exposed:
+- **`check_email_breaches`**: check if an email appears in any known breach
+- **`get_breach_analytics`**: detailed breach stats for an email
+- **`list_breaches`**: list known breaches (optionally filtered by domain)
+
+A quick `tools/list` call:
+
+```bash
+curl -X POST https://api.xposedornot.com/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
 ## Why use XposedOrNot API?
 
-XposedOrNot API is the power behind XposedOrNot, and it's the first open-source tool that monitors and alerts you about data breaches.
+XposedOrNot was the first open-source tool to monitor and alert on data breaches, and this API gives you direct access to everything it has collected and keeps current. With it you can:
+- Check whether an email has appeared in a known data breach, with stats on where and when
+- See if an email shows up in public pastes
+- Run a single combined search across both breaches and pastes
+- Check whether a password has been exposed without ever revealing your identity
 
-This API is your go-to for all information related to data breaches that XposedOrNot has collected and keeps up-to-date. Here are some things you can do with it:
-- Look up whether an email address has been caught in a data breach and get some stats about it
-- See if an email address has been exposed in public pastes
-- Do a combined search to check both data breach and pastes exposure for an email address
-- Check for exposed passwords without having to reveal who you are
-
-If you'd rather skip the API and check data breach info directly, you can do that on our website at : https://XposedOrNot.com.
+Prefer to just look something up without writing code? You can do all of this on the website too: https://XposedOrNot.com.
 
 
 ## Security
@@ -147,6 +193,56 @@ This project is fully open-source and uses automated security tooling (Black, Py
     python3 main.py
     ```
 
+## Configuration
+
+Configuration is read from environment variables. For Docker Compose these are
+already set in `docker-compose.yml`; for a local install, copy `.env.example` to
+`.env` and fill in the values (or export them in your shell).
+
+### Required (the app won't start without these)
+| Variable | What it's for |
+|----------|---------------|
+| `SECRET_APIKEY` | Secret used to sign issued API keys |
+| `SECURITY_SALT` | Salt for signing verification tokens |
+| `WTF_CSRF_SECRET_KEY` | CSRF protection secret |
+| `ENCRYPTION_KEY` | Fernet key for encrypting stored data |
+| `XMLAPI_KEY` | WhoisXML API key ([whoisxmlapi.com](https://www.whoisxmlapi.com/)) |
+| `AUTH_EMAIL` | Cloudflare account email |
+| `AUTHKEY` | Cloudflare API key |
+| `CF_MAGIC` | Cloudflare integration token |
+| `CF_UNBLOCK_MAGIC` | Cloudflare unblock token |
+| `MJ_API_KEY` | Mailjet API key, for sending alert emails ([mailjet.com](https://www.mailjet.com/)) |
+| `MJ_API_SECRET` | Mailjet API secret |
+
+> For local development you can set these to any placeholder value; the defaults
+> in `docker-compose.yml` show the expected format.
+
+### Redis (rate limiting & state)
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `REDIS_HOST` | `localhost` | Redis host |
+| `REDIS_PORT` | `6379` | Redis port |
+| `REDIS_DB` | `0` | Redis database number |
+| `REDIS_PASSWORD` | _(none)_ | Set if your Redis requires auth |
+
+### Google Cloud (Datastore & Pub/Sub)
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `PROJECT_ID` | _(none)_ | GCP project ID |
+| `DATASTORE_EMULATOR_HOST` | _(none)_ | Point at the local emulator, e.g. `localhost:8000` |
+| `TOPIC_ID` | _(none)_ | Pub/Sub topic for the live-visitor globe feed |
+
+### Optional
+| Variable | Default | Notes |
+|----------|---------|-------|
+| `ENVIRONMENT` | `production` | `production` or `development` |
+| `BASE_URL` | `https://api.xposedornot.com` | Public base URL used in links |
+| `PORT` | `8080` | Port the server listens on |
+| `ENABLE_SCHEDULER` | `false` | Run the background digest scheduler |
+| `DEBUG_EMAIL` | _(none)_ | Override recipient for debug emails |
+| `OPENAI_API_KEY` | _(none)_ | Enables AI-assisted analytics |
+| `SENIORITY_ENRICH_URL` / `SENIORITY_ENRICH_SECRET` | _(none)_ | External seniority-enrichment service |
+
 ## Contributing
 
 Please read [CONTRIBUTING.md](https://github.com/XposedOrNot/XposedOrNot-API/blob/master/CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
@@ -167,15 +263,15 @@ Please do not report security vulnerabilities through public GitHub issues. Inst
 
 ## Acknowledgments
 
-* Big shout-out to Python and all the people looking after the modules we've used. You guys rock!
+* Thanks to the Python community and the maintainers of every library this project leans on. XposedOrNot stands on your work.
 
-* And a round of applause for everyone who's reviewed our code. Your eyes make all the difference.
+* And to everyone who has reviewed the code and reported issues: thank you. A second set of eyes catches what I can't.
 
 ## Show Your Support
 
-If you find this project useful:
+If this saved you some trouble, a few things genuinely help:
 
-- Star the repository
-- Fork it and contribute
-- Share it with others
+- Star the repo so others can find it
+- Fork it and send a pull request; contributions are welcome
+- Share it with someone who'd find it useful
 
