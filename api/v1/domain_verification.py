@@ -460,11 +460,13 @@ async def check_file(domain: str, prefix: str, code: str) -> bool:
 
         async with httpx.AsyncClient(
             limits=limits,
-            verify=False,  # Required when using IP directly; validates via Host header
+            verify=True,
             follow_redirects=False,  # Prevent redirect-based SSRF
             timeout=20,
         ) as client:
-            response = await client.get(url, headers=headers)
+            response = await client.get(
+                url, headers=headers, extensions={"sni_hostname": domain}
+            )
 
             if response.status_code == 200:
                 data = response.content[:1000]
