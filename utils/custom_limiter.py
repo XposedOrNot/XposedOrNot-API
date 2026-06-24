@@ -8,7 +8,12 @@ from fastapi import Request, HTTPException
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
 from datetime import datetime, timedelta
 
-from config.settings import REDIS_URL
+from config.settings import BOT_ENFORCEMENT_ENABLED, REDIS_URL
+from utils.bot_detection import (
+    BOT_FLAG_THRESHOLD,
+    classify_request,
+    request_fingerprint,
+)
 from utils.helpers import get_client_ip
 
 logger = logging.getLogger(__name__)
@@ -216,6 +221,9 @@ def get_drop_percentage(violation_count: int) -> float:
         return 0.95
 
 
+_BOT_FP_LIMITS = parse_rate_limit("5 per minute;100 per day")
+
+
 def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
     """
     A decorator for FastAPI routes to enforce custom rate limiting with request dropping.
@@ -249,6 +257,50 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
             key = f"rate-limit:{endpoint}:{client_ip}"
 
             redis_conn = await get_healthy_redis_connection()
+
+            bot = classify_request(request.headers)
+            if bot["score"] >= BOT_FLAG_THRESHOLD:
+                fingerprint = request_fingerprint(request.headers)
+                bot_limited, bot_retry = (
+                    await is_rate_limited(
+                        f"botnet-fp:{endpoint}:{fingerprint}",
+                        _BOT_FP_LIMITS,
+                        redis_conn,
+                    )
+                    if BOT_ENFORCEMENT_ENABLED
+                    else (False, 0)
+                )
+                logger.info(
+                    "bot-classify: verdict=%s endpoint=%s score=%s fp=%s "
+                    "reasons=%s ip=%s ua=%s",
+                    (
+                        "THROTTLED"
+                        if bot_limited
+                        else (
+                            "FLAG_ALLOWED" if BOT_ENFORCEMENT_ENABLED else "SHADOW_FLAG"
+                        )
+                    ),
+                    endpoint,
+                    bot["score"],
+                    fingerprint,
+                    ",".join(bot["reasons"]) or "-",
+                    client_ip,
+                    request.headers.get("User-Agent"),
+                )
+                if bot_limited:
+                    raise HTTPException(
+                        status_code=HTTP_429_TOO_MANY_REQUESTS,
+                        detail={
+                            "error": "Rate limit exceeded",
+                            "detail": (
+                                "Automated access detected. Please slow down or "
+                                "use an API plan: "
+                                "https://plus.xposedornot.com/products/api"
+                            ),
+                            "retry_after": bot_retry,
+                        },
+                        headers={"Retry-After": str(bot_retry)},
+                    )
 
             violation_count = await get_violation_count(client_ip, redis_conn)
             drop_percentage = get_drop_percentage(violation_count)

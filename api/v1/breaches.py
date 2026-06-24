@@ -3,7 +3,6 @@
 # Standard library imports
 import hashlib
 import json
-import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Union
 from urllib.parse import urlparse
@@ -15,13 +14,7 @@ from google.cloud import datastore
 from redis import Redis
 
 # Local imports
-from config.settings import (
-    BOT_ENFORCEMENT_ENABLED,
-    MAX_EMAIL_LENGTH,
-    REDIS_DB,
-    REDIS_HOST,
-    REDIS_PORT,
-)
+from config.settings import MAX_EMAIL_LENGTH, REDIS_DB, REDIS_HOST, REDIS_PORT
 from models.responses import (
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
@@ -37,18 +30,8 @@ from services.analytics import (
 )
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
 from services.send_email import send_exception_email
-from utils.bot_detection import (
-    BOT_FLAG_THRESHOLD,
-    classify_request,
-    request_fingerprint,
-)
-from utils.custom_limiter import (
-    custom_rate_limiter,
-    is_rate_limited,
-    parse_rate_limit,
-)
+from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import (
-    get_client_ip,
     string_to_boolean,
     validate_domain,
     validate_email_with_tld,
@@ -57,10 +40,6 @@ from utils.helpers import (
 from utils.validation import validate_variables
 
 router = APIRouter()
-
-logger = logging.getLogger(__name__)
-
-_BOT_FP_LIMITS = parse_rate_limit("5 per minute;100 per day")
 
 # Redis client for caching
 redis_client = Redis(
@@ -489,48 +468,6 @@ async def search_email(
 ) -> Union[EmailBreachResponse, EmailBreachErrorResponse]:
     """Check if an email address appears in any known data breaches."""
     try:
-
-        client_ip = get_client_ip(request)
-
-        _clf = classify_request(request.headers)
-        logger.info(
-            "bot-classify: verdict=%s score=%s ua_family=%s sec-ch-ua=%s "
-            "reasons=%s resolved=%s ua=%s",
-            "SHADOW_FLAG" if _clf["score"] >= BOT_FLAG_THRESHOLD else "PASS",
-            _clf["score"],
-            _clf["ua_family"],
-            "present" if request.headers.get("sec-ch-ua") else "absent",
-            ",".join(_clf["reasons"]) or "-",
-            client_ip,
-            request.headers.get("User-Agent"),
-        )
-
-        if BOT_ENFORCEMENT_ENABLED and _clf["score"] >= BOT_FLAG_THRESHOLD:
-            fingerprint = request_fingerprint(request.headers)
-            fp_limited, fp_retry = await is_rate_limited(
-                f"botnet-fp:{fingerprint}", _BOT_FP_LIMITS
-            )
-            if fp_limited:
-                logger.info(
-                    "bot-enforce: throttled fp=%s retry=%s score=%s resolved=%s",
-                    fingerprint,
-                    fp_retry,
-                    _clf["score"],
-                    client_ip,
-                )
-                return JSONResponse(
-                    status_code=429,
-                    content={
-                        "Error": "Rate limit exceeded",
-                        "detail": (
-                            "Automated access detected. Please slow down or use "
-                            "an API plan: "
-                            "https://plus.xposedornot.com/products/api"
-                        ),
-                        "retry_after": fp_retry,
-                    },
-                    headers={"Retry-After": str(fp_retry)},
-                )
 
         if not email or not validate_email_with_tld(email) or not validate_url(request):
             return EmailBreachErrorResponse(Error="Not found")
