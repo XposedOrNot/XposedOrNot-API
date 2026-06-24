@@ -77,11 +77,7 @@ async def publish_to_pubsub(data: Dict[str, Any]) -> None:
 
         def _log_publish_result(fut):
             try:
-                message_id = fut.result()
-                print(
-                    f"[GLOBE] publish OK ip={data.get('ip')} message_id={message_id}",
-                    flush=True,
-                )
+                fut.result()
             except Exception as exc:  # pylint: disable=broad-except
                 print(
                     f"[GLOBE] publish FAILED ip={data.get('ip')}: "

@@ -22,64 +22,28 @@ logger = logging.getLogger(__name__)
 
 def get_client_ip(request: Request) -> str:
     """
-    Extract the real client IP address from request headers.
-    Handles various proxy and load balancer scenarios.
+    Extract the real client IP address for rate limiting and logging.
+
+    All legitimate traffic reaches us through Cloudflare, which sets
+    ``CF-Connecting-IP`` and a caller cannot forge it *through* Cloudflare, so
+    we trust ONLY that header. The other forwarding headers
+    (``X-Forwarded-For``, ``True-Client-IP``, ``X-Real-IP``) are
+    caller-controlled on our topology — trusted proxies append the real client
+    on the right while the left is whatever the caller prepended — so keying on
+    them would let a caller mint a fresh rate-limit key per request and bypass
+    limiting. Requests without ``CF-Connecting-IP`` did not come through
+    Cloudflare; collapse them into a single bucket so that path is throttled
+    collectively (until the origin is locked to Cloudflare).
     """
-    headers = request.headers
+    cf_ip = (request.headers.get("CF-Connecting-IP") or "").strip()
+    if cf_ip:
+        try:
+            ipaddress.ip_address(cf_ip)
+            return cf_ip
+        except ValueError:
+            logger.warning("Malformed CF-Connecting-IP header received")
 
-    # Log specific IP-related headers
-    ip_headers = {
-        "CF-Connecting-IP": headers.get("CF-Connecting-IP"),
-        "X-Forwarded-For": headers.get("X-Forwarded-For"),
-        "X-Real-IP": headers.get("X-Real-IP"),
-        "True-Client-IP": headers.get("True-Client-IP"),
-        "Remote-Addr": getattr(request.client, "host", None),
-        "X-Original-Forwarded-For": headers.get("X-Original-Forwarded-For"),
-    }
-
-    # Try to get IP from various headers in order of reliability
-    client_ip = None
-
-    # 1. Try Cloudflare headers first
-    if headers.get("CF-Connecting-IP"):
-        client_ip = headers["CF-Connecting-IP"].strip()
-        return client_ip
-
-    # 2. Try True-Client-IP
-    if headers.get("True-Client-IP"):
-        client_ip = headers["True-Client-IP"].strip()
-        return client_ip
-
-    # 3. Try X-Forwarded-For
-    if headers.get("X-Forwarded-For"):
-        # Get the leftmost IP which is typically the client
-        ips = [ip.strip() for ip in headers["X-Forwarded-For"].split(",")]
-        # Filter out private and reserved IPs (skip malformed entries)
-        public_ips = []
-        for ip in ips:
-            try:
-                if not ipaddress.ip_address(ip).is_private:
-                    public_ips.append(ip)
-            except ValueError:
-                continue
-        if public_ips:
-            client_ip = public_ips[0]
-            return client_ip
-        client_ip = ips[0]
-        return client_ip
-
-    # 4. Try X-Real-IP
-    if headers.get("X-Real-IP"):
-        client_ip = headers["X-Real-IP"].strip()
-        return client_ip
-
-    # 5. Fallback to direct client address
-    client_ip = getattr(request.client, "host", "unknown")
-
-    if client_ip == "unknown" or client_ip.startswith("169.254"):
-        logger.warning(f"Potentially invalid IP address detected: {client_ip}")
-
-    return client_ip
+    return "non-cloudflare"
 
 
 def validate_domain(domain: str) -> bool:
