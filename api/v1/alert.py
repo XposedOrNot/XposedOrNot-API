@@ -27,7 +27,12 @@ from services.send_email import (
     send_exception_email,
     send_unsub_email,
 )
-from utils.custom_limiter import custom_rate_limiter
+from utils.custom_limiter import (
+    custom_rate_limiter,
+    get_healthy_redis_connection,
+    is_rate_limited,
+    parse_rate_limit,
+)
 from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
 from utils.token import confirm_token, generate_confirmation_token
 from utils.validation import (
@@ -45,6 +50,8 @@ logger = logging.getLogger(__name__)
 
 REMINDER_SCHEDULE_DAYS = {0: 2, 1: 6}
 MAX_REMINDERS = 2
+
+CONFIRMATION_EMAIL_LIMIT = parse_rate_limit("1 per hour;2 per day")
 
 
 @router.get("/alertme/{user_email}", response_model=AlertResponse)
@@ -110,6 +117,13 @@ async def subscribe_to_alert_me(
                     }
                 )
                 datastore_client.put(alert_task_data)
+
+        redis_conn = await get_healthy_redis_connection()
+        recipient_limited, _ = await is_rate_limited(
+            f"alert-confirm:{user_email}", CONFIRMATION_EMAIL_LIMIT, redis_conn
+        )
+        if recipient_limited:
+            return AlertResponse(status="Success", message="Subscription Successful")
 
         # IP Address detection
         client_ip_address = None
