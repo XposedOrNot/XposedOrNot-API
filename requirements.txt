@@ -29,7 +29,7 @@ python-multipart>=0.0.32
 python-whois
 pyyaml>=6.0.3
 PySocks
-redis==8.0.0
+redis==8.0.1
 requests>=2.34.2
 schedule>=1.2.2
 simplejson>=4.1.1
