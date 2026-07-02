@@ -60,7 +60,7 @@ curl "https://api.xposedornot.com/v1/breach-analytics?email=test@example.com"
 
 - **No API key required** for basic endpoints (`/v1/check-email`, `/v1/breach-analytics`, `/v1/breaches`)
 - **Rate limits**: 2 requests/second, 100 requests/day per IP
-- **API key required** for domain breach monitoring (enterprise feature)
+- **API key required** for domain breach monitoring — see [Domain endpoints & API keys](#domain-endpoints--api-keys) for how to get and use one
 
 For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
 
@@ -89,10 +89,33 @@ endpoints you'll reach for most:
 | GET | `/v1/xon-pulse` | XposedOrNot activity feed |
 | GET | `/v1/rss` | Breach updates as an RSS feed |
 
-### Domain monitoring (API key required)
-Domain-level breach monitoring, verification, and alerting are available with an
-API key. See the [API docs](https://XposedOrNot.com/api_doc) for the domain
-verification and alert-subscription flows.
+### Domain endpoints & API keys
+Breach data for a domain is only available once you've **verified ownership** of
+that domain, and calls are authenticated with an API key tied to your account.
+
+**Getting an API key** — keys are issued and managed from the web console, not
+via a public endpoint:
+
+1. Sign in at [xposedornot.com](https://xposedornot.com).
+2. Open your **CxO Dashboard** and verify the domain(s) you want to monitor.
+3. Go to **API Key Management** (linked from the dashboard). Your key is shown
+   there; use **Reset API Key** to rotate it.
+
+**Using the key** — pass it in the `x-api-key` header. The domain-breaches
+endpoint takes no body; it returns breaches across *all* the domains you've
+verified:
+
+```bash
+curl -L -X POST \
+  -H "x-api-key: <YOUR_API_KEY>" \
+  -H "Content-Length: 0" \
+  https://api.xposedornot.com/v1/domain-breaches/
+```
+
+An invalid key (or one with no verified domains) returns `401 Invalid or missing
+API key`; omitting the `x-api-key` header entirely returns `422`. See the
+[API docs](https://XposedOrNot.com/api_doc) for the full domain verification and
+alert-subscription flows.
 
 ## Use it from your AI tools (MCP)
 
