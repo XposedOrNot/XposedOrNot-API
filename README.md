@@ -59,8 +59,20 @@ curl "https://api.xposedornot.com/v1/breach-analytics?email=test@example.com"
 ## Rate Limits & API Access
 
 - **No API key required** for basic endpoints (`/v1/check-email`, `/v1/breach-analytics`, `/v1/breaches`)
-- **Rate limits**: 2 requests/second, 100 requests/day per IP
 - **API key required** for domain breach monitoring — see [Domain endpoints & API keys](#domain-endpoints--api-keys) for how to get and use one
+
+Rate limits are applied **per IP, per endpoint**:
+
+| Endpoint | Per second | Per hour | Per day |
+|----------|:----------:|:--------:|:-------:|
+| `GET /v1/check-email/{email}` | 2 | 25 | 100 |
+| `GET /v1/breach-analytics` | 2 | 25 | 100 |
+| `GET /v1/breaches` | 2 | 50 | 100 |
+| `POST /v1/domain-breaches/` | 2 | 25 | 50 |
+
+When a limit is exceeded the API returns `429 Too Many Requests` with a `Retry-After`
+header (seconds) and a JSON body carrying `retry_after` and `reset_time`, so clients
+can back off precisely.
 
 For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
 
