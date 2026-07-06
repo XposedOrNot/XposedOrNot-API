@@ -2,6 +2,7 @@
 
 # Standard library imports
 import asyncio
+from typing import Optional
 
 # Third-party imports
 from fastapi import FastAPI, Request
@@ -70,10 +71,15 @@ def setup_security_headers(app: FastAPI) -> None:
 _globe_tasks: "set[asyncio.Task]" = set()
 
 
-async def process_globe_request_background(client_ip: str) -> None:
+async def process_globe_request_background(
+    client_ip: str,
+    city: Optional[str] = None,
+    lat: Optional[str] = None,
+    lon: Optional[str] = None,
+) -> None:
     """Process the globe request in the background."""
     try:
-        await process_request_for_globe(client_ip)
+        await process_request_for_globe(client_ip, city, lat, lon)
     except (ValueError, KeyError) as e:
         pass
     except Exception as e:
@@ -89,7 +95,13 @@ def setup_globe_middleware(app: FastAPI) -> None:
         try:
             client_ip = get_client_ip(request)
 
-            task = asyncio.create_task(process_globe_request_background(client_ip))
+            city = request.headers.get("cf-ipcity")
+            lat = request.headers.get("cf-iplatitude")
+            lon = request.headers.get("cf-iplongitude")
+
+            task = asyncio.create_task(
+                process_globe_request_background(client_ip, city, lat, lon)
+            )
             _globe_tasks.add(task)
             task.add_done_callback(_globe_tasks.discard)
         except (ValueError, KeyError) as e:

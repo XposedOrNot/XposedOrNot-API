@@ -2,7 +2,7 @@ name: Live API Smoke Tests
 
 on:
   schedule:
-    - cron: "30 4 * * *"  # daily at 04:30 UTC
+    - cron: "30 4 * * *"
   workflow_dispatch:
 
 permissions:

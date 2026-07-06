@@ -1,8 +1,9 @@
 """Globe visualization service.
 
 This module handles the collection and publishing of IP-based location data
-for the globe visualization feature. It captures client IP addresses,
-retrieves geolocation information, and publishes the data to a PubSub topic.
+for the globe visualization feature. It captures client IP addresses, reads
+geolocation from Cloudflare visitor-location headers (Managed Transform
+"Add visitor location headers"), and publishes the data to a PubSub topic.
 """
 
 import hashlib
@@ -11,7 +12,6 @@ import os
 import time
 from typing import Any, Dict, Optional
 
-import httpx
 from google.cloud import pubsub_v1
 
 # Initialize PubSub constants
@@ -26,24 +26,39 @@ publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
 
-async def get_geolocation(ip: str) -> Optional[Dict[str, Any]]:
-    """Fetch city, latitude, and longitude for the given IP."""
-    geolocation_api_url = f"http://ip-api.com/json/{ip}"
+_last_missing_geo_log = 0.0  # pylint: disable=invalid-name
+_MISSING_GEO_LOG_INTERVAL = 300
+
+_MAX_CITY_LENGTH = 80
+
+
+def build_geo_from_headers(
+    city: Optional[str], lat: Optional[str], lon: Optional[str]
+) -> Optional[Dict[str, Any]]:
+    """Build geolocation data from Cloudflare visitor-location headers."""
+    if not city or not lat or not lon:
+        return None
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(geolocation_api_url, timeout=10.0)
-            data = response.json()
-            if data["status"] == "success":
-                return {
-                    "city": data.get("city", "Unknown"),
-                    "lat": data.get("lat", 0.0),
-                    "lon": data.get("lon", 0.0),
-                }
-            return None
-    except httpx.HTTPError:
+        return {
+            "city": city[:_MAX_CITY_LENGTH],
+            "lat": float(lat),
+            "lon": float(lon),
+        }
+    except (TypeError, ValueError):
         return None
-    except Exception:
-        return None
+
+
+def _log_missing_geo_headers() -> None:
+    """Log (throttled) when Cloudflare visitor-location headers are absent."""
+    global _last_missing_geo_log  # pylint: disable=global-statement
+    now = time.time()
+    if now - _last_missing_geo_log > _MISSING_GEO_LOG_INTERVAL:
+        _last_missing_geo_log = now
+        print(
+            "[GLOBE] cf visitor-location headers missing or invalid — "
+            "check the 'Add visitor location headers' Managed Transform",
+            flush=True,
+        )
 
 
 def generate_request_hash(data: Dict[str, Any]) -> str:
@@ -94,14 +109,20 @@ async def publish_to_pubsub(data: Dict[str, Any]) -> None:
         pass
 
 
-async def process_request_for_globe(client_ip: str) -> None:
+async def process_request_for_globe(
+    client_ip: str,
+    city: Optional[str] = None,
+    lat: Optional[str] = None,
+    lon: Optional[str] = None,
+) -> None:
     """Process a request for the globe visualization feature."""
     try:
         if not client_ip:
             return
 
-        geo_data = await get_geolocation(client_ip)
+        geo_data = build_geo_from_headers(city, lat, lon)
         if not geo_data:
+            _log_missing_geo_headers()
             return
 
         pubsub_data = {
