@@ -47,6 +47,16 @@ def cache_metrics(
         pass
 
 
+def get_last_breach_added(metrics: Dict) -> Optional[str]:
+    """Return the ISO timestamp of the most recently added breach."""
+    recent_breaches = metrics.get("recent_breaches") or []
+    if recent_breaches:
+        timestamp = recent_breaches[0].get("timestamp")
+        if isinstance(timestamp, datetime):
+            return timestamp.replace(microsecond=0).isoformat()
+    return None
+
+
 @router.get("/metrics", response_model=MetricsResponse)
 @custom_rate_limiter("5 per minute;50 per hour;100 per day")
 async def get_metrics_endpoint(request: Request) -> MetricsResponse:
@@ -68,6 +78,7 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
             "Breaches_Records": metrics["breaches_total_records"],
             "Pastes_Count": str(metrics["pastes_count"]),
             "Pastes_Records": metrics["pastes_total_records"],
+            "Last_Breach_Added": get_last_breach_added(metrics),
         }
         cache_metrics(cache_key, response_data)
 
@@ -140,6 +151,7 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
             )
 
         # Build response and cache it
+        last_breach_added = get_last_breach_added(metrics)
         response_data = {
             "Breaches_Count": metrics["breaches_count"],
             "Breaches_Records": metrics["breaches_total_records"],
@@ -149,6 +161,7 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
             "Industry_Breaches_Count": metrics["industry_breaches_count"],
             "Top_Breaches": top_breaches,
             "Recent_Breaches": recent_breaches,
+            "Last_Breach_Added": last_breach_added,
         }
         cache_metrics(cache_key, response_data)
 
@@ -161,6 +174,7 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
             Industry_Breaches_Count=metrics["industry_breaches_count"],
             Top_Breaches=top_breaches,
             Recent_Breaches=recent_breaches,
+            Last_Breach_Added=last_breach_added,
         )
 
     except Exception as e:

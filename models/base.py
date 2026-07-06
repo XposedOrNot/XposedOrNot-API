@@ -34,6 +34,7 @@ class BaseMetrics(BaseModel):
     Breaches_Records: int
     Pastes_Count: str
     Pastes_Records: int
+    Last_Breach_Added: Optional[str] = None
 
 
 class BaseAnalytics(BaseModel):
