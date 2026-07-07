@@ -159,6 +159,41 @@ _MCP_TOOLS = [
             "required": [],
         },
     },
+    {
+        "name": "domain_breach_summary",
+        "description": (
+            "Get an aggregate breach summary for a domain, including the number "
+            "of breaches, affected email accounts, pastes, and the most recent "
+            "breach date. Returns only counts, not individual email addresses."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "domain": {
+                    "type": "string",
+                    "description": "Domain to summarize breaches for",
+                }
+            },
+            "required": ["domain"],
+        },
+    },
+    {
+        "name": "get_breach_metrics",
+        "description": (
+            "Get system-wide breach statistics: total breaches and records "
+            "indexed, breaches per year and industry, the largest and most "
+            "recent breaches, and when the latest breach was added."
+        ),
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_recent_breaches",
+        "description": (
+            "Get the latest data breach news and recently added breaches "
+            "tracked by XposedOrNot."
+        ),
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
 ]
 
 # Light rate limit for cheap MCP envelope methods (initialize / tools/list),
@@ -337,6 +372,31 @@ async def mcp_post_handler(fastapi_request: Request):
                     if_modified_since=None,
                 ),
                 "Breach list",
+            )
+
+        if tool_name == "domain_breach_summary":
+            domain = tool_args.get("domain")
+            if not domain:
+                return _mcp_error(req_id, -32602, "Missing domain parameter")
+            return await _run_mcp_tool(
+                req_id,
+                breaches.get_domain_breach_summary(request=fastapi_request, d=domain),
+                "Domain breach summary",
+                email=domain,
+            )
+
+        if tool_name == "get_breach_metrics":
+            return await _run_mcp_tool(
+                req_id,
+                metrics.get_detailed_metrics_endpoint(request=fastapi_request),
+                "Breach metrics",
+            )
+
+        if tool_name == "get_recent_breaches":
+            return await _run_mcp_tool(
+                req_id,
+                analytics.get_news_feed(request=fastapi_request),
+                "Recent breaches",
             )
 
         return _mcp_error(req_id, -32601, f"Unknown tool: {tool_name}")
