@@ -5,6 +5,8 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 from google.cloud import datastore
+
+from config.clients import ds_client
 from utils.safe_encoding import escape_html, build_safe_url
 
 logger = logging.getLogger(__name__)
@@ -178,9 +180,7 @@ async def generate_monthly_digest_html_optimized(
 
         # Use provided client or create new one if not available
         if client is None:
-            from google.cloud.datastore import Client
-
-            client = Client()
+            client = ds_client
 
         # OPTIMIZATION: Single batch query instead of N individual queries
         if user_domains:

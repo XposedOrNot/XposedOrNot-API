@@ -10,11 +10,10 @@ from urllib.parse import urlparse
 # Third-party imports
 from fastapi import APIRouter, Header, HTTPException, Path, Query, Request
 from fastapi.responses import JSONResponse, Response
-from google.cloud import datastore
-from redis import Redis
+from config.clients import ds_client, redis_client
 
 # Local imports
-from config.settings import MAX_EMAIL_LENGTH, REDIS_DB, REDIS_HOST, REDIS_PORT
+from config.settings import MAX_EMAIL_LENGTH
 from models.responses import (
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
@@ -43,10 +42,6 @@ from utils.validation import validate_token, validate_variables
 
 router = APIRouter()
 
-# Redis client for caching
-redis_client = Redis(
-    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-)
 
 # Cache TTL: 24 hours
 BREACH_CACHE_TTL_HOURS = 24
@@ -121,7 +116,7 @@ async def get_xposed_breaches(
             return BreachListResponse(**cached_result)
 
         # Cache miss - query Datastore
-        client = datastore.Client()
+        client = ds_client
         query = client.query(kind="xon_breaches")
 
         if breach_id:
@@ -229,7 +224,7 @@ async def search_data_breaches_v2(
 
     try:
         email = email.lower()
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", email)
         alert_record = datastore_client.get(alert_key)
 
@@ -323,7 +318,7 @@ async def search_data_breaches(
 
     try:
         email = email.lower()
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", email)
         alert_record = datastore_client.get(alert_key)
 
@@ -485,7 +480,7 @@ async def search_email(
         email = email.lower()
 
         # Always check shieldOn first (privacy - can't cache this)
-        data_store = datastore.Client()
+        data_store = ds_client
         alert_key = data_store.key("xon_alert", email)
         alert_record = data_store.get(alert_key)
 
@@ -616,7 +611,7 @@ async def get_domain_breach_summary(
             return DomainBreachSummaryResponse(**cached_result)
 
         # Cache miss - query Datastore
-        ds_xon = datastore.Client()
+        ds_xon = ds_client
 
         # Query xon records for domain
         xon_rec = ds_xon.query(kind="xon")
@@ -643,7 +638,7 @@ async def get_domain_breach_summary(
         emails_count = len(unique_emails)
 
         # Query paste records
-        ds_paste = datastore.Client()
+        ds_paste = ds_client
         paste_rec = ds_paste.query(kind="xon_paste")
         paste_rec.add_filter("domain", "=", domain)
         query_paste = paste_rec.fetch(limit=50)

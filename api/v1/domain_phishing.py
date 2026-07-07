@@ -10,11 +10,9 @@ from typing import Any, Dict, List, Optional, Union
 
 import dnstwist
 from fastapi import APIRouter, HTTPException, Query, Request
-from google.cloud import datastore
+from config.clients import ds_client, redis_client
 from pydantic import BaseModel, EmailStr, Field, validator
-from redis import Redis
 
-from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
 from models.responses import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
@@ -22,9 +20,6 @@ from utils.token import confirm_token
 
 router = APIRouter()
 
-redis_client = Redis(
-    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-)
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 STATIC_DIR = BASE_DIR / "static" / "static"
@@ -159,7 +154,7 @@ async def verify_user_access(email: str, token: str) -> bool:
         verified_email = await confirm_token(token)
         if not verified_email or verified_email.lower() != email.lower():
             return False
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", email.lower())
         alert_record = datastore_client.get(alert_key)
         is_verified = bool(alert_record and alert_record.get("verified", False))
@@ -171,7 +166,7 @@ async def verify_user_access(email: str, token: str) -> bool:
 async def is_domain_verified_for_user(email: str, domain: str) -> bool:
     """Check if a domain is verified for a specific user."""
     try:
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         # Query for the domain record
         query = datastore_client.query(kind="xon_domains")
         query.add_filter("email", "=", email.lower())

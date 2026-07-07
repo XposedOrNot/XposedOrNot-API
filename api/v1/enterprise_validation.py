@@ -1,7 +1,7 @@
 """Enterprise API key validation endpoint."""
 
 from fastapi import APIRouter, Header, Request
-from google.cloud import datastore
+from config.clients import ds_client
 from pydantic import BaseModel
 
 from services.send_email import send_exception_email
@@ -56,7 +56,7 @@ async def validate_enterprise_key(
     if not validate_url(request):
         return EnterpriseValidationResponse(valid=False, reason="Invalid request URL")
 
-    datastore_client = datastore.Client()
+    datastore_client = ds_client
 
     try:
         # STEP 2: Check plus_api_key

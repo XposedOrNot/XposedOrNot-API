@@ -10,7 +10,6 @@ import traceback
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-import redis
 import schedule
 
 # from concurrent.futures import ThreadPoolExecutor  # No longer needed
@@ -19,22 +18,10 @@ logger = logging.getLogger(__name__)
 
 # Redis client for tracking last run times
 try:
-    from config.settings import (
-        REDIS_HOST,
-        REDIS_PORT,
-        REDIS_DB,
-        REDIS_PASSWORD,
-        ENVIRONMENT,
-    )
+    from config.settings import ENVIRONMENT
     from api.v1.monthly_digest import process_monthly_digest_for_all_users
+    from config.clients import redis_client
 
-    redis_client = redis.Redis(
-        host=REDIS_HOST,
-        port=REDIS_PORT,
-        db=REDIS_DB,
-        password=REDIS_PASSWORD,
-        decode_responses=True,
-    )
     logger.info("📊 SCHEDULER: Redis client initialized for last-run tracking")
 except Exception as e:
     logger.error(f"📊 SCHEDULER: Failed to initialize Redis client: {str(e)}")

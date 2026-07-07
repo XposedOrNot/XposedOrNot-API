@@ -14,6 +14,8 @@ import domcheck
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
 from google.cloud import datastore
+
+from config.clients import ds_client
 from google.api_core import exceptions as google_exceptions
 from pydantic import EmailStr
 
@@ -91,7 +93,7 @@ def list_transactions_for_domain(client: datastore.Client, domain: str) -> List[
 
 def process_single_domain(domain: str):
     """Processes transactions for a given domain and updates breach summaries."""
-    client = datastore.Client()
+    client = ds_client
     domain_transactions = list_transactions_for_domain(client, domain)
 
     breach_summary = defaultdict(int)
@@ -233,7 +235,7 @@ async def verify_email(
             )
 
             if email.lower() == registrant_email.lower():
-                datastore_client = datastore.Client()
+                datastore_client = ds_client
                 domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
                 domain_record = datastore_client.get(domain_key)
                 token = await generate_confirmation_token(email)
@@ -273,7 +275,7 @@ async def verify_dns(
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
     if domcheck.check(domain, prefix, code, strategies="dns_txt"):
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
         domain_record = datastore_client.get(domain_key)
 
@@ -310,7 +312,7 @@ async def verify_html(
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
     if await check_file(domain, prefix, code):
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
         domain_record = datastore_client.get(domain_key)
 

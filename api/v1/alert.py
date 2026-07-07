@@ -10,6 +10,8 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
 from google.cloud import datastore
+
+from config.clients import ds_client
 from google.api_core import exceptions as google_exceptions
 from user_agents import parse
 
@@ -82,7 +84,7 @@ async def subscribe_to_alert_me(
         user_email = validated_email
 
         # Datastore operations
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
@@ -173,7 +175,7 @@ async def subscribe_to_alert_me(
 
 async def process_alert_reminders():
     """Send confirmation reminders to unconfirmed alert-me subscribers."""
-    datastore_client = datastore.Client()
+    datastore_client = ds_client
     now = datetime.now(timezone.utc)
 
     query = datastore_client.query(kind="xon_alert")
@@ -260,7 +262,7 @@ async def alert_me_verification(verification_token: str, request: Request):
             raise HTTPException(status_code=404, detail="Not found")
 
         # Datastore operations with transaction to prevent race conditions
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", user_email)
 
         # Update alert task inside transaction to prevent TOCTOU race condition
@@ -341,7 +343,7 @@ async def send_verification(
         ):
             return VerificationResponse(status="Failed")
 
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
@@ -357,7 +359,7 @@ async def send_verification(
             time_diff_hours = (now - verification_timestamp).total_seconds() / 3600
 
             if time_diff_hours < 24:
-                ds_xon = datastore.Client()
+                ds_xon = ds_client
                 xon_key = ds_xon.key("xon", user_email)
                 xon_record = ds_xon.get(xon_key)
                 sensitive_site_breaches = ""
@@ -417,7 +419,7 @@ async def unsubscribe(user_email: str, request: Request):
             raise HTTPException(status_code=404, detail="Not found")
 
         # Datastore operations
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
@@ -469,7 +471,7 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
             raise HTTPException(status_code=404, detail="Not found")
 
         # Datastore operations
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 

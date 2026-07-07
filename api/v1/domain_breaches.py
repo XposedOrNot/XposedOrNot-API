@@ -6,7 +6,7 @@ from typing import Dict, List
 from operator import itemgetter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from google.cloud import datastore
+from config.clients import ds_client
 from pydantic import BaseModel, Field
 
 from models.base import BaseResponse
@@ -83,7 +83,7 @@ async def protected(
             raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
         # Instantiate a datastore client
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
 
         # Try to find API key in xon_api_key table (existing users)
         query = datastore_client.query(kind="xon_api_key")

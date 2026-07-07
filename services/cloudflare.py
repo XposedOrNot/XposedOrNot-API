@@ -13,6 +13,8 @@ import requests
 import httpx
 import dateutil.parser as dp
 from google.cloud import datastore
+
+from config.clients import ds_client
 from fastapi import HTTPException
 from pydantic import BaseModel, Field
 
@@ -64,7 +66,7 @@ async def update_cf_trans(ip_address: str, block_seconds: int = 3600) -> None:
     """Update the Cloud Firestore transaction with the given IP address."""
     try:
         key = hashlib.sha256(ip_address.encode()).hexdigest()
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         task_cnt = datastore.Entity(
             datastore_client.key("xon_cf", key),
             exclude_from_indexes=["insrt_tmpstmp", "cf_data"],
@@ -210,7 +212,7 @@ async def unblock() -> CloudflareResponse:
             "Content-Type": "application/json",
         }
 
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         query = datastore_client.query(kind="xon_cf")
         query.add_filter("release_timestamp", "=", "")
 

@@ -6,25 +6,12 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-from google.cloud import datastore
-from redis import Redis
-
-from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
+from config.clients import ds_client, redis_client
 
 logger = logging.getLogger(__name__)
 
 CATALOG_TTL_SECONDS = 900
 REFRESH_FAILURE_BACKOFF_SECONDS = 30
-
-ds_client = datastore.Client()
-
-redis_client = Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    db=REDIS_DB,
-    socket_timeout=2,
-    socket_connect_timeout=2,
-)
 
 _catalog: Optional[Dict[str, Any]] = None
 _loaded_at: float = 0.0

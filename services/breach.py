@@ -4,20 +4,17 @@
 from typing import Dict, List, Any
 
 # Third-party imports
-from google.cloud import datastore
 from google.api_core import exceptions as api_exceptions
 from fastapi import HTTPException
 
+from config.clients import ds_client
 from services.breach_catalog import get_breach
-
-# Initialize datastore client
-ds_client = datastore.Client()
 
 
 async def get_combined_breach_data(email: str) -> Dict[str, Any]:
     """Get combined breach data for a given email."""
     try:
-        client = datastore.Client()
+        client = ds_client
         key = client.key("xon", email)
         entity = client.get(key)
 
@@ -79,7 +76,7 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
     """Returns breach data for a given email."""
 
     try:
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         search_key = datastore_client.key("xon", user_email)
 
         user_data = datastore_client.get(search_key)
@@ -98,7 +95,7 @@ async def get_exposure(user_email: str) -> Dict[str, Any]:
 async def get_sensitive_exposure(user_email: str) -> Dict[str, Any]:
     """Get sensitive exposure data for a user."""
     try:
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         search_key = datastore_client.key("xon_sensitive", user_email)
         user_data = datastore_client.get(search_key)
         if user_data is not None:

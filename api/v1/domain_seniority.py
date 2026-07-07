@@ -6,6 +6,8 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from google.cloud import datastore
+
+from config.clients import ds_client
 from pydantic import BaseModel, EmailStr, Field, validator
 
 from models.base import BaseResponse
@@ -74,7 +76,7 @@ async def verify_user_access(email: str, token: str) -> bool:
         verified_email = await confirm_token(token)
         if not verified_email or verified_email.lower() != email.lower():
             return False
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", email.lower())
         alert_record = datastore_client.get(alert_key)
         is_verified = bool(alert_record and alert_record.get("verified", False))
@@ -86,7 +88,7 @@ async def verify_user_access(email: str, token: str) -> bool:
 async def get_verified_domains_for_user(email: str) -> List[str]:
     """Get all verified domains for a user."""
     try:
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         query = datastore_client.query(kind="xon_domains")
         query.add_filter("email", "=", email.lower())
         query.add_filter("verified", "=", True)
@@ -164,7 +166,7 @@ async def get_seniority_data(
     domain: str, seniority_filter: SeniorityLevel
 ) -> DomainSeniorityData:
     """Get seniority data for a specific domain."""
-    datastore_client = datastore.Client()
+    datastore_client = ds_client
     query = datastore_client.query(kind="xon_domains_seniority")
     query.add_filter("domain", "=", domain.lower())
 

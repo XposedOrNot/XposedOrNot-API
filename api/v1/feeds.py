@@ -7,11 +7,9 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Request, Response
 from feedgen.feed import FeedGenerator
-from google.cloud import datastore
+from config.clients import ds_client, redis_client
 from pydantic import BaseModel
-from redis import Redis
 
-from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
 from models.base import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
@@ -19,10 +17,6 @@ from utils.safe_encoding import escape_rss_content, escape_url_fragment
 
 router = APIRouter()
 
-# Redis client for caching
-redis_client = Redis(
-    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-)
 
 # Cache TTL: 12 hours for feeds
 FEEDS_CACHE_TTL_HOURS = 12
@@ -75,7 +69,7 @@ async def get_pulse_data(request: Request):
             return PulseNewsResponse(**cached_data)
 
         # Cache miss - fetch from Datastore
-        client = datastore.Client()
+        client = ds_client
         query = client.query(kind="xon-pulse")
         results = list(query.fetch())
 
@@ -132,7 +126,7 @@ async def rss_feed(request: Request):
             name="Devanand Premkumar", email="deva@xposedornot.com"
         )
 
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         query = datastore_client.query(kind="xon_breaches")
         query_iter = query.fetch()
 

@@ -16,9 +16,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from google.api_core import exceptions as google_exceptions
 from google.cloud import datastore
-from redis import Redis
 
-from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
+from config.clients import ds_client, redis_client
 
 # Local imports
 from models.responses import (
@@ -67,10 +66,6 @@ router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 logger = logging.getLogger(__name__)
 
-# Redis client for caching
-redis_client = Redis(
-    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-)
 
 # Cache TTL: 24 hours
 ANALYTICS_CACHE_TTL_HOURS = 24
@@ -270,7 +265,7 @@ async def domain_alert(
             )
         user_email = validated_email
 
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
 
         # Check if the user exists in xon_domains
         query = datastore_client.query(kind="xon_domains")
@@ -383,7 +378,7 @@ async def domain_verify(
 
         # Create session data
         try:
-            client = datastore.Client()
+            client = ds_client
             alert_task_data = datastore.Entity(
                 client.key("xon_domains_session", user_email)
             )
@@ -500,7 +495,7 @@ async def send_domain_breaches(
             )
 
         # Check for matching session in xon_domains_session
-        client = datastore.Client()
+        client = ds_client
         alert_key = client.key("xon_domains_session", email)
         alert_task = client.get(alert_key)
 
@@ -882,7 +877,7 @@ async def activate_shield(
                 content={"Error": "Not found"},
             )
 
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", email)
         alert_task = datastore_client.get(alert_key)
 
@@ -991,7 +986,7 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
                 status_code=404,
             )
 
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", email)
         alert_task = datastore_client.get(alert_key)
 
@@ -1152,7 +1147,7 @@ async def get_analytics(
         ):
             return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
-        data_store = datastore.Client()
+        data_store = ds_client
         xon_key = data_store.key("xon", user_email)
         xon_record = data_store.get(xon_key)
         alert_key = data_store.key("xon_alert", user_email)
@@ -1276,7 +1271,7 @@ async def update_alert_status(
             )
 
         # Check session authentication
-        client = datastore.Client()
+        client = ds_client
         alert_key = client.key("xon_domains_session", email)
         alert_task = client.get(alert_key)
 

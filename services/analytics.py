@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Tuple, Optional, Set
 
 # Third-party imports
 from fastapi import HTTPException
-from google.cloud import datastore
+from config.clients import ds_client
 from google.api_core import exceptions as google_exceptions
 from openai import OpenAI
 from openai import OpenAIError
@@ -922,7 +922,7 @@ def get_ai_summary(breach_data: Dict[str, Any]) -> str:
 async def get_detailed_metrics() -> Dict[str, Any]:
     """Get detailed metrics about breaches."""
     try:
-        datastore_client = datastore.Client()
+        datastore_client = ds_client
         metrics_key = datastore_client.key("xon_metrics", "metrics")
         metrics_data = datastore_client.get(metrics_key)
 
@@ -990,7 +990,7 @@ async def get_detailed_metrics() -> Dict[str, Any]:
 async def get_pulse_news() -> List[Dict[str, Any]]:
     """Get news feed for data breaches."""
     try:
-        client = datastore.Client()
+        client = ds_client
         query = client.query(kind="xon-pulse")
         results = list(query.fetch())
 
@@ -1014,7 +1014,6 @@ async def get_pulse_news() -> List[Dict[str, Any]]:
 async def get_breaches_analytics(site: str) -> Dict[str, Any]:
     """Returns analytics of data breaches for a given site."""
     try:
-        ds_client = datastore.Client()
         breach_list = site.split(";")
 
         total_breaches = len(breach_list)

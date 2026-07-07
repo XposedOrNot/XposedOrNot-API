@@ -5,9 +5,8 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from redis import Redis
 
-from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
+from config.clients import redis_client
 from models.responses import DetailedMetricsResponse, MetricsResponse
 from services.analytics import get_detailed_metrics
 from services.send_email import send_exception_email
@@ -16,10 +15,6 @@ from utils.helpers import validate_url
 
 router = APIRouter()
 
-# Redis client for caching
-redis_client = Redis(
-    host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_responses=True
-)
 
 # Cache TTL: 24 hours
 METRICS_CACHE_TTL_HOURS = 24

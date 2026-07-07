@@ -8,18 +8,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
-import redis
 from fastapi import APIRouter, HTTPException, Query, Request
-from google.cloud.datastore import Client
+from config.clients import ds_client, redis_client
 
 from models.responses import MonthlyDigestResponse
 from utils.custom_limiter import custom_rate_limiter
 from utils.token import generate_confirmation_token
 from config.settings import (
-    REDIS_HOST,
-    REDIS_PORT,
-    REDIS_DB,
-    REDIS_PASSWORD,
     CF_UNBLOCK_MAGIC,
     ENVIRONMENT,
     DEBUG_EMAIL,
@@ -41,15 +36,6 @@ API_SECRET = os.environ.get("MJ_API_SECRET")
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# Redis client for background tasks using environment variables
-redis_client = redis.Redis(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    db=REDIS_DB,
-    password=REDIS_PASSWORD,
-    decode_responses=True,
-)
 
 
 async def process_single_email_optimized(
@@ -158,7 +144,7 @@ async def process_monthly_digest_for_all_users():
         )
 
         # Get all verified domains with optimized batch operations
-        client = Client()
+        client = ds_client
 
         # PERFORMANCE: Single query for all verified domains
         perf_start = time.time()

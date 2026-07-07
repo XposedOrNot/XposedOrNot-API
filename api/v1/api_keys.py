@@ -8,6 +8,8 @@ from typing import Optional
 from fastapi import APIRouter, Request
 from google.cloud import datastore
 
+from config.clients import ds_client
+
 from models.base import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
@@ -42,7 +44,7 @@ async def create_api_key(token: str, request: Request):
                 status="error", message="Invalid token or URL", status_code=400
             )
 
-        client = datastore.Client()
+        client = ds_client
         query = client.query(kind="xon_domains_session")
         query.add_filter("domain_magic", "=", token)
         user = list(query.fetch())
@@ -113,7 +115,7 @@ async def get_api_key(token: str, request: Request):
                 status="error", message="Invalid token or URL", status_code=400
             )
 
-        client = datastore.Client()
+        client = ds_client
         query = client.query(kind="xon_domains_session")
         query.add_filter("domain_magic", "=", token)
         user = list(query.fetch())
