@@ -37,7 +37,8 @@ from utils.helpers import (
     validate_email_with_tld,
     validate_url,
 )
-from utils.validation import validate_variables
+from utils.token import validate_dashboard_session
+from utils.validation import validate_token, validate_variables
 
 router = APIRouter()
 
@@ -237,7 +238,11 @@ async def search_data_breaches_v2(
 
         # Validate token if provided
         if token:
+            if not validate_token(token):
+                raise HTTPException(status_code=403, detail="Invalid token")
             token_valid = bool(alert_record and alert_record.get("token") == token)
+            if not token_valid:
+                token_valid = validate_dashboard_session(datastore_client, email, token)
             if not token_valid:
                 raise HTTPException(status_code=403, detail="Invalid token")
 
@@ -327,7 +332,11 @@ async def search_data_breaches(
 
         # Validate token if provided
         if token:
+            if not validate_token(token):
+                raise HTTPException(status_code=403, detail="Invalid token")
             token_valid = bool(alert_record and alert_record.get("token") == token)
+            if not token_valid:
+                token_valid = validate_dashboard_session(datastore_client, email, token)
             if not token_valid:
                 raise HTTPException(status_code=403, detail="Invalid token")
 

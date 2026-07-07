@@ -228,7 +228,7 @@ async def get_news_feed(request: Request) -> PulseNewsResponse:
 )
 @custom_rate_limiter("2 per second;25 per hour;50 per day")
 async def domain_alert(
-    request: Request, user_email: str
+    request: Request, user_email: str, dashboard: Optional[str] = Query(None)
 ) -> Union[DomainAlertResponse, DomainAlertErrorResponse]:
     """
     Initiate domain breaches dashboard access and send confirmation email.
@@ -255,6 +255,11 @@ async def domain_alert(
         if not validate_url(request):
             return DomainAlertErrorResponse(Error="Invalid request", email=user_email)
 
+        if dashboard not in (None, "my"):
+            return JSONResponse(
+                status_code=400, content={"Error": "Invalid dashboard parameter"}
+            )
+
         # Validate email format, TLD, and domain is live
         is_deliverable, validated_email = validate_email_deliverable(user_email)
         if not is_deliverable:
@@ -272,12 +277,22 @@ async def domain_alert(
         domain_task = list(query.fetch())
 
         if not domain_task:
-            # Still return success to avoid email enumeration
-            return DomainAlertResponse()
+            alert_key = datastore_client.key("xon_alert", user_email)
+            alert_record = datastore_client.get(alert_key)
+            alert_verified = bool(
+                alert_record
+                and alert_record.get("verified", False)
+                and not alert_record.get("unSubscribeOn", False)
+            )
+            if not alert_verified:
+                # Still return success to avoid email enumeration
+                return DomainAlertResponse()
 
         # Generate verification token and URL
         verification_token = await generate_confirmation_token(user_email)
         confirmation_url = f"{request.base_url}v1/domain-verify/{verification_token}"
+        if dashboard == "my":
+            confirmation_url += "?d=my"
 
         # Store session data
         try:
@@ -335,7 +350,9 @@ async def domain_alert(
     },
 )
 @custom_rate_limiter("2 per second;25 per hour;50 per day")
-async def domain_verify(request: Request, verification_token: str) -> HTMLResponse:
+async def domain_verify(
+    request: Request, verification_token: str, d: Optional[str] = Query(None)
+) -> HTMLResponse:
     """
     Verify domain alerts using token and return dashboard access.
     """
@@ -380,8 +397,13 @@ async def domain_verify(request: Request, verification_token: str) -> HTMLRespon
             raise
 
         # Generate dashboard link with properly encoded parameters
+        dashboard_page = (
+            "https://xposedornot.com/my-dashboard.html"
+            if d == "my"
+            else "https://xposedornot.com/breach-dashboard.html"
+        )
         dashboard_link = build_safe_url(
-            "https://xposedornot.com/breach-dashboard.html",
+            dashboard_page,
             {"email": user_email, "token": verification_token},
         )
 
@@ -507,7 +529,14 @@ async def send_domain_breaches(
         verified_domains = [entity["domain"] for entity in query.fetch()]
 
         if not verified_domains:
-            return DomainBreachesErrorResponse(Error="No verified domains found")
+            alert_record = client.get(client.key("xon_alert", email))
+            alert_verified = bool(
+                alert_record
+                and alert_record.get("verified", False)
+                and not alert_record.get("unSubscribeOn", False)
+            )
+            if not alert_verified:
+                return DomainBreachesErrorResponse(Error="No verified domains found")
 
         # Calculate time threshold for filtering
         time_threshold = None
@@ -654,15 +683,16 @@ async def send_domain_breaches(
         filtered_emails = {bd.email for bd in breach_details}
 
         # Get seniority information (filtered by emails in time-filtered breaches)
-        query = client.query(kind="xon_domains_seniority")
-        query.add_filter("domain", "IN", verified_domains)
-        for entity in query.fetch():
-            # Only count seniority for emails that are in the filtered breach details
-            entity_email = entity.get("email", "")
-            if time_threshold is None or entity_email in filtered_emails:
-                seniority = entity.get("seniority", "").lower()
-                if seniority in seniority_summary:
-                    seniority_summary[seniority] += 1
+        if verified_domains:
+            query = client.query(kind="xon_domains_seniority")
+            query.add_filter("domain", "IN", verified_domains)
+            for entity in query.fetch():
+                # Only count seniority for emails that are in the filtered breach details
+                entity_email = entity.get("email", "")
+                if time_threshold is None or entity_email in filtered_emails:
+                    seniority = entity.get("seniority", "").lower()
+                    if seniority in seniority_summary:
+                        seniority_summary[seniority] += 1
 
         # Build yearly breach hierarchy
         yearly_breach_hierarchy = {"description": "Data Breaches", "children": []}

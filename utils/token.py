@@ -1,7 +1,9 @@
 """Token generation and verification utilities."""
 
-from typing import Optional
+import datetime
 import logging
+from typing import Optional
+
 from fastapi import HTTPException
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
@@ -10,6 +12,32 @@ from utils.redaction import mask_email
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+DASHBOARD_SESSION_MAX_AGE_HOURS = 12
+
+
+def validate_dashboard_session(datastore_client, email: str, token: str) -> bool:
+    """
+    Validate a dashboard magic-link session token for an email.
+
+    Accepts the session created by the domain-alert/domain-verify flow
+    (xon_domains_session) and enforces the same 12-hour expiry as the
+    dashboard data routes.
+    """
+    if not email or not token:
+        return False
+    try:
+        session_key = datastore_client.key("xon_domains_session", email)
+        session_record = datastore_client.get(session_key)
+        if not session_record or session_record.get("domain_magic") != token:
+            return False
+        magic_timestamp = session_record.get("magic_timestamp")
+        if magic_timestamp is None:
+            return False
+        age = datetime.datetime.utcnow() - magic_timestamp.replace(tzinfo=None)
+        return age <= datetime.timedelta(hours=DASHBOARD_SESSION_MAX_AGE_HOURS)
+    except Exception:  # pylint: disable=broad-except
+        return False
 
 
 async def generate_confirmation_token(email: str) -> str:

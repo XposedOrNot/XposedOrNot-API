@@ -11,9 +11,19 @@ from google.cloud import datastore
 from models.base import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
+from utils.token import DASHBOARD_SESSION_MAX_AGE_HOURS
 from utils.validation import validate_url, validate_variables
 
 router = APIRouter()
+
+
+def _session_expired(session_entity) -> bool:
+    """Check whether a dashboard session entity is past its validity window."""
+    magic_timestamp = session_entity.get("magic_timestamp")
+    if magic_timestamp is None:
+        return True
+    age = datetime.datetime.utcnow() - magic_timestamp.replace(tzinfo=None)
+    return age > datetime.timedelta(hours=DASHBOARD_SESSION_MAX_AGE_HOURS)
 
 
 class APIKeyResponse(BaseResponse):
@@ -41,7 +51,22 @@ async def create_api_key(token: str, request: Request):
                 status="error", message="Invalid token", status_code=400
             )
 
+        if _session_expired(user[0]):
+            return APIKeyResponse(
+                status="error", message="Session expired", status_code=401
+            )
+
         email = user[0].key.name
+
+        domain_query = client.query(kind="xon_domains")
+        domain_query.add_filter("email", "=", email)
+        if not list(domain_query.fetch(limit=1)):
+            return APIKeyResponse(
+                status="error",
+                message="API keys require a verified domain",
+                status_code=403,
+            )
+
         api_key = secrets.token_hex(16)
         timestamp = datetime.datetime.utcnow()
         api_key_key = client.key("xon_api_key", email)
@@ -95,6 +120,11 @@ async def get_api_key(token: str, request: Request):
         if not user:
             return APIKeyResponse(
                 status="error", message="Invalid token", status_code=400
+            )
+
+        if _session_expired(user[0]):
+            return APIKeyResponse(
+                status="error", message="Session expired", status_code=401
             )
 
         email = user[0].key.name
