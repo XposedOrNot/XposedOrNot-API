@@ -94,7 +94,7 @@ async def handle_404_with_protection(request: Request, exc: HTTPException):
                 )
 
         # Check rate limits
-        limited, retry_after = await is_rate_limited(key, rate_limits, redis_conn)
+        limited, retry_after, _ = await is_rate_limited(key, rate_limits, redis_conn)
 
         if limited:
             # Increment violation count for this IP

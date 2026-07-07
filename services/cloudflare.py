@@ -60,7 +60,7 @@ class CloudflareError(BaseModel):
         }
 
 
-async def update_cf_trans(ip_address: str) -> None:
+async def update_cf_trans(ip_address: str, block_seconds: int = 3600) -> None:
     """Update the Cloud Firestore transaction with the given IP address."""
     try:
         key = hashlib.sha256(ip_address.encode()).hexdigest()
@@ -74,6 +74,7 @@ async def update_cf_trans(ip_address: str) -> None:
                 "insert_timestamp": datetime.datetime.now(),
                 "release_timestamp": "",
                 "cf_data": ip_address,
+                "block_seconds": block_seconds,
             }
         )
         datastore_client.put(task_cnt)
@@ -108,8 +109,10 @@ async def get_isp_from_ip(ip_address: str) -> Optional[str]:
         return None
 
 
-async def block_hour(ip_address: str) -> CloudflareResponse:
-    """Block an IP address for one hour using the Cloudflare API."""
+async def _create_access_rule(
+    ip_address: str, mode: str, note: str, block_seconds: int, success_message: str
+) -> CloudflareResponse:
+    """Create a Cloudflare IP access rule and record it for scheduled release."""
     try:
         isp_info = await get_isp_from_ip(ip_address)
         if isp_info and "Cloudflare" in isp_info:
@@ -126,19 +129,19 @@ async def block_hour(ip_address: str) -> CloudflareResponse:
             "Content-Type": "application/json",
         }
         payload = {
-            "mode": "challenge",
+            "mode": mode,
             "configuration": {"target": "ip", "value": ip_address},
-            "notes": "Hour block enforced",
+            "notes": note,
         }
 
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=payload, timeout=20)
 
             if response.status_code in [200, 201]:
-                await update_cf_trans(response.content)
+                await update_cf_trans(response.content, block_seconds)
                 return CloudflareResponse(
                     status="success",
-                    message=f"Successfully blocked IP {ip_address} for one hour",
+                    message=success_message,
                     details=response.json(),
                 )
 
@@ -160,60 +163,39 @@ async def block_hour(ip_address: str) -> CloudflareResponse:
             status_code=500,
             detail={"status": "error", "message": f"Error blocking IP: {str(e)}"},
         ) from e
+
+
+async def block_hour(ip_address: str) -> CloudflareResponse:
+    """Block an IP address for one hour using the Cloudflare API."""
+    return await _create_access_rule(
+        ip_address,
+        "challenge",
+        "Hour block enforced",
+        3600,
+        f"Successfully blocked IP {ip_address} for one hour",
+    )
 
 
 async def block_day(ip_address: str) -> CloudflareResponse:
     """Block an IP address for one day using the Cloudflare API."""
-    try:
-        isp_info = await get_isp_from_ip(ip_address)
-        if isp_info and "Cloudflare" in isp_info:
-            return CloudflareResponse(
-                status="skipped",
-                message="IP belongs to Cloudflare, skipping block",
-                details={"ip": ip_address},
-            )
+    return await _create_access_rule(
+        ip_address,
+        "block",
+        "Day block enforced",
+        86400,
+        f"Successfully blocked IP {ip_address} for one day",
+    )
 
-        url = "https://api.cloudflare.com/client/v4/user/firewall/access_rules/rules"
-        headers = {
-            "X-Auth-Email": AUTH_EMAIL,
-            "X-Auth-Key": AUTH_KEY,
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "mode": "block",
-            "configuration": {"target": "ip", "value": ip_address},
-            "notes": "Day block enforced",
-        }
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=headers, json=payload, timeout=20)
-
-            if response.status_code in [200, 201]:
-                await update_cf_trans(response.content)
-                return CloudflareResponse(
-                    status="success",
-                    message=f"Successfully blocked IP {ip_address} for one day",
-                    details=response.json(),
-                )
-
-            raise HTTPException(
-                status_code=response.status_code,
-                detail={
-                    "status": "error",
-                    "message": f"Failed to block IP: {response.text}",
-                },
-            )
-
-    except httpx.HTTPError as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"status": "error", "message": f"HTTP error blocking IP: {str(e)}"},
-        ) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail={"status": "error", "message": f"Error blocking IP: {str(e)}"},
-        ) from e
+async def challenge_day(ip_address: str) -> CloudflareResponse:
+    """Apply a one-day managed challenge to an IP using the Cloudflare API."""
+    return await _create_access_rule(
+        ip_address,
+        "managed_challenge",
+        "Day challenge enforced (rate-limit escalation)",
+        86400,
+        f"Successfully challenged IP {ip_address} for one day",
+    )
 
 
 async def unblock() -> CloudflareResponse:
@@ -241,7 +223,8 @@ async def unblock() -> CloudflareResponse:
                 parsed_created = dp.parse(created)
                 created_time_in_seconds = parsed_created.strftime("%s")
 
-                if time.time() - float(created_time_in_seconds) > 3600:
+                block_seconds = entity.get("block_seconds") or 3600
+                if time.time() - float(created_time_in_seconds) > block_seconds:
                     url = base_url + firewall_rule_id
                     response = await client.delete(url, headers=headers, timeout=20)
 

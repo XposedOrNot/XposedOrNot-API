@@ -1,3 +1,5 @@
+import asyncio
+import ipaddress
 import logging
 import time
 import redis.asyncio as redis
@@ -5,10 +7,15 @@ import random
 from functools import wraps
 from typing import Callable, Dict, List, Tuple, Optional
 from fastapi import Request, HTTPException
-from starlette.status import HTTP_429_TOO_MANY_REQUESTS
+from starlette.status import HTTP_403_FORBIDDEN, HTTP_429_TOO_MANY_REQUESTS
 from datetime import datetime, timedelta
 
-from config.settings import BOT_ENFORCEMENT_ENABLED, REDIS_URL
+from config.settings import (
+    BOT_ENFORCEMENT_ENABLED,
+    CF_BLOCK_DAY_THRESHOLD,
+    CF_BLOCK_ENFORCEMENT_ENABLED,
+    REDIS_URL,
+)
 from utils.bot_detection import (
     BOT_FLAG_THRESHOLD,
     classify_request,
@@ -66,8 +73,6 @@ async def get_healthy_redis_connection():
                     return redis_pool
                 except Exception as reconnect_error:
                     if attempt < max_retries - 1:
-                        import asyncio
-
                         try:
                             await asyncio.sleep(retry_delay)
                         except asyncio.CancelledError:
@@ -124,10 +129,10 @@ def parse_rate_limit(rate_limit_str: str) -> List[Tuple[int, int]]:
 
 async def is_rate_limited(
     key: str, rate_limits: List[Tuple[int, int]], redis_conn: redis.Redis = None
-) -> Tuple[bool, int]:
+) -> Tuple[bool, int, int]:
     """
     Checks if a given key has exceeded any of the specified rate limits using Redis.
-    Returns a tuple of (is_limited, retry_after_seconds).
+    Returns a tuple of (is_limited, retry_after_seconds, limited_period_seconds).
     """
     if redis_conn is None:
         redis_conn = await get_healthy_redis_connection()
@@ -161,14 +166,14 @@ async def is_rate_limited(
                 if oldest_in_window_list:
                     oldest_ts = oldest_in_window_list[0][1]
                     retry_after = int(period - (now - oldest_ts))
-                    return True, max(1, retry_after)
+                    return True, max(1, retry_after), period
 
-                return True, period
+                return True, period, period
 
-        return False, 0
+        return False, 0, 0
     except Exception as e:
         _log_redis_failure("is_rate_limited", e)
-        return False, 0
+        return False, 0, 0
 
 
 async def get_violation_count(client_ip: str, redis_conn: redis.Redis = None) -> int:
@@ -223,6 +228,86 @@ def get_drop_percentage(violation_count: int) -> float:
 
 _BOT_FP_LIMITS = parse_rate_limit("5 per minute;100 per day")
 
+CF_ESCALATION_ENDPOINTS = {"/v1/check-email/{email}", "/v1/breach-analytics"}
+_CF_DAY_PERIOD_SECONDS = 86400
+_CF_OVERAGE_TTL_SECONDS = 86400
+_CF_OFFENSE_WINDOW_SECONDS = 7 * 86400
+_cf_block_tasks: set = set()
+
+
+async def _apply_cf_rule(client_ip: str, repeat_offender: bool) -> None:
+    """Apply the Cloudflare edge rule for an escalated IP."""
+    try:
+        from services.cloudflare import block_day, challenge_day
+
+        if repeat_offender:
+            await block_day(client_ip)
+        else:
+            await challenge_day(client_ip)
+    except Exception as e:
+        logger.error("cf-escalation rule creation failed for %s: %s", client_ip, e)
+
+
+async def escalate_day_limit_abuse(
+    client_ip: str, endpoint: str, redis_conn: redis.Redis
+) -> bool:
+    """
+    Escalate persistent day-limit abusers to a Cloudflare edge rule.
+
+    Applies once an IP keeps sending requests past the day cap: the first
+    offense gets a 24h managed challenge, a repeat offense within 7 days a
+    24h block, both released by the unblock cron. Returns True when the
+    caller should respond 403 instead of 429.
+    """
+    try:
+        ipaddress.ip_address(client_ip)
+    except ValueError:
+        return False
+
+    try:
+        overage_key = f"cf-overage:{endpoint}:{client_ip}"
+        overage = await redis_conn.incr(overage_key)
+        if overage == 1:
+            await redis_conn.expire(overage_key, _CF_OVERAGE_TTL_SECONDS)
+        if overage < CF_BLOCK_DAY_THRESHOLD:
+            return False
+
+        newly_escalated = await redis_conn.set(
+            f"cf-escalated:{client_ip}", "1", nx=True, ex=_CF_OVERAGE_TTL_SECONDS
+        )
+        if not newly_escalated:
+            return CF_BLOCK_ENFORCEMENT_ENABLED
+
+        offense_key = f"cf-offense:{client_ip}"
+        repeat_offender = bool(await redis_conn.get(offense_key))
+        action = "block" if repeat_offender else "challenge"
+
+        if not CF_BLOCK_ENFORCEMENT_ENABLED:
+            logger.warning(
+                "cf-escalation SHADOW: would %s ip=%s endpoint=%s overage=%s",
+                action,
+                client_ip,
+                endpoint,
+                overage,
+            )
+            return False
+
+        logger.warning(
+            "cf-escalation ENFORCED: %s ip=%s endpoint=%s overage=%s",
+            action,
+            client_ip,
+            endpoint,
+            overage,
+        )
+        await redis_conn.set(offense_key, "1", ex=_CF_OFFENSE_WINDOW_SECONDS)
+        task = asyncio.create_task(_apply_cf_rule(client_ip, repeat_offender))
+        _cf_block_tasks.add(task)
+        task.add_done_callback(_cf_block_tasks.discard)
+        return True
+    except Exception as e:
+        _log_redis_failure("escalate_day_limit_abuse", e)
+        return False
+
 
 def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
     """
@@ -261,14 +346,14 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
             bot = classify_request(request.headers)
             if bot["score"] >= BOT_FLAG_THRESHOLD:
                 fingerprint = request_fingerprint(request.headers)
-                bot_limited, bot_retry = (
+                bot_limited, bot_retry, _ = (
                     await is_rate_limited(
                         f"botnet-fp:{endpoint}:{fingerprint}",
                         _BOT_FP_LIMITS,
                         redis_conn,
                     )
                     if BOT_ENFORCEMENT_ENABLED
-                    else (False, 0)
+                    else (False, 0, 0)
                 )
                 logger.info(
                     "bot-classify: verdict=%s endpoint=%s score=%s fp=%s "
@@ -325,9 +410,30 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                     },
                 )
 
-            limited, retry_after = await is_rate_limited(key, rate_limits, redis_conn)
+            limited, retry_after, limited_period = await is_rate_limited(
+                key, rate_limits, redis_conn
+            )
             if limited:
                 await increment_violation(client_ip, redis_conn)
+
+                if (
+                    limited_period == _CF_DAY_PERIOD_SECONDS
+                    and endpoint in CF_ESCALATION_ENDPOINTS
+                ):
+                    escalated = await escalate_day_limit_abuse(
+                        client_ip, endpoint, redis_conn
+                    )
+                    if escalated:
+                        raise HTTPException(
+                            status_code=HTTP_403_FORBIDDEN,
+                            detail={
+                                "error": "Access blocked",
+                                "detail": (
+                                    "Daily rate limit repeatedly exceeded. "
+                                    "Access is blocked for 24 hours."
+                                ),
+                            },
+                        )
 
                 reset_time = datetime.now() + timedelta(seconds=retry_after)
 

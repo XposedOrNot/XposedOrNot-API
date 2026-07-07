@@ -193,7 +193,10 @@ async def _mcp_envelope_limited(request: Request):
         client_ip = get_client_ip(request)
         redis_conn = await get_healthy_redis_connection()
         key = f"rate-limit:/mcp-envelope:{client_ip}"
-        return await is_rate_limited(key, _MCP_ENVELOPE_LIMIT, redis_conn)
+        limited, retry_after, _ = await is_rate_limited(
+            key, _MCP_ENVELOPE_LIMIT, redis_conn
+        )
+        return limited, retry_after
     except Exception:  # pylint: disable=broad-except
         # Never let limiter infrastructure errors break the envelope
         return False, 0

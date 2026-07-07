@@ -119,7 +119,7 @@ async def subscribe_to_alert_me(
                 datastore_client.put(alert_task_data)
 
         redis_conn = await get_healthy_redis_connection()
-        recipient_limited, _ = await is_rate_limited(
+        recipient_limited, _, _ = await is_rate_limited(
             f"alert-confirm:{user_email}", CONFIRMATION_EMAIL_LIMIT, redis_conn
         )
         if recipient_limited:
