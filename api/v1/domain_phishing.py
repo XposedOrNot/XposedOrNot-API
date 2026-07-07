@@ -8,7 +8,6 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-import dnstwist
 from fastapi import APIRouter, HTTPException, Query, Request
 from config.clients import ds_client, redis_client
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -96,6 +95,8 @@ class DomainPhishingResponse(BaseResponse):
 
 def run_dnstwist_sync(domain: str, options: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Run dnstwist synchronously (for use in thread pool)."""
+    import dnstwist
+
     return dnstwist.run(domain=domain, **options)
 
 

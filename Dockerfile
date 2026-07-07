@@ -11,14 +11,6 @@ WORKDIR ${APP_HOME}
 # Create a non-root user
 RUN adduser --system --group app
 
-# Install system dependencies for ssdeep and tlsh
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    libfuzzy-dev \
-    ssdeep \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
 # Copy only essential files first to leverage Docker's caching
 COPY requirements.txt ./
 COPY .github/requirements-pip.txt ./.github/requirements-pip.txt
@@ -39,5 +31,4 @@ USER app
 # Expose the port for Cloud Run
 EXPOSE ${PORT}
 
-# Use environment variable for port and dynamic worker allocation
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers $(nproc) --limit-concurrency 60 --timeout-keep-alive 120 --log-level info
+CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT} --workers ${WEB_CONCURRENCY:-$(nproc)} --limit-concurrency 100 --timeout-keep-alive 120 --log-level info

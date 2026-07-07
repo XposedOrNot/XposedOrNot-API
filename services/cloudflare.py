@@ -9,7 +9,6 @@ import time
 import os
 import hashlib
 from typing import Optional, Dict, Any
-import requests
 import httpx
 import dateutil.parser as dp
 from google.cloud import datastore
