@@ -4,20 +4,22 @@
 """XposedOrNot Mailer Sub-module API module using Mailjet"""
 
 # Standard library imports
+import asyncio
+import json
 import logging
 import os
 import time
 import socket
-import datetime
 from typing import Dict, Any, Optional, List
 
 # Third-party imports
 import httpx
 from fastapi import HTTPException
-from google.cloud import datastore
 
 # Local imports
 from utils.redaction import sanitize_log_text
+
+logger = logging.getLogger(__name__)
 
 # Mailjet configuration
 MAILJET_API_KEY = os.environ.get("MAILJET_API_KEY")
@@ -258,112 +260,57 @@ async def send_dashboard_email_confirmation(
         ) from e
 
 
-# Module-level rate limiting state
+# Module-level rate limiting state for the admin email alert
 _error_count = 0
 _last_error_time = 0.0
 _RATE_LIMIT = 5
 _ERROR_WINDOW = 60
 
+# Fire-and-forget admin alert tasks (kept referenced so they are not GC'd)
+_exception_alert_tasks: "set[asyncio.Task]" = set()
 
-async def log_exception_to_db(
+
+def log_exception(
     api_route: str,
     error_message: str,
     exception_type: Optional[str] = None,
     user_agent: Optional[str] = None,
     request_params: Optional[str] = None,
-) -> bool:
+) -> None:
     """
-    Logs exception details to the xon_except table in Datastore.
+    Emit a structured error log for the exception.
 
-    Args:
-        api_route: The API route where the exception occurred
-        error_message: The exception error message
-        exception_type: The type of exception (e.g., "ValueError", "HTTPException")
-        user_agent: The User-Agent header from the request
-        request_params: Additional request parameters as a string
-
-    Returns:
-        True if logged successfully, False otherwise
+    Cloud Logging ingests stdout, so this record feeds log-based metrics and
+    Cloud Monitoring alert policies. PII/secrets are scrubbed before logging.
     """
     try:
-        client = datastore.Client()
-
-        # Create unique key using api_route and timestamp
-        timestamp = time.time()
-        entity_key = f"{api_route}-{timestamp}"
-
-        # Create entity
-        exception_entity = datastore.Entity(
-            client.key("xon_except", entity_key),
-            exclude_from_indexes=["error", "user_agent", "request_params"],
+        logger.error(
+            "api_exception %s",
+            json.dumps(
+                {
+                    "api_route": api_route,
+                    "exception_type": exception_type or "Exception",
+                    "error": sanitize_log_text(error_message)
+                    or "No error message provided",
+                    "user_agent": user_agent or "Unknown",
+                    "request_params": sanitize_log_text(request_params) or "None",
+                },
+                default=str,
+            ),
         )
-
-        # Store exception details (scrub PII/secrets before persisting)
-        exception_entity.update(
-            {
-                "api": api_route,
-                "error": sanitize_log_text(error_message),
-                "exception_type": exception_type or "Exception",
-                "user_agent": user_agent or "Unknown",
-                "request_params": sanitize_log_text(request_params) or "None",
-                "timestamp": datetime.datetime.utcnow(),
-            }
-        )
-
-        # Save to datastore
-        client.put(exception_entity)
-        return True
-
     except Exception:
-        # Silently fail if logging fails - don't want to cause cascading errors
-        return False
+        pass
 
 
-async def send_exception_email(
+async def _send_exception_alert_email(
     api_route: str,
-    error_message: Optional[str] = None,
-    exception_type: Optional[str] = None,
-    user_agent: Optional[str] = None,
-    request_params: Optional[str] = None,
-) -> Optional[Dict[str, Any]]:
-    """
-    Sends Exception email to admin with detailed error information and logs to database.
-
-    Args:
-        api_route: The API route where the exception occurred (e.g., "GET /v1/check-email/{email}")
-        error_message: The exception error message (optional)
-        exception_type: The type of exception (e.g., "ValueError", "HTTPException") (optional)
-        user_agent: The User-Agent header from the request (optional)
-        request_params: Additional request parameters as a string (optional)
-
-    Returns:
-        Response JSON if successful, None otherwise
-    """
-    global _error_count, _last_error_time
-
-    # Log exception to database (non-blocking)
-    await log_exception_to_db(
-        api_route=api_route,
-        error_message=error_message or "No error message provided",
-        exception_type=exception_type,
-        user_agent=user_agent,
-        request_params=request_params,
-    )
-
-    current_time = time.time()
-
-    # Reset counter if outside the error window
-    if current_time - _last_error_time > _ERROR_WINDOW:
-        _error_count = 0
-
-    # Check rate limit
-    if _error_count >= _RATE_LIMIT:
-        return None
-
-    # Increment counter and update timestamp
-    _error_count += 1
-    _last_error_time = current_time
-
+    error_message: Optional[str],
+    exception_type: Optional[str],
+    user_agent: Optional[str],
+    request_params: Optional[str],
+) -> None:
+    """Send the admin exception alert email (best-effort, off the request path)."""
+    # TODO: migrate this admin alert from Mailjet email to a Slack webhook.
     try:
         data = {
             "Messages": [
@@ -388,12 +335,62 @@ async def send_exception_email(
             ]
         }
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            await client.post(
                 MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
             )
-            return response.json() if response.status_code == 200 else None
     except Exception:
-        return None
+        pass
+
+
+async def send_exception_email(
+    api_route: str,
+    error_message: Optional[str] = None,
+    exception_type: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    request_params: Optional[str] = None,
+) -> None:
+    """
+    Record an API exception via structured logging and a rate-limited admin alert.
+
+    The structured log is emitted synchronously (cheap, non-blocking) for Cloud
+    Logging; the admin email alert is rate-limited and dispatched as a
+    background task so it never holds up the request's error response.
+
+    Args:
+        api_route: The API route where the exception occurred (e.g., "GET /v1/check-email/{email}")
+        error_message: The exception error message (optional)
+        exception_type: The type of exception (e.g., "ValueError", "HTTPException") (optional)
+        user_agent: The User-Agent header from the request (optional)
+        request_params: Additional request parameters as a string (optional)
+    """
+    global _error_count, _last_error_time
+
+    log_exception(
+        api_route=api_route,
+        error_message=error_message or "No error message provided",
+        exception_type=exception_type,
+        user_agent=user_agent,
+        request_params=request_params,
+    )
+
+    current_time = time.time()
+
+    if current_time - _last_error_time > _ERROR_WINDOW:
+        _error_count = 0
+
+    if _error_count >= _RATE_LIMIT:
+        return
+
+    _error_count += 1
+    _last_error_time = current_time
+
+    task = asyncio.create_task(
+        _send_exception_alert_email(
+            api_route, error_message, exception_type, user_agent, request_params
+        )
+    )
+    _exception_alert_tasks.add(task)
+    task.add_done_callback(_exception_alert_tasks.discard)
 
 
 async def send_domain_confirmation(
