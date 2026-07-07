@@ -74,6 +74,15 @@ When a limit is exceeded the API returns `429 Too Many Requests` with a `Retry-A
 header (seconds) and a JSON body carrying `retry_after` and `reset_time`, so clients
 can back off precisely.
 
+### Commercial use & higher rate limits
+
+The free API above is for personal and low-volume use, and it stays free. If
+you're building a product on breach data or need more throughput,
+[xonAPI+](https://plus.xposedornot.com/products/api) offers paid plans from
+$5/month with rate limits up to 25,000 requests/minute, API-key access, and
+commercial support. It's the same breach data, and it's what keeps the free
+tier free.
+
 For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
 
 ## API Endpoints
