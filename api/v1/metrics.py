@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from typing import Dict, Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
 from redis import Redis
 
 from config.settings import REDIS_DB, REDIS_HOST, REDIS_PORT
@@ -184,53 +183,6 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
             request_params="None",
-        )
-        raise HTTPException(
-            status_code=500, detail="An error occurred during processing"
-        ) from e
-
-
-@router.get("/metrics/domain/{domain}", include_in_schema=False)
-@custom_rate_limiter("5 per minute;50 per hour;100 per day")
-async def get_domain_metrics(request: Request, domain: str) -> JSONResponse:
-    """Returns metrics for a specific domain."""
-    try:
-        if not validate_url(request):
-            raise HTTPException(status_code=400, detail="Invalid request URL")
-
-        # Check cache first
-        cache_key = f"metrics:domain:{domain.lower()}"
-        cached_result = get_cached_metrics(cache_key)
-        if cached_result:
-            return JSONResponse(content=cached_result)
-
-        # Cache miss - build response
-        domain_metrics = {
-            "status": "success",
-            "message": "Domain metrics retrieved successfully",
-            "data": {
-                "domain": domain,
-                "metrics": {
-                    "total_breaches": 0,
-                    "total_records": 0,
-                    "last_breach": None,
-                    "risk_score": 0,
-                    "industry_breaches_count": {},
-                },
-            },
-        }
-
-        cache_metrics(cache_key, domain_metrics)
-
-        return JSONResponse(content=domain_metrics)
-
-    except Exception as e:
-        await send_exception_email(
-            api_route=f"GET /v1/metrics/domain/{domain}",
-            error_message=str(e),
-            exception_type=type(e).__name__,
-            user_agent=request.headers.get("User-Agent"),
-            request_params=f"domain={domain}",
         )
         raise HTTPException(
             status_code=500, detail="An error occurred during processing"
