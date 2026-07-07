@@ -229,7 +229,6 @@ def get_drop_percentage(violation_count: int) -> float:
 _BOT_FP_LIMITS = parse_rate_limit("5 per minute;100 per day")
 
 CF_ESCALATION_ENDPOINTS = {"/v1/check-email/{email}", "/v1/breach-analytics"}
-_CF_DAY_PERIOD_SECONDS = 86400
 _CF_OVERAGE_TTL_SECONDS = 86400
 _CF_OFFENSE_WINDOW_SECONDS = 7 * 86400
 _cf_block_tasks: set = set()
@@ -252,12 +251,13 @@ async def escalate_day_limit_abuse(
     client_ip: str, endpoint: str, redis_conn: redis.Redis
 ) -> bool:
     """
-    Escalate persistent day-limit abusers to a Cloudflare edge rule.
+    Escalate persistent rate-limit abusers to a Cloudflare edge rule.
 
-    Applies once an IP keeps sending requests past the day cap: the first
+    Counts rate-limited (429) requests per IP per endpoint over 24 hours;
+    once an IP crosses CF_BLOCK_DAY_THRESHOLD it is escalated. The first
     offense gets a 24h managed challenge, a repeat offense within 7 days a
-    24h block, both released by the unblock cron. Returns True when the
-    caller should respond 403 instead of 429.
+    24h block, both released by the scheduled unblock job. Returns True when
+    the caller should respond 403 instead of 429.
     """
     try:
         ipaddress.ip_address(client_ip)
@@ -265,6 +265,9 @@ async def escalate_day_limit_abuse(
         return False
 
     try:
+        if await redis_conn.get(f"cf-escalated:{client_ip}"):
+            return CF_BLOCK_ENFORCEMENT_ENABLED
+
         overage_key = f"cf-overage:{endpoint}:{client_ip}"
         overage = await redis_conn.incr(overage_key)
         if overage == 1:
@@ -410,16 +413,13 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                     },
                 )
 
-            limited, retry_after, limited_period = await is_rate_limited(
+            limited, retry_after, _ = await is_rate_limited(
                 key, rate_limits, redis_conn
             )
             if limited:
                 await increment_violation(client_ip, redis_conn)
 
-                if (
-                    limited_period == _CF_DAY_PERIOD_SECONDS
-                    and endpoint in CF_ESCALATION_ENDPOINTS
-                ):
+                if endpoint in CF_ESCALATION_ENDPOINTS:
                     escalated = await escalate_day_limit_abuse(
                         client_ip, endpoint, redis_conn
                     )
@@ -429,7 +429,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                             detail={
                                 "error": "Access blocked",
                                 "detail": (
-                                    "Daily rate limit repeatedly exceeded. "
+                                    "Rate limit repeatedly exceeded. "
                                     "Access is blocked for 24 hours."
                                 ),
                             },

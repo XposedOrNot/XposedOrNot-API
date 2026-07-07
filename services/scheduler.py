@@ -118,6 +118,50 @@ class SchedulerService:
                 f"🔔 REMINDER_WRAPPER: ❌ Error running alert reminders: {str(e)}"
             )
 
+    def schedule_cf_unblock(self):
+        """Schedule hourly release of expired Cloudflare IP blocks."""
+        schedule.every().hour.do(self._run_cf_unblock_trigger)
+        logger.info("📅 SCHEDULER: Cloudflare unblock sweep scheduled hourly")
+
+    def _run_cf_unblock_trigger(self):
+        """Sync wrapper to run the async Cloudflare unblock sweep."""
+        try:
+            asyncio.run(self._trigger_cf_unblock())
+        except Exception as e:
+            logger.error(
+                f"🌐 CF_UNBLOCK_WRAPPER: ❌ Error running unblock sweep: {str(e)}"
+            )
+
+    async def _trigger_cf_unblock(self):
+        """Release expired Cloudflare IP blocks at most once per hour."""
+        now = datetime.now(timezone.utc)
+        claim_key = f"{ENVIRONMENT}_cf_unblock_ran_{now.strftime('%Y-%m-%d-%H')}"
+
+        if redis_client:
+            try:
+                instance_id = f"{socket.gethostname()}_{os.getpid()}"
+                claimed = redis_client.set(claim_key, instance_id, nx=True, ex=7200)
+                if not claimed:
+                    logger.info(
+                        "🌐 CF_UNBLOCK_TRIGGER: ❌ Already claimed this hour by another "
+                        "instance, skipping"
+                    )
+                    return
+            except Exception as e:
+                logger.error(
+                    f"🌐 CF_UNBLOCK_TRIGGER: ⚠️ Redis claim failed: {str(e)}, "
+                    f"aborting to avoid duplicate Cloudflare calls"
+                )
+                return
+
+        try:
+            from services.cloudflare import unblock
+
+            result = await unblock()
+            logger.info(f"🌐 CF_UNBLOCK_TRIGGER: ✅ Completed - {result}")
+        except Exception as e:
+            logger.error(f"🌐 CF_UNBLOCK_TRIGGER: ❌ Sweep failed: {str(e)}")
+
     async def _trigger_alert_reminders(self):
         """Run the alert confirmation reminder job at most once per day."""
         now = datetime.now(timezone.utc)
@@ -581,6 +625,7 @@ class SchedulerService:
         self.is_running = True
         self.schedule_monthly_digest()
         self.schedule_alert_reminders()
+        self.schedule_cf_unblock()
 
         self.scheduler_thread = threading.Thread(
             target=self._run_scheduler, daemon=True
