@@ -2,15 +2,29 @@
 
 # Standard library imports
 import asyncio
+import hashlib
 from typing import Optional
 
 # Third-party imports
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 # Local imports
 from services.globe import process_request_for_globe
 from utils.request import get_client_ip
+
+PUBLIC_CACHEABLE_PATHS = frozenset(
+    {
+        "/v1/breaches",
+        "/v1/metrics",
+        "/v1/metrics/detailed",
+        "/v1/analytics/metrics",
+        "/v1/xon-pulse",
+        "/v1/analytics/pulse",
+        "/v1/rss",
+    }
+)
+PUBLIC_CACHE_CONTROL = "public, max-age=3600"
 
 
 def setup_middleware(app: FastAPI) -> None:
@@ -62,8 +76,37 @@ def setup_security_headers(app: FastAPI) -> None:
             "accelerometer=(), camera=(), geolocation=(), "
             "microphone=(), midi=(), payment=(), usb=()"
         )
-        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        cacheable = request.url.path in PUBLIC_CACHEABLE_PATHS and (
+            response.status_code in (200, 304)
+        )
+        if cacheable:
+            response.headers["Cache-Control"] = PUBLIC_CACHE_CONTROL
+        else:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["X-Content-Type-Options"] = "nosniff"
+
+        if cacheable and response.status_code == 200:
+            body = b""
+            async for chunk in response.body_iterator:
+                body += chunk
+            etag = f'"{hashlib.sha256(body).hexdigest()[:32]}"'
+
+            if_none_match = request.headers.get("if-none-match", "")
+            client_etags = {t.strip() for t in if_none_match.split(",") if t.strip()}
+            if etag in client_etags:
+                headers = dict(response.headers)
+                headers.pop("content-length", None)
+                headers.pop("content-type", None)
+                headers["ETag"] = etag
+                return Response(status_code=304, headers=headers)
+
+            full = Response(
+                content=body,
+                status_code=response.status_code,
+                headers=dict(response.headers),
+            )
+            full.headers["ETag"] = etag
+            return full
 
         return response
 

@@ -3,8 +3,9 @@
 # Standard library imports
 import hashlib
 import json
-from datetime import datetime, timedelta
-from typing import Dict, Optional, Union
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime, parsedate_to_datetime
+from typing import Dict, List, Optional, Union
 from urllib.parse import urlparse
 
 # Third-party imports
@@ -83,10 +84,42 @@ def hash_email(email: str) -> str:
     return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 
+def _newest_added_date(breaches: List[Dict]) -> Optional[datetime]:
+    """Return the newest addedDate across breach entries, if any."""
+    latest = None
+    for breach in breaches:
+        added = breach.get("addedDate")
+        if not added:
+            continue
+        try:
+            value = datetime.fromisoformat(added)
+        except (TypeError, ValueError):
+            continue
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        if latest is None or value > latest:
+            latest = value
+    return latest
+
+
+def _not_modified(if_modified_since: Optional[str], latest: Optional[datetime]) -> bool:
+    """True when the client's If-Modified-Since covers the newest breach."""
+    if not if_modified_since or latest is None:
+        return False
+    try:
+        since = parsedate_to_datetime(if_modified_since)
+    except (TypeError, ValueError):
+        return False
+    if since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)
+    return latest.replace(microsecond=0) <= since
+
+
 @router.get("/breaches", response_model=BreachListResponse)
 @custom_rate_limiter("2 per second;50 per hour;100 per day")
 async def get_xposed_breaches(
     request: Request,
+    response: Response,
     domain: Optional[str] = None,
     breach_id: Optional[str] = None,
     if_modified_since: Optional[str] = Header(None),
@@ -114,6 +147,14 @@ async def get_xposed_breaches(
         cache_key = get_breach_cache_key(breach_id, domain)
         cached_result = get_cached_breaches(cache_key)
         if cached_result:
+            latest = _newest_added_date(cached_result.get("exposedBreaches") or [])
+            if _not_modified(if_modified_since, latest):
+                return Response(
+                    status_code=304,
+                    headers={"Last-Modified": format_datetime(latest, usegmt=True)},
+                )
+            if latest is not None:
+                response.headers["Last-Modified"] = format_datetime(latest, usegmt=True)
             return BreachListResponse(**cached_result)
 
         # Cache miss - query Datastore
@@ -188,6 +229,15 @@ async def get_xposed_breaches(
             "exposedBreaches": [breach.model_dump() for breach in breach_details],
         }
         cache_breaches(cache_key, response_data)
+
+        latest = _newest_added_date(response_data["exposedBreaches"])
+        if _not_modified(if_modified_since, latest):
+            return Response(
+                status_code=304,
+                headers={"Last-Modified": format_datetime(latest, usegmt=True)},
+            )
+        if latest is not None:
+            response.headers["Last-Modified"] = format_datetime(latest, usegmt=True)
 
         return BreachListResponse(status="success", exposedBreaches=breach_details)
 
