@@ -44,47 +44,20 @@ redis_pool = redis.from_url(
 
 async def get_healthy_redis_connection():
     """
-    Get a healthy Redis connection with automatic reconnection.
+    Return the shared async Redis pool.
+
+    Connection liveness is handled by the client itself: TCP keepalives,
+    health_check_interval pings on idle connections, and retry_on_error
+    reconnection for commands that hit a dead socket.
     """
-    global redis_pool
-    max_retries = 3
-    retry_delay = 0.1
-
-    for attempt in range(max_retries):
-        try:
-            await redis_pool.ping()
-            return redis_pool
-        except Exception as e:
-            if attempt < max_retries - 1:
-                try:
-                    await redis_pool.close()
-                    redis_pool = redis.from_url(
-                        REDIS_URL,
-                        encoding="utf-8",
-                        decode_responses=True,
-                        socket_keepalive=True,
-                        socket_keepalive_options={},
-                        retry_on_timeout=True,
-                        health_check_interval=30,
-                        max_connections=20,
-                        retry_on_error=[redis.ConnectionError, redis.TimeoutError],
-                    )
-                    await redis_pool.ping()
-                    return redis_pool
-                except Exception as reconnect_error:
-                    if attempt < max_retries - 1:
-                        try:
-                            await asyncio.sleep(retry_delay)
-                        except asyncio.CancelledError:
-                            break
-                        retry_delay *= 2
-                    continue
-
     return redis_pool
 
 
+_redis_alert_tasks: set = set()
+
+
 def _log_redis_failure(context: str, error: Exception):
-    """Log Redis failures with dedup to avoid log spam."""
+    """Log Redis failures with dedup and alert the admin via email."""
     global _last_redis_alert_time
     now = time.time()
     if now - _last_redis_alert_time > _REDIS_ALERT_INTERVAL:
@@ -92,6 +65,22 @@ def _log_redis_failure(context: str, error: Exception):
         logger.error(
             "Redis failure in %s: %s — rate limiting bypassed", context, str(error)
         )
+        try:
+            from services.send_email import send_exception_email
+
+            task = asyncio.get_running_loop().create_task(
+                send_exception_email(
+                    api_route=f"redis-failure:{context}",
+                    error_message=str(error),
+                    exception_type=type(error).__name__,
+                    user_agent="internal",
+                    request_params="rate limiting bypassed (fail-open)",
+                )
+            )
+            _redis_alert_tasks.add(task)
+            task.add_done_callback(_redis_alert_tasks.discard)
+        except Exception:
+            pass
 
 
 def parse_rate_limit(rate_limit_str: str) -> List[Tuple[int, int]]:
@@ -206,8 +195,10 @@ async def increment_violation(client_ip: str, redis_conn: redis.Redis = None):
     now = time.time()
 
     try:
-        await redis_conn.zadd(violation_key, {str(now): now})
-        await redis_conn.expire(violation_key, 7200)
+        async with redis_conn.pipeline(transaction=True) as pipe:
+            pipe.zadd(violation_key, {str(now): now})
+            pipe.expire(violation_key, 7200)
+            await pipe.execute()
     except Exception as e:
         _log_redis_failure("increment_violation", e)
 
@@ -224,6 +215,37 @@ def get_drop_percentage(violation_count: int) -> float:
         return 0.8
     else:
         return 0.95
+
+
+async def _oldest_retry_after(
+    redis_conn: redis.Redis, key: str, count: int, period: int, now: float
+) -> Optional[int]:
+    """Compute retry-after from the oldest request in the limited window.
+
+    Returns period when the window is unexpectedly empty, and None on a
+    Redis error so the caller fails open exactly like is_rate_limited.
+    """
+    try:
+        oldest_in_window_list = await redis_conn.zrange(
+            key, -count, -count, withscores=True
+        )
+    except Exception as e:
+        _log_redis_failure("_oldest_retry_after", e)
+        return None
+    if oldest_in_window_list:
+        oldest_ts = oldest_in_window_list[0][1]
+        return max(1, int(period - (now - oldest_ts)))
+    return period
+
+
+async def _discard_window_member(
+    redis_conn: redis.Redis, key: str, member: str
+) -> None:
+    """Remove the speculatively added window entry when a request is rejected early."""
+    try:
+        await redis_conn.zrem(key, member)
+    except Exception as e:
+        _log_redis_failure("_discard_window_member", e)
 
 
 _BOT_FP_LIMITS = parse_rate_limit("5 per minute;100 per day")
@@ -347,17 +369,59 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
             redis_conn = await get_healthy_redis_connection()
 
             bot = classify_request(request.headers)
-            if bot["score"] >= BOT_FLAG_THRESHOLD:
+            bot_flagged = bot["score"] >= BOT_FLAG_THRESHOLD
+            bot_included = bot_flagged and BOT_ENFORCEMENT_ENABLED
+            bot_key = None
+            if bot_flagged:
                 fingerprint = request_fingerprint(request.headers)
-                bot_limited, bot_retry, _ = (
-                    await is_rate_limited(
-                        f"botnet-fp:{endpoint}:{fingerprint}",
-                        _BOT_FP_LIMITS,
-                        redis_conn,
-                    )
-                    if BOT_ENFORCEMENT_ENABLED
-                    else (False, 0, 0)
-                )
+                bot_key = f"botnet-fp:{endpoint}:{fingerprint}"
+
+            now = time.time()
+            member = str(now)
+            violation_key = f"violations:{client_ip}"
+            max_period = (
+                max(limit[1] for limit in rate_limits) if rate_limits else 86400
+            )
+
+            violation_count = 0
+            request_counts = []
+            bot_counts = []
+            try:
+                async with redis_conn.pipeline(transaction=True) as pipe:
+                    if bot_included:
+                        bot_max = max(limit[1] for limit in _BOT_FP_LIMITS)
+                        pipe.zadd(bot_key, {member: now})
+                        pipe.zremrangebyscore(bot_key, 0, now - bot_max)
+                        for _, period in _BOT_FP_LIMITS:
+                            pipe.zcount(bot_key, now - period, now)
+                        pipe.expire(bot_key, int(bot_max))
+                    pipe.zremrangebyscore(violation_key, 0, now - 3600)
+                    pipe.zcard(violation_key)
+                    pipe.zadd(key, {member: now})
+                    pipe.zremrangebyscore(key, 0, now - max_period)
+                    for _, period in rate_limits:
+                        pipe.zcount(key, now - period, now)
+                    pipe.expire(key, int(max_period))
+                    results = await pipe.execute()
+
+                base = (3 + len(_BOT_FP_LIMITS)) if bot_included else 0
+                if bot_included:
+                    bot_counts = list(results[2 : 2 + len(_BOT_FP_LIMITS)])
+                violation_count = results[base + 1]
+                request_counts = list(results[base + 4 : base + 4 + len(rate_limits)])
+            except Exception as e:
+                _log_redis_failure("custom_rate_limiter", e)
+
+            if bot_flagged:
+                bot_limited, bot_retry = False, 0
+                for i, (limit, period) in enumerate(_BOT_FP_LIMITS):
+                    if bot_counts and bot_counts[i] > limit:
+                        retry = await _oldest_retry_after(
+                            redis_conn, bot_key, bot_counts[i], period, now
+                        )
+                        if retry is not None:
+                            bot_limited, bot_retry = True, retry
+                        break
                 logger.info(
                     "bot-classify: verdict=%s endpoint=%s score=%s fp=%s "
                     "reasons=%s ip=%s ua=%s",
@@ -376,6 +440,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                     request.headers.get("User-Agent"),
                 )
                 if bot_limited:
+                    await _discard_window_member(redis_conn, key, member)
                     raise HTTPException(
                         status_code=HTTP_429_TOO_MANY_REQUESTS,
                         detail={
@@ -390,10 +455,10 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         headers={"Retry-After": str(bot_retry)},
                     )
 
-            violation_count = await get_violation_count(client_ip, redis_conn)
             drop_percentage = get_drop_percentage(violation_count)
 
             if random.random() < drop_percentage:
+                await _discard_window_member(redis_conn, key, member)
 
                 raise HTTPException(
                     status_code=HTTP_429_TOO_MANY_REQUESTS,
@@ -413,9 +478,15 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                     },
                 )
 
-            limited, retry_after, _ = await is_rate_limited(
-                key, rate_limits, redis_conn
-            )
+            limited, retry_after = False, 0
+            for i, (limit, period) in enumerate(rate_limits):
+                if request_counts and request_counts[i] > limit:
+                    retry = await _oldest_retry_after(
+                        redis_conn, key, request_counts[i], period, now
+                    )
+                    if retry is not None:
+                        limited, retry_after = True, retry
+                    break
             if limited:
                 await increment_violation(client_ip, redis_conn)
 
