@@ -52,6 +52,8 @@ data_categories = {
     "Income levels": {"category": "💳 Financial Details", "group": "B"},
     "Credit card details": {"category": "💳 Financial Details", "group": "B"},
     "Bank Account Numbers": {"category": "💳 Financial Details", "group": "B"},
+    "Financial Transactions": {"category": "💳 Financial Details", "group": "B"},
+    "Purchases": {"category": "💳 Financial Details", "group": "B"},
     "Apps Installed on Devices": {
         "category": "🍔 Personal Habits and Lifestyle",
         "group": "C",
@@ -124,6 +126,14 @@ data_categories = {
         "group": "F",
     },
     "Private Messages": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "Support Tickets": {
+        "category": "📞 Communication and Social Interactions",
+        "group": "F",
+    },
+    "AI Prompts": {
         "category": "📞 Communication and Social Interactions",
         "group": "F",
     },
@@ -200,6 +210,10 @@ data_categories = {
     "Social security numbers": {"category": "👤 Personal Identification", "group": "A"},
     "Government IDs": {"category": "👤 Personal Identification", "group": "A"},
     "Government issued IDs": {"category": "👤 Personal Identification", "group": "A"},
+    "Partial Government Issued IDs": {
+        "category": "👤 Personal Identification",
+        "group": "A",
+    },
     "Passport numbers": {"category": "👤 Personal Identification", "group": "A"},
     "Mothers maiden names": {"category": "🔒 Security Practices", "group": "D"},
     "Account balances": {"category": "💳 Financial Details", "group": "B"},
@@ -249,6 +263,28 @@ DATA_TYPE_ALIASES = {
     "Drink habits": "Drinking Habits",
     "Passwords history": "Historical Passwords",
     "Sexual preferences": "Sexual Orientations",
+    "Private messages": "Private Messages",
+    "Website activity": "Website Activity",
+    "Vehicle details": "Vehicle Details",
+    "Auth tokens": "Auth Tokens",
+    "Historical passwords": "Historical Passwords",
+    "Bank account numbers": "Bank Account Numbers",
+    "Places of birth": "Places of Birth",
+    "Licence plates": "Licence Plates",
+    "Profile photos": "Profile Photos",
+    "Drug habits": "Drug Habits",
+    "Job applications": "Job Applications",
+    "Education levels": "Education Levels",
+    "Vehicle identification numbers": "Vehicle Identification Numbers",
+    "National IDs": "Government issued IDs",
+    "Spouses names": "Spouses details",
+    "Email": "Email addresses",
+    "mail addresses": "Email addresses",
+    "Support tickets": "Support Tickets",
+    "Customer support tickets": "Support Tickets",
+    "Financial transactions": "Financial Transactions",
+    "AI prompts": "AI Prompts",
+    "Partial government issued IDs": "Partial Government Issued IDs",
 }
 
 # Known compound entries that need special splitting
@@ -299,6 +335,8 @@ _HIGH_TYPES = {
     "Email Messages",
     "Chat Logs",
     "GPS Coordinates",
+    "Financial Transactions",
+    "Partial Government Issued IDs",
 }
 
 # MEDIUM: Useful for social engineering
@@ -330,6 +368,9 @@ _MEDIUM_TYPES = {
     "Employment Statuses",
     "Job titles",
     "Password Strengths",
+    "Purchases",
+    "Support Tickets",
+    "AI Prompts",
 }
 
 # Points per tier
