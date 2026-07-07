@@ -23,6 +23,7 @@ from models.responses import (
 )
 from services.analytics import get_breaches_analytics
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
+from services.shield_cache import invalidate_cached_shield
 from services.send_email import (
     send_alert_confirmation,
     send_alert_reminder,
@@ -119,6 +120,7 @@ async def subscribe_to_alert_me(
                     }
                 )
                 datastore_client.put(alert_task_data)
+                invalidate_cached_shield(user_email)
 
         redis_conn = await get_healthy_redis_connection()
         recipient_limited, _, _ = await is_rate_limited(

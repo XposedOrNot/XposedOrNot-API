@@ -40,6 +40,11 @@ from models.responses import (
 )
 from services.analytics import get_detailed_metrics, get_pulse_news
 from services.breach_catalog import get_breach
+from services.shield_cache import (
+    get_cached_shield,
+    invalidate_cached_shield,
+    set_cached_shield,
+)
 from services.send_email import (
     send_dashboard_email_confirmation,
     send_exception_email,
@@ -908,6 +913,7 @@ async def activate_shield(
                     }
                 )
                 datastore_client.put(alert_entity)
+                invalidate_cached_shield(email)
 
             # Get client information
             client_ip = get_client_ip(request)
@@ -1005,6 +1011,8 @@ async def verify_shield(request: Request, token_shield: str) -> HTMLResponse:
                 }
             )
             datastore_client.put(alert_task)
+
+        invalidate_cached_shield(email)
 
         return HTMLResponse(
             content=templates.TemplateResponse(
@@ -1148,13 +1156,16 @@ async def get_analytics(
             return JSONResponse(content={"Error": "Not found"}, status_code=404)
 
         data_store = ds_client
-        xon_key = data_store.key("xon", user_email)
-        xon_record = data_store.get(xon_key)
-        alert_key = data_store.key("xon_alert", user_email)
-        alert_record = data_store.get(alert_key)
 
         # Always check shieldOn first (privacy - can't cache this)
-        if alert_record and alert_record.get("shieldOn"):
+        shield_on = get_cached_shield(user_email)
+        if shield_on is None:
+            alert_key = data_store.key("xon_alert", user_email)
+            alert_record = data_store.get(alert_key)
+            shield_on = bool(alert_record and alert_record.get("shieldOn"))
+            set_cached_shield(user_email, shield_on)
+
+        if shield_on:
             raise ShieldOnException("Shield is on")
 
         # Check cache after shieldOn validation
@@ -1162,6 +1173,9 @@ async def get_analytics(
         cached_result = get_cached_analytics(cache_key)
         if cached_result:
             return BreachHierarchyResponse(**cached_result)
+
+        xon_key = data_store.key("xon", user_email)
+        xon_record = data_store.get(xon_key)
 
         if xon_record:
             site = str(xon_record["site"])

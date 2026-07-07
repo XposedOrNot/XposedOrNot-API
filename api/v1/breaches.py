@@ -29,6 +29,7 @@ from services.analytics import (
 )
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
 from services.breach_catalog import get_breach
+from services.shield_cache import get_cached_shield, set_cached_shield
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import (
@@ -225,12 +226,20 @@ async def search_data_breaches_v2(
     try:
         email = email.lower()
         datastore_client = ds_client
-        alert_key = datastore_client.key("xon_alert", email)
-        alert_record = datastore_client.get(alert_key)
 
         # Privacy: shieldOn blocks unauthenticated access
-        if alert_record and alert_record.get("shieldOn", False) and not token:
-            raise HTTPException(status_code=404, detail="Not found")
+        if token:
+            alert_key = datastore_client.key("xon_alert", email)
+            alert_record = datastore_client.get(alert_key)
+        else:
+            shield_on = get_cached_shield(email)
+            if shield_on is None:
+                alert_key = datastore_client.key("xon_alert", email)
+                alert_record = datastore_client.get(alert_key)
+                shield_on = bool(alert_record and alert_record.get("shieldOn", False))
+                set_cached_shield(email, shield_on)
+            if shield_on:
+                raise HTTPException(status_code=404, detail="Not found")
 
         # Validate token if provided
         if token:
@@ -319,12 +328,20 @@ async def search_data_breaches(
     try:
         email = email.lower()
         datastore_client = ds_client
-        alert_key = datastore_client.key("xon_alert", email)
-        alert_record = datastore_client.get(alert_key)
 
         # Always check shieldOn first (privacy - can't cache this)
-        if alert_record and alert_record.get("shieldOn", False) and not token:
-            raise HTTPException(status_code=404, detail="Not found")
+        if token:
+            alert_key = datastore_client.key("xon_alert", email)
+            alert_record = datastore_client.get(alert_key)
+        else:
+            shield_on = get_cached_shield(email)
+            if shield_on is None:
+                alert_key = datastore_client.key("xon_alert", email)
+                alert_record = datastore_client.get(alert_key)
+                shield_on = bool(alert_record and alert_record.get("shieldOn", False))
+                set_cached_shield(email, shield_on)
+            if shield_on:
+                raise HTTPException(status_code=404, detail="Not found")
 
         # Validate token if provided
         if token:
@@ -481,10 +498,23 @@ async def search_email(
 
         # Always check shieldOn first (privacy - can't cache this)
         data_store = ds_client
-        alert_key = data_store.key("xon_alert", email)
-        alert_record = data_store.get(alert_key)
+        xon_record = None
+        xon_fetched = False
+        shield_on = get_cached_shield(email)
+        if shield_on is None:
+            alert_key = data_store.key("xon_alert", email)
+            xon_key = data_store.key("xon", email)
+            alert_record = None
+            for entity in data_store.get_multi([alert_key, xon_key]):
+                if entity.key.kind == "xon_alert":
+                    alert_record = entity
+                elif entity.key.kind == "xon":
+                    xon_record = entity
+            xon_fetched = True
+            shield_on = bool(alert_record and alert_record.get("shieldOn", False))
+            set_cached_shield(email, shield_on)
 
-        if alert_record and alert_record.get("shieldOn", False):
+        if shield_on:
             return JSONResponse(
                 status_code=404,
                 content={
@@ -502,13 +532,15 @@ async def search_email(
             cached_result["email"] = email
             return JSONResponse(status_code=200, content=cached_result)
 
-        breach_data = await get_exposure(email)
+        if xon_fetched:
+            breach_data = dict(xon_record) if xon_record is not None else {}
+        else:
+            breach_data = await get_exposure(email)
 
         if not breach_data:
             return EmailBreachErrorResponse(Error="Not found")
 
-        xon_key = data_store.key("xon", email)
-        xon_record = data_store.get(xon_key)
+        xon_record = breach_data
 
         if xon_record and "site" in xon_record:
             # Use set to filter out duplicate breaches
