@@ -14,6 +14,8 @@ from google.api_core import exceptions as google_exceptions
 from openai import OpenAI
 from openai import OpenAIError
 
+from services.breach_catalog import get_breach
+
 # Initialize OpenAI client
 ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -442,15 +444,13 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
     Returns the exposed breaches with details including records, domain, industry,
     and other metadata.
     """
-    ds_client = datastore.Client()
     breaches_output = {"breaches_details": []}
 
     breaches = breaches.split(";")
 
     for breach in breaches:
         try:
-            key = ds_client.key("xon_breaches", breach)
-            query_result = ds_client.get(key)
+            query_result = get_breach(breach)
 
             if query_result is not None:
                 xposed_records = query_result.get("xposed_records", 0)
@@ -522,7 +522,6 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
 def get_breaches_data(breaches: str) -> dict:
     """Returns a dictionary with the count of various types of exposed data in breaches"""
     try:
-        ds_client = datastore.Client()
         breach_list = breaches.split(";")
 
         # Initialize metrics structure
@@ -590,6 +589,7 @@ def get_breaches_data(breaches: str) -> dict:
 
         # Process each breach
         exposed_data_types = set()
+        exposed_data_counts = {}
         date_list = []
         password_risk_counters = {
             "PlainText": 0,
@@ -600,8 +600,7 @@ def get_breaches_data(breaches: str) -> dict:
 
         for breach in breach_list:
             try:
-                key = ds_client.key("xon_breaches", breach)
-                query_result = ds_client.get(key)
+                query_result = get_breach(breach)
 
                 if query_result:
                     # Update industry count
@@ -636,6 +635,10 @@ def get_breaches_data(breaches: str) -> dict:
                     if xposed_data := query_result.get("xposed_data"):
                         normalized_types = normalize_data_types(xposed_data)
                         exposed_data_types.update(normalized_types)
+                        for data_type in normalized_types:
+                            exposed_data_counts[data_type] = (
+                                exposed_data_counts.get(data_type, 0) + 1
+                            )
 
             except Exception as e:
                 continue
@@ -653,17 +656,9 @@ def get_breaches_data(breaches: str) -> dict:
         # Build exposed data hierarchy
         xposed_data_structure = {"children": []}
 
-        # Process exposed data from each breach (normalized)
-        exposed_data_counts = {}
         for breach in breach_list:
-            key = ds_client.key("xon_breaches", breach)
-            query_result = ds_client.get(key)
-            if query_result and "xposed_data" in query_result:
-                normalized = normalize_data_types(query_result["xposed_data"])
-                for data_type in normalized:
-                    exposed_data_counts[data_type] = (
-                        exposed_data_counts.get(data_type, 0) + 1
-                    )
+            if not breach:
+                raise ValueError("Key name must not be empty")
 
         # Map exposed data to categories
         category_dict = {}

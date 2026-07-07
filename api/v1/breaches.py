@@ -29,6 +29,7 @@ from services.analytics import (
     get_summary_and_metrics,
 )
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
+from services.breach_catalog import get_breach
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import (
@@ -653,19 +654,15 @@ async def get_domain_breach_summary(
         breach_last_seen = None
         if unique_sites:
             breach_dates = []
-            ds_breaches = datastore.Client()
             for site in unique_sites:
-                breach_rec = ds_breaches.query(kind="xon_breaches")
-                breach_rec.add_filter(
-                    "__key__", "=", ds_breaches.key("xon_breaches", site)
-                )
-                breach_rec.order = ["-breached_date"]
-                query_breaches = list(breach_rec.fetch(limit=1))
-                if query_breaches:
-                    breach_dates.append(query_breaches[0]["breached_date"])
+                breach_entity = get_breach(site)
+                if breach_entity is not None:
+                    breach_date = breach_entity.get("breached_date")
+                    if breach_date is not None:
+                        breach_dates.append(breach_date)
 
-                if breach_dates:
-                    breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
+            if breach_dates:
+                breach_last_seen = max(breach_dates).strftime("%d-%b-%Y")
 
         breaches_dict = {
             "breaches_details": [

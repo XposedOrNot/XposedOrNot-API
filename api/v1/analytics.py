@@ -40,6 +40,7 @@ from models.responses import (
     ShieldActivationResponse,
 )
 from services.analytics import get_detailed_metrics, get_pulse_news
+from services.breach_catalog import get_breach
 from services.send_email import (
     send_dashboard_email_confirmation,
     send_exception_email,
@@ -573,8 +574,7 @@ async def send_domain_breaches(
                 if entity["breach"] == "No_Breaches":
                     continue
 
-                breach_key = client.key("xon_breaches", entity["breach"])
-                breach = client.get(breach_key)
+                breach = get_breach(entity["breach"])
 
                 if breach:
                     # Apply time filtering if specified
@@ -1039,7 +1039,6 @@ async def get_breach_hierarchy_analytics(
 ) -> Dict[str, Any]:
     """Returns the hierarchical metrics of exposed breaches organized by year"""
     try:
-        ds_client = datastore.Client()
         get_details = {"children": [], "description": "Data Breaches"}
 
         # Create year dictionaries dynamically from 2026 down to 2007
@@ -1055,13 +1054,11 @@ async def get_breach_hierarchy_analytics(
                 if not breach:
                     continue
 
-                key = ds_client.key("xon_breaches", breach)
-                query = ds_client.get(key)
+                query = get_breach(breach)
                 if not query:
                     continue
 
-                parts_s = str(key).split(",")
-                bid = parts_s[1][:-2][2:]
+                bid = breach
                 logo = query.get("logo", "default_logo.jpg")
 
                 details = (
@@ -1092,13 +1089,11 @@ async def get_breach_hierarchy_analytics(
                 if not breach:
                     continue
 
-                key = ds_client.key("xon_breaches", breach)
-                query = ds_client.get(key)
+                query = get_breach(breach)
                 if not query:
                     continue
 
-                parts_s = str(key).split(",")
-                bid = parts_s[1][:-2][2:]
+                bid = breach
                 logo = query.get("logo", "default_logo.jpg")
 
                 details = (

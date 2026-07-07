@@ -8,6 +8,8 @@ from google.cloud import datastore
 from google.api_core import exceptions as api_exceptions
 from fastapi import HTTPException
 
+from services.breach_catalog import get_breach
+
 # Initialize datastore client
 ds_client = datastore.Client()
 
@@ -121,8 +123,7 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
 
     for breach in breach_list:
         try:
-            key = ds_client.key("xon_breaches", breach)
-            query_result = ds_client.get(key)
+            query_result = get_breach(breach)
 
             if query_result is not None:
                 xposed_records = query_result.get("xposed_records", 0)
