@@ -60,7 +60,7 @@ async def get_metrics_endpoint(request: Request) -> MetricsResponse:
             raise HTTPException(status_code=400, detail="Invalid request URL")
 
         # Check cache first
-        cache_key = "metrics:basic"
+        cache_key = "metrics:basic:v2"
         cached_result = get_cached_metrics(cache_key)
         if cached_result:
             return MetricsResponse(**cached_result)
@@ -103,7 +103,7 @@ async def get_detailed_metrics_endpoint(request: Request) -> DetailedMetricsResp
             raise HTTPException(status_code=400, detail="Invalid request URL")
 
         # Check cache first
-        cache_key = "metrics:detailed"
+        cache_key = "metrics:detailed:v2"
         cached_result = get_cached_metrics(cache_key)
         if cached_result:
             return DetailedMetricsResponse(**cached_result)
