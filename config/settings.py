@@ -26,6 +26,9 @@ CF_BLOCK_ENFORCEMENT_ENABLED: bool = (
     os.environ.get("CF_BLOCK_ENFORCEMENT_ENABLED", "false").lower() == "true"
 )
 CF_BLOCK_DAY_THRESHOLD: int = int(os.environ.get("CF_BLOCK_DAY_THRESHOLD", "25"))
+LIMITER_DEGRADED_ENABLED: bool = (
+    os.environ.get("LIMITER_DEGRADED_ENABLED", "true").lower() == "true"
+)
 SENIORITY_ENRICH_URL: Optional[str] = os.environ.get("SENIORITY_ENRICH_URL")
 SENIORITY_ENRICH_SECRET: Optional[str] = os.environ.get("SENIORITY_ENRICH_SECRET")
 

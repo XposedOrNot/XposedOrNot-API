@@ -14,6 +14,7 @@ from config.settings import (
     BOT_ENFORCEMENT_ENABLED,
     CF_BLOCK_DAY_THRESHOLD,
     CF_BLOCK_ENFORCEMENT_ENABLED,
+    LIMITER_DEGRADED_ENABLED,
     REDIS_URL,
 )
 from utils.bot_detection import (
@@ -35,11 +36,62 @@ redis_pool = redis.from_url(
     decode_responses=True,
     socket_keepalive=True,
     socket_keepalive_options={},
+    socket_connect_timeout=1,
+    socket_timeout=2,
     retry_on_timeout=True,
     health_check_interval=30,
     max_connections=20,
     retry_on_error=[redis.ConnectionError, redis.TimeoutError],
 )
+
+_REDIS_RETRY_COOLDOWN_SECONDS = 5.0
+_FALLBACK_MAX_KEYS = 100_000
+
+_redis_down_until = 0.0
+_redis_degraded = False
+_fallback_windows: Dict[str, List[float]] = {}
+
+
+def _mark_redis_down(context: str, error: Exception) -> None:
+    """Open the circuit for a cooldown and record the failure."""
+    global _redis_down_until, _redis_degraded
+    _redis_down_until = time.time() + _REDIS_RETRY_COOLDOWN_SECONDS
+    if not _redis_degraded:
+        _redis_degraded = True
+        logger.error(
+            "Rate limiter entering degraded mode: in-memory per-instance limits active"
+        )
+    _log_redis_failure(context, error)
+
+
+def _mark_redis_recovered() -> None:
+    """Close the circuit and discard fallback state after Redis returns."""
+    global _redis_degraded
+    if _redis_degraded:
+        _redis_degraded = False
+        _fallback_windows.clear()
+        logger.info("Rate limiter recovered: Redis restored, shared limits active")
+
+
+def _fallback_is_limited(
+    key: str, rate_limits: List[Tuple[int, int]], now: float
+) -> Tuple[bool, int]:
+    """Per-process sliding-window check used while Redis is unavailable."""
+    if len(_fallback_windows) > _FALLBACK_MAX_KEYS:
+        _fallback_windows.clear()
+
+    max_period = max(limit[1] for limit in rate_limits) if rate_limits else 86400
+    cutoff = now - max_period
+    timestamps = [t for t in _fallback_windows.get(key, []) if t > cutoff]
+    timestamps.append(now)
+    _fallback_windows[key] = timestamps
+
+    for limit, period in rate_limits:
+        window = [t for t in timestamps if t > now - period]
+        if len(window) > limit:
+            retry_after = max(1, int(period - (now - window[0])))
+            return True, retry_after
+    return False, 0
 
 
 async def get_healthy_redis_connection():
@@ -386,31 +438,64 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
             violation_count = 0
             request_counts = []
             bot_counts = []
-            try:
-                async with redis_conn.pipeline(transaction=True) as pipe:
-                    if bot_included:
-                        bot_max = max(limit[1] for limit in _BOT_FP_LIMITS)
-                        pipe.zadd(bot_key, {member: now})
-                        pipe.zremrangebyscore(bot_key, 0, now - bot_max)
-                        for _, period in _BOT_FP_LIMITS:
-                            pipe.zcount(bot_key, now - period, now)
-                        pipe.expire(bot_key, int(bot_max))
-                    pipe.zremrangebyscore(violation_key, 0, now - 3600)
-                    pipe.zcard(violation_key)
-                    pipe.zadd(key, {member: now})
-                    pipe.zremrangebyscore(key, 0, now - max_period)
-                    for _, period in rate_limits:
-                        pipe.zcount(key, now - period, now)
-                    pipe.expire(key, int(max_period))
-                    results = await pipe.execute()
+            degraded = False
+            if LIMITER_DEGRADED_ENABLED and now < _redis_down_until:
+                degraded = True
+            else:
+                try:
+                    async with redis_conn.pipeline(transaction=True) as pipe:
+                        if bot_included:
+                            bot_max = max(limit[1] for limit in _BOT_FP_LIMITS)
+                            pipe.zadd(bot_key, {member: now})
+                            pipe.zremrangebyscore(bot_key, 0, now - bot_max)
+                            for _, period in _BOT_FP_LIMITS:
+                                pipe.zcount(bot_key, now - period, now)
+                            pipe.expire(bot_key, int(bot_max))
+                        pipe.zremrangebyscore(violation_key, 0, now - 3600)
+                        pipe.zcard(violation_key)
+                        pipe.zadd(key, {member: now})
+                        pipe.zremrangebyscore(key, 0, now - max_period)
+                        for _, period in rate_limits:
+                            pipe.zcount(key, now - period, now)
+                        pipe.expire(key, int(max_period))
+                        results = await pipe.execute()
 
-                base = (3 + len(_BOT_FP_LIMITS)) if bot_included else 0
-                if bot_included:
-                    bot_counts = list(results[2 : 2 + len(_BOT_FP_LIMITS)])
-                violation_count = results[base + 1]
-                request_counts = list(results[base + 4 : base + 4 + len(rate_limits)])
-            except Exception as e:
-                _log_redis_failure("custom_rate_limiter", e)
+                    _mark_redis_recovered()
+                    base = (3 + len(_BOT_FP_LIMITS)) if bot_included else 0
+                    if bot_included:
+                        bot_counts = list(results[2 : 2 + len(_BOT_FP_LIMITS)])
+                    violation_count = results[base + 1]
+                    request_counts = list(
+                        results[base + 4 : base + 4 + len(rate_limits)]
+                    )
+                except Exception as e:
+                    if LIMITER_DEGRADED_ENABLED:
+                        _mark_redis_down("custom_rate_limiter", e)
+                        degraded = True
+                    else:
+                        _log_redis_failure("custom_rate_limiter", e)
+
+            if degraded:
+                limited, retry_after = _fallback_is_limited(key, rate_limits, now)
+                if limited:
+                    reset_time = datetime.now() + timedelta(seconds=retry_after)
+                    error_detail = {
+                        "error": "Rate limit exceeded",
+                        "detail": (
+                            f"Rate limit exceeded for endpoint {endpoint}. "
+                            f"Please try again after {retry_after} seconds."
+                        ),
+                        "retry_after": retry_after,
+                        "reset_time": reset_time.isoformat(),
+                    }
+                    if message:
+                        error_detail["message"] = message
+                    raise HTTPException(
+                        status_code=HTTP_429_TOO_MANY_REQUESTS,
+                        detail=error_detail,
+                        headers={"Retry-After": str(retry_after)},
+                    )
+                return await func(*args, **kwargs)
 
             if bot_flagged:
                 bot_limited, bot_retry = False, 0
