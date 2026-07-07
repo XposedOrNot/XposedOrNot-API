@@ -46,7 +46,7 @@ from services.send_email import (
     send_shield_email,
 )
 from utils.custom_limiter import custom_rate_limiter
-from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
+from utils.helpers import get_location_from_headers
 from utils.request import get_client_ip, get_user_agent_info
 from utils.token import confirm_token, generate_confirmation_token
 from utils.validation import (
@@ -296,8 +296,7 @@ async def domain_alert(
 
         # Get client information
         client_ip = get_client_ip(request)
-        preferred_ip = get_preferred_ip_address(client_ip)
-        location = fetch_location_by_ip(preferred_ip) if preferred_ip else "Unknown"
+        location = get_location_from_headers(request)
         browser_type, client_platform = get_user_agent_info(request)
 
         # Send confirmation email
@@ -887,8 +886,7 @@ async def activate_shield(
 
             # Get client information
             client_ip = get_client_ip(request)
-            preferred_ip = get_preferred_ip_address(client_ip)
-            location = fetch_location_by_ip(preferred_ip) if preferred_ip else "Unknown"
+            location = get_location_from_headers(request)
             browser_type, client_platform = get_user_agent_info(request)
 
             # Send shield email

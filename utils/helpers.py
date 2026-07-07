@@ -8,7 +8,6 @@ import logging
 from typing import Optional, Dict, Any
 
 # Third-party imports
-import requests
 from fastapi import Request
 from user_agents import parse
 
@@ -93,18 +92,17 @@ def get_preferred_ip_address(x_forwarded_for: str) -> Optional[str]:
     return None
 
 
-def fetch_location_by_ip(ip_address: str) -> str:
-    """Fetch location information for an IP address."""
-    try:
-        response = requests.get(f"http://ip-api.com/json/{ip_address}", timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "success":
-                return data.get("isp", "Unknown ISP")
-    except requests.RequestException:
-        # Log the error if needed
-        pass
-    return "Unknown ISP"
+def get_location_from_headers(request: Request) -> str:
+    """Get approximate visitor location from Cloudflare visitor-location headers."""
+    city = (request.headers.get("cf-ipcity") or "").strip()
+    country = (request.headers.get("cf-ipcountry") or "").strip()
+    if country in ("XX", ""):
+        country = ""
+    if city and country:
+        return f"{city}, {country}"
+    if country:
+        return country
+    return "Unknown"
 
 
 def generate_request_hash(data: Dict[str, Any]) -> str:

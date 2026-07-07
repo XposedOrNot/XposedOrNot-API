@@ -33,7 +33,7 @@ from utils.custom_limiter import (
     is_rate_limited,
     parse_rate_limit,
 )
-from utils.helpers import fetch_location_by_ip, get_preferred_ip_address
+from utils.helpers import get_location_from_headers, get_preferred_ip_address
 from utils.token import confirm_token, generate_confirmation_token
 from utils.validation import (
     validate_email_deliverable,
@@ -135,7 +135,7 @@ async def subscribe_to_alert_me(
             client_ip_address = request.client.host
 
         preferred_ip = get_preferred_ip_address(client_ip_address)
-        location = fetch_location_by_ip(preferred_ip) if preferred_ip else "Unknown"
+        location = get_location_from_headers(request)
 
         # User agent parsing
         user_agent_string = request.headers.get("User-Agent")
