@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from config.clients import ds_client, redis_client
 from pydantic import BaseModel, EmailStr, Field, validator
 
+from config.clients import ds_client, redis_client
 from models.responses import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter

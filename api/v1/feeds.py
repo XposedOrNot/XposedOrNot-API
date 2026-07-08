@@ -7,9 +7,9 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Request, Response
 from feedgen.feed import FeedGenerator
-from config.clients import ds_client, redis_client
 from pydantic import BaseModel
 
+from config.clients import ds_client, redis_client
 from models.base import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter

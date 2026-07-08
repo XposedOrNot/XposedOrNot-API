@@ -1,9 +1,9 @@
 """Enterprise API key validation endpoint."""
 
 from fastapi import APIRouter, Header, Request
-from config.clients import ds_client
 from pydantic import BaseModel
 
+from config.clients import ds_client
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.validation import validate_token, validate_url

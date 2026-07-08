@@ -6,10 +6,9 @@ from typing import Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from google.cloud import datastore
-
-from config.clients import ds_client
 from pydantic import BaseModel, EmailStr, Field
 
+from config.clients import ds_client
 from models.base import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter

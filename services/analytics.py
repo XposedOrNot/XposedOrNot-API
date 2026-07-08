@@ -9,10 +9,10 @@ from typing import Dict, List, Any, Tuple, Optional, Set
 
 # Third-party imports
 from fastapi import HTTPException
-from config.clients import ds_client
 from openai import OpenAI
 from openai import OpenAIError
 
+from config.clients import ds_client
 from services.breach_catalog import get_breach
 
 # Initialize OpenAI client

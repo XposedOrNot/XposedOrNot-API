@@ -6,9 +6,9 @@ from typing import Dict, List
 from operator import itemgetter
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from config.clients import ds_client
 from pydantic import BaseModel, Field
 
+from config.clients import ds_client
 from models.base import BaseResponse
 from models.responses import DomainBreachesResponse
 from services.send_email import send_exception_email

@@ -9,16 +9,16 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
-from config.clients import ds_client, redis_client
 
-from models.responses import MonthlyDigestResponse
-from utils.custom_limiter import custom_rate_limiter
-from utils.token import generate_confirmation_token
+from config.clients import ds_client, redis_client
 from config.settings import (
     CF_UNBLOCK_MAGIC,
     ENVIRONMENT,
     DEBUG_EMAIL,
 )
+from models.responses import MonthlyDigestResponse
+from utils.custom_limiter import custom_rate_limiter
+from utils.token import generate_confirmation_token
 
 from .monthly_digest_helpers import (
     heartbeat_logger,

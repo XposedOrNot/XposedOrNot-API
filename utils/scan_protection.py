@@ -1,9 +1,10 @@
 """Custom 404 handler with path-based scanning protection."""
 
+from datetime import datetime, timedelta
+
 from fastapi import Request, HTTPException
 from fastapi.responses import JSONResponse
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
-from datetime import datetime, timedelta
 
 from utils.custom_limiter import (
     get_healthy_redis_connection,

@@ -9,13 +9,13 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
-from google.cloud import datastore
-
-from config.clients import ds_client
 from google.api_core import exceptions as google_exceptions
+from google.cloud import datastore
 from user_agents import parse
 
 # Local imports
+from config.clients import ds_client
+from config.settings import BASE_URL
 from models.responses import (
     AlertResponse,
     UnsubscribeResponse,
@@ -45,7 +45,6 @@ from utils.validation import (
     validate_variables,
 )
 from utils.safe_encoding import build_safe_url
-from config.settings import BASE_URL
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")

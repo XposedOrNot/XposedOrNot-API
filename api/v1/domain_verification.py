@@ -13,13 +13,12 @@ from typing import List, Union
 import domcheck
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
-from google.cloud import datastore
-
-from config.clients import ds_client
 from google.api_core import exceptions as google_exceptions
+from google.cloud import datastore
 from pydantic import EmailStr
 
 # Local imports
+from config.clients import ds_client
 from config.settings import XMLAPI_KEY
 from models.base import BaseResponse
 from services.send_email import (
