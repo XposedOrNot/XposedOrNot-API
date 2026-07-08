@@ -108,7 +108,8 @@ async def handle_404_with_protection(request: Request, exc: HTTPException):
                     "error": "Rate limit exceeded",
                     "type": "scanning_protection",
                     "path": path,
-                    "detail": f"Rate limit exceeded for unknown endpoint requests. Stop scanning behavior.",
+                    "detail": "Rate limit exceeded for unknown endpoint requests. "
+                    "Stop scanning behavior.",
                     "retry_after": retry_after,
                     "reset_time": reset_time.isoformat(),
                     "warning": "Automated scanning is not permitted.",

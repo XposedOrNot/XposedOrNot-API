@@ -308,7 +308,8 @@ async def get_domain_seniority(
             if domain_lower not in [d.lower() for d in verified_domains]:
                 raise HTTPException(
                     status_code=401,
-                    detail="Domain not verified for this user. Please verify domain ownership first.",
+                    detail="Domain not verified for this user. "
+                    "Please verify domain ownership first.",
                 )
 
             # Get seniority data for single domain
@@ -343,7 +344,9 @@ async def get_domain_seniority(
             error_message=str(exception_details),
             exception_type=type(exception_details).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"email={'provided' if email else 'missing'}, token={'provided' if token else 'missing'}, domain={domain or 'all'}, seniority={seniority.value}",
+            request_params=f"email={'provided' if email else 'missing'}, "
+            f"token={'provided' if token else 'missing'}, "
+            f"domain={domain or 'all'}, seniority={seniority.value}",
         )
         raise HTTPException(
             status_code=500, detail="An error occurred during processing"

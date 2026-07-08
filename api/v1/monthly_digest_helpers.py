@@ -22,7 +22,8 @@ async def heartbeat_logger():
             logger.info(
                 (
                     f"[MONTHLY-DIGEST] 💓 HEARTBEAT {heartbeat_count} - "
-                    f"Processing still active at {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
+                    "Processing still active at "
+                    f"{datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}"
                 )
             )
     except asyncio.CancelledError:
@@ -263,11 +264,15 @@ def generate_mobile_exposure_cards(user_exposures: list) -> str:
                             🚨 {escape_html(exposure.get('breach_name', 'Unknown'))}
                         </div>
                         <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                            <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(exposure.get('breach_date', 'Unknown'))}</div>
-                            <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(exposure.get('added_date', 'Unknown'))}</div>
-                            <div style="margin: 4px 0;"><strong>Records:</strong> {exposure.get('records_count', 0):,}</div>
+                            <div style="margin: 4px 0;"><strong>Breached:</strong> {
+                            escape_html(exposure.get('breach_date', 'Unknown'))}</div>
+                            <div style="margin: 4px 0;"><strong>Added:</strong> {
+                            escape_html(exposure.get('added_date', 'Unknown'))}</div>
+                            <div style="margin: 4px 0;"><strong>Records:</strong> {
+                            exposure.get('records_count', 0):,}</div>
                             <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                <strong>Data Exposed:</strong><br>{escape_html(exposure.get('data_exposed', 'Unknown'))}
+                                <strong>Data Exposed:</strong><br>{
+                                escape_html(exposure.get('data_exposed', 'Unknown'))}
                             </div>
                         </div>
                     </div>"""
@@ -290,11 +295,15 @@ def generate_mobile_breach_cards(new_breaches: list) -> str:
                             🚨 {escape_html(breach.get('breach_name', 'Unknown'))}
                         </div>
                         <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                            <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(breach.get('breach_date', 'Unknown'))}</div>
-                            <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(breach.get('added_date', 'Unknown'))}</div>
-                            <div style="margin: 4px 0;"><strong>Records:</strong> {breach.get('records_count', 0):,}</div>
+                            <div style="margin: 4px 0;"><strong>Breached:</strong> {
+                            escape_html(breach.get('breach_date', 'Unknown'))}</div>
+                            <div style="margin: 4px 0;"><strong>Added:</strong> {
+                            escape_html(breach.get('added_date', 'Unknown'))}</div>
+                            <div style="margin: 4px 0;"><strong>Records:</strong> {
+                            breach.get('records_count', 0):,}</div>
                             <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                <strong>Data Exposed:</strong><br>{escape_html(breach.get('data_exposed', 'Unknown'))}
+                                <strong>Data Exposed:</strong><br>{
+                                escape_html(breach.get('data_exposed', 'Unknown'))}
                             </div>
                         </div>
                     </div>"""
@@ -346,11 +355,15 @@ async def generate_html_template(
                                 🚨 {escape_html(exposure.get('breach_name', 'Unknown'))}
                             </div>
                             <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                                <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(exposure.get('breach_date', 'Unknown'))}</div>
-                                <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(exposure.get('added_date', 'Unknown'))}</div>
-                                <div style="margin: 4px 0;"><strong>Records:</strong> {exposure.get('records_count', 0):,}</div>
+                                <div style="margin: 4px 0;"><strong>Breached:</strong> {
+                                escape_html(exposure.get('breach_date', 'Unknown'))}</div>
+                                <div style="margin: 4px 0;"><strong>Added:</strong> {
+                                escape_html(exposure.get('added_date', 'Unknown'))}</div>
+                                <div style="margin: 4px 0;"><strong>Records:</strong> {
+                                exposure.get('records_count', 0):,}</div>
                                 <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                    <strong>Data Exposed:</strong><br>{escape_html(exposure.get('data_exposed', 'Unknown'))}
+                                    <strong>Data Exposed:</strong><br>{
+                                    escape_html(exposure.get('data_exposed', 'Unknown'))}
                                 </div>
                             </div>
                         </div>"""
@@ -371,11 +384,15 @@ async def generate_html_template(
                                 🚨 {escape_html(breach.get('breach_name', 'Unknown'))}
                             </div>
                             <div style="color: #495057; font-size: 14px; line-height: 1.4;">
-                                <div style="margin: 4px 0;"><strong>Breached:</strong> {escape_html(breach.get('breach_date', 'Unknown'))}</div>
-                                <div style="margin: 4px 0;"><strong>Added:</strong> {escape_html(breach.get('added_date', 'Unknown'))}</div>
-                                <div style="margin: 4px 0;"><strong>Records:</strong> {breach.get('records_count', 0):,}</div>
+                                <div style="margin: 4px 0;"><strong>Breached:</strong> {
+                                escape_html(breach.get('breach_date', 'Unknown'))}</div>
+                                <div style="margin: 4px 0;"><strong>Added:</strong> {
+                                escape_html(breach.get('added_date', 'Unknown'))}</div>
+                                <div style="margin: 4px 0;"><strong>Records:</strong> {
+                                breach.get('records_count', 0):,}</div>
                                 <div style="margin: 8px 0 0 0; padding: 8px; background-color: #f8f9fa; border-radius: 4px; font-size: 12px;">
-                                    <strong>Data Exposed:</strong><br>{escape_html(breach.get('data_exposed', 'Unknown'))}
+                                    <strong>Data Exposed:</strong><br>{
+                                    escape_html(breach.get('data_exposed', 'Unknown'))}
                                 </div>
                             </div>
                         </div>"""
@@ -386,14 +403,16 @@ async def generate_html_template(
                         </div>"""
 
     # Generate Gmail-compatible HTML template (no CSS, no tables)
-    html_content = f"""
+    html_content = (
+        f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 15px; background-color: #f8f9fa;">
         <div style="background-color: white; border-radius: 8px; padding: 20px;">
             
             <!-- Header -->
             <div style="text-align: center; margin-bottom: 25px;">
                 <h1 style="color: #2c3e50; margin: 0; font-size: 22px;">XposedOrNot Breach Digest</h1>
-                <p style="color: #7f8c8d; font-size: 14px; margin: 8px 0 0 0;">({current_month_year})</p>
+                <p style="color: #7f8c8d; font-size: 14px; margin: 8px 0 0 0;">({
+                current_month_year})</p>
             </div>
 
             <!-- Greeting -->
@@ -417,13 +436,17 @@ async def generate_html_template(
                 </div>
 
                 <div style="text-align: center; margin: 15px 0;">
-                    <a href="{dashboard_url}" style="background-color: #e74c3c; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">🔍 View your full breach report</a>
+                    <a href="{dashboard_url}" """
+        """style="background-color: #e74c3c; color: white; padding: 10px 20px; """
+        """text-decoration: none; border-radius: 6px; font-weight: bold; """
+        f"""display: inline-block; font-size: 14px;">🔍 View your full breach report</a>
                 </div>
             </div>
 
             <!-- New Breaches Section -->
             <div style="margin: 25px 0;">
-                <h2 style="color: #f39c12; font-size: 16px; margin: 0 0 12px 0;">🚨 New Breaches Added in {previous_month}:</h2>
+                <h2 style="color: #f39c12; font-size: 16px; margin: 0 0 12px 0;">🚨 """
+        f"""New Breaches Added in {previous_month}:</h2>
                 
                 <!-- Mobile-First Card Layout -->
                 <div style="background-color: #fff9e6; border-left: 4px solid #f39c12; padding: 12px; margin: 12px 0; border-radius: 6px;">
@@ -456,12 +479,15 @@ async def generate_html_template(
 
             <!-- Email Footer -->
             <div style="background-color: #f8f9fa; padding: 20px; margin-top: 30px; border-top: 1px solid #dee2e6; font-size: 12px; color: #6c757d; text-align: center;">
-                <p style="margin: 0 0 10px 0;">This email was sent to <strong>{escape_html(email)}</strong> because of monthly breach notifications in XposedOrNot.com.</p>
+                <p style="margin: 0 0 10px 0;">This email was sent to <strong>{
+                escape_html(email)
+                }</strong> because of monthly breach notifications in XposedOrNot.com.</p>
                 <p style="margin: 0;">© 2026 XposedOrNot. All rights reserved. | <a href="https://xposedornot.com/dashboard" style="color: #6c757d;">Visit Website</a></p>
             </div>
 
         </div>
     </div>
     """
+    )
 
     return html_content

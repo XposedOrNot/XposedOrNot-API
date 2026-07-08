@@ -358,7 +358,9 @@ async def check_domain_phishing(
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"domain={domain}, email={'provided' if email else 'not_provided'}, token={'provided' if token else 'not_provided'}",
+            request_params=f"domain={domain}, "
+            f"email={'provided' if email else 'not_provided'}, "
+            f"token={'provided' if token else 'not_provided'}",
         )
         raise HTTPException(
             status_code=500, detail="An error occurred during processing"

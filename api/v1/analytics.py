@@ -705,7 +705,8 @@ async def send_domain_breaches(
                 breach_logo = all_breaches_logo.get(breach_name, "")
                 details = (
                     f"<img src='{escape_html_attr(breach_logo)}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{escape_url_fragment(breach_name)}'>"
+                    f"<a target='_blank' "
+                    f"href='https://xposedornot.com/xposed/#{escape_url_fragment(breach_name)}'>"
                     " &nbsp;Details</a>"
                 )
                 breach_node = {
@@ -855,7 +856,9 @@ async def send_domain_breaches(
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"email={email}, token={'provided' if token else 'not_provided'}, time_filter={time_filter}",
+            request_params=f"email={email}, "
+            f"token={'provided' if token else 'not_provided'}, "
+            f"time_filter={time_filter}",
         )
         return DomainBreachesErrorResponse(Error="An error occurred during processing")
 
@@ -1068,7 +1071,8 @@ async def get_breach_hierarchy_analytics(
 
                 details = (
                     f"<img src='{escape_html_attr(logo)}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{escape_url_fragment(bid)}'>"
+                    f"<a target='_blank' "
+                    f"href='https://xposedornot.com/xposed/#{escape_url_fragment(bid)}'>"
                     " &nbsp;Details</a>"
                 )
 
@@ -1103,7 +1107,8 @@ async def get_breach_hierarchy_analytics(
 
                 details = (
                     f"<img src='{escape_html_attr(logo)}' style='height:40px;width:65px;' />"
-                    f"<a target='_blank' href='https://xposedornot.com/xposed/#{escape_url_fragment(bid)}'>"
+                    f"<a target='_blank' "
+                    f"href='https://xposedornot.com/xposed/#{escape_url_fragment(bid)}'>"
                     " &nbsp;Details</a>"
                 )
 
@@ -1135,7 +1140,8 @@ async def get_breach_hierarchy_analytics(
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent="N/A (helper function)",
-            request_params=f"breaches={breaches[:50] if breaches else 'None'}, sensitive_breaches={'provided' if sensitive_breaches else 'not_provided'}",
+            request_params=f"breaches={breaches[:50] if breaches else 'None'}, "
+            f"sensitive_breaches={'provided' if sensitive_breaches else 'not_provided'}",
         )
         raise HTTPException(
             status_code=404, detail="Error processing breach data"
@@ -1425,7 +1431,10 @@ async def update_alert_status(
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"email={email}, token={'provided' if token else 'not_provided'}, alert_id={payload.alert_id if payload else 'missing'}, status={payload.status if payload else 'missing'}",
+            request_params=f"email={email}, "
+            f"token={'provided' if token else 'not_provided'}, "
+            f"alert_id={payload.alert_id if payload else 'missing'}, "
+            f"status={payload.status if payload else 'missing'}",
         )
         return AlertStatusUpdateErrorResponse(
             Error="An error occurred during processing"

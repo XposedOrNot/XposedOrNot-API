@@ -401,7 +401,8 @@ async def send_verification(
             error_message=str(exception_details),
             exception_type=type(exception_details).__name__,
             user_agent=request.headers.get("User-Agent") if request else "Unknown",
-            request_params=f"email={email}, token={'provided' if token != 'None' else 'not_provided'}",
+            request_params=f"email={email}, token="
+            f"{'provided' if token != 'None' else 'not_provided'}",
         )
         return VerificationResponse(status="Failed")
 
