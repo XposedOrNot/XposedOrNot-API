@@ -771,8 +771,6 @@ async def send_domain_breaches(
                 exposed_fields = alert_entity.get("exposed_fields", [])
                 if isinstance(exposed_fields, str):
                     try:
-                        import json
-
                         exposed_fields = json.loads(exposed_fields)
                     except (json.JSONDecodeError, ValueError):
                         exposed_fields = []

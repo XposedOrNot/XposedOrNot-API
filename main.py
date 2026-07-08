@@ -495,8 +495,6 @@ async def health_check(request: Request, token: str = None):
     timestamps.append(now)
     _health_requests[client_ip] = timestamps
 
-    from utils.custom_limiter import redis_pool
-
     redis_status = "healthy"
     try:
         await redis_pool.ping()
@@ -505,8 +503,6 @@ async def health_check(request: Request, token: str = None):
 
     status = "healthy" if redis_status == "healthy" else "degraded"
     status_code = 200 if status == "healthy" else 503
-
-    from fastapi.responses import JSONResponse
 
     return JSONResponse(
         status_code=status_code,
