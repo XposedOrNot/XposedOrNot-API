@@ -121,6 +121,12 @@ class BreachAnalyticsResponse(BaseModel):
         validate_assignment = True
 
 
+class BreachAnalyticsAuthResponse(BreachAnalyticsResponse):
+    """Response model for breach analytics with a validated session token."""
+
+    ShieldOn: bool = False
+
+
 class BreachAnalyticsV2Response(BaseModel):
     """Response model for breach analytics v2 endpoint."""
 

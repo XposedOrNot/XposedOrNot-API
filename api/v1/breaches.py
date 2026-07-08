@@ -16,6 +16,7 @@ from config.clients import ds_client, redis_client
 # Local imports
 from config.settings import MAX_EMAIL_LENGTH
 from models.responses import (
+    BreachAnalyticsAuthResponse,
     BreachAnalyticsResponse,
     BreachAnalyticsV2Response,
     BreachDetailResponse,
@@ -361,11 +362,23 @@ async def search_data_breaches_v2(
         raise HTTPException(status_code=404, detail="Not found") from exc
 
 
-@router.get("/breach-analytics", response_model=BreachAnalyticsResponse)
+def build_breach_analytics_response(
+    data: Dict, token: Optional[str], shield_on: bool
+) -> Union[BreachAnalyticsAuthResponse, BreachAnalyticsResponse]:
+    """Build the breach-analytics response, adding shield status for valid sessions."""
+    if token:
+        return BreachAnalyticsAuthResponse(**data, ShieldOn=shield_on)
+    return BreachAnalyticsResponse(**data)
+
+
+@router.get(
+    "/breach-analytics",
+    response_model=Union[BreachAnalyticsAuthResponse, BreachAnalyticsResponse],
+)
 @custom_rate_limiter("2 per second;25 per hour;100 per day")
 async def search_data_breaches(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
-) -> BreachAnalyticsResponse:
+) -> Union[BreachAnalyticsAuthResponse, BreachAnalyticsResponse]:
     """Returns summary and details of data breaches for a given email."""
     if (
         not email
@@ -403,24 +416,34 @@ async def search_data_breaches(
             if not token_valid:
                 raise HTTPException(status_code=403, detail="Invalid token")
 
+        shield_on_status = bool(
+            token and alert_record and alert_record.get("shieldOn", False)
+        )
+
         # Check cache (after shieldOn/token validation)
         has_token = "with_token" if token else "no_token"
         cache_key = f"breach-analytics:{hash_email(email)}:{has_token}"
         cached_result = get_cached_breaches(cache_key)
         if cached_result:
-            return BreachAnalyticsResponse(**cached_result)
+            return build_breach_analytics_response(
+                cached_result, token, shield_on_status
+            )
 
         breach_data = await get_exposure(email)
         sensitive_data = await get_sensitive_exposure(email) if token else None
 
         if not breach_data and not sensitive_data:
-            return BreachAnalyticsResponse(
-                BreachesSummary={"domain": "", "site": "", "tmpstmp": ""},
-                PastesSummary={"cnt": 0, "domain": "", "tmpstmp": ""},
-                ExposedBreaches=None,
-                ExposedPastes=None,
-                BreachMetrics=None,
-                PasteMetrics=None,
+            return build_breach_analytics_response(
+                {
+                    "BreachesSummary": {"domain": "", "site": "", "tmpstmp": ""},
+                    "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
+                    "ExposedBreaches": None,
+                    "ExposedPastes": None,
+                    "BreachMetrics": None,
+                    "PasteMetrics": None,
+                },
+                token,
+                shield_on_status,
             )
 
         if breach_data and sensitive_data and token:
@@ -460,7 +483,9 @@ async def search_data_breaches(
                 "PasteMetrics": paste_metrics,
             }
             cache_breaches(cache_key, response_data)
-            return BreachAnalyticsResponse(**response_data)
+            return build_breach_analytics_response(
+                response_data, token, shield_on_status
+            )
 
         empty_response = {
             "BreachesSummary": {"domain": "", "site": "", "tmpstmp": ""},
@@ -470,7 +495,7 @@ async def search_data_breaches(
             "BreachMetrics": None,
             "PasteMetrics": None,
         }
-        return BreachAnalyticsResponse(**empty_response)
+        return build_breach_analytics_response(empty_response, token, shield_on_status)
 
     except HTTPException:
         raise
