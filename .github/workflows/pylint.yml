@@ -30,4 +30,4 @@ jobs:
 
     - name: Run Pylint
       run: |
-        pylint --fail-under=8 $(git ls-files '*.py' | grep -v '^.github/fuzz/')
+        pylint --fail-under=9 $(git ls-files '*.py' | grep -v '^.github/fuzz/')
