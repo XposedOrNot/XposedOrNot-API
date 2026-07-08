@@ -15,7 +15,7 @@ from google.cloud import datastore
 
 from config.clients import ds_client
 from fastapi import HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 # Environment variables
 AUTH_EMAIL = os.environ["AUTH_EMAIL"]

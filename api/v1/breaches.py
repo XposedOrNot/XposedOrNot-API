@@ -33,14 +33,14 @@ from services.breach_catalog import get_breach
 from services.shield_cache import get_cached_shield, set_cached_shield
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
-from utils.helpers import (
-    string_to_boolean,
-    validate_domain,
-    validate_email_with_tld,
-    validate_url,
-)
+from utils.helpers import string_to_boolean, validate_domain
 from utils.token import validate_dashboard_session
-from utils.validation import validate_token, validate_variables
+from utils.validation import (
+    validate_email_with_tld,
+    validate_token,
+    validate_url,
+    validate_variables,
+)
 
 router = APIRouter()
 

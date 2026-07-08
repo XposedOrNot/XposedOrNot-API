@@ -10,7 +10,7 @@ import logging
 import os
 import time
 import socket
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 # Third-party imports
 import httpx

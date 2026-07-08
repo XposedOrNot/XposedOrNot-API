@@ -3,7 +3,7 @@
 import json
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Request, Response
 from feedgen.feed import FeedGenerator

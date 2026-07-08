@@ -11,7 +11,7 @@ from models.responses import DetailedMetricsResponse, MetricsResponse
 from services.analytics import get_detailed_metrics
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
-from utils.helpers import validate_url
+from utils.validation import validate_url
 
 router = APIRouter()
 

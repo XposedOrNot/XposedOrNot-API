@@ -12,7 +12,6 @@ from fastapi import Request
 from user_agents import parse
 
 # Local imports
-from utils.validation import validate_url, validate_variables, validate_email_with_tld
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

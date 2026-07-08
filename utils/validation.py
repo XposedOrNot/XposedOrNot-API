@@ -3,7 +3,7 @@
 import re
 from urllib.parse import urlparse
 from fastapi import Request
-from email_validator import validate_email, EmailNotValidError
+from email_validator import validate_email
 
 
 def validate_variables(variables_to_validate: list) -> bool:
