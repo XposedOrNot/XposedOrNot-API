@@ -461,3 +461,16 @@ class AlertStatusUpdateErrorResponse(BaseModel):
     """Error response model for alert status update."""
 
     Error: str
+
+
+class DashboardSignOutResponse(BaseModel):
+    """Response model for dashboard sign-out."""
+
+    status: str = "success"
+    message: str = "Signed out"
+
+
+class DashboardSignOutErrorResponse(BaseModel):
+    """Error response model for dashboard sign-out."""
+
+    Error: str

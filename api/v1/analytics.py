@@ -28,6 +28,8 @@ from models.responses import (
     AlertStatusUpdateResponse,
     BreachDetails,
     BreachHierarchyResponse,
+    DashboardSignOutErrorResponse,
+    DashboardSignOutResponse,
     DetailedBreachInfo,
     DetailedMetricsResponse,
     DomainAlertErrorResponse,
@@ -1426,5 +1428,98 @@ async def update_alert_status(
             request_params=f"email={email}, token={'provided' if token else 'not_provided'}, alert_id={payload.alert_id if payload else 'missing'}, status={payload.status if payload else 'missing'}",
         )
         return AlertStatusUpdateErrorResponse(
+            Error="An error occurred during processing"
+        )
+
+
+@router.post(
+    "/dashboard/sign-out",
+    response_model=Union[DashboardSignOutResponse, DashboardSignOutErrorResponse],
+    responses={
+        200: {"model": DashboardSignOutResponse},
+        400: {"model": DashboardSignOutErrorResponse},
+        401: {"model": DashboardSignOutErrorResponse},
+    },
+)
+@custom_rate_limiter("2 per second;50 per hour;200 per day")
+async def dashboard_sign_out(
+    request: Request,
+    email: Optional[str] = Query(None),
+    token: Optional[str] = Query(None),
+) -> Union[DashboardSignOutResponse, DashboardSignOutErrorResponse]:
+    """
+    Sign out of the dashboard by revoking the active session.
+
+    Deletes the xon_domains_session entity for the email after the provided
+    token matches the stored session, invalidating the session across all
+    dashboard routes. Signing out when no session exists returns the same
+    success response so the call stays idempotent.
+
+    Args:
+        request: FastAPI request object
+        email: Email address for authentication
+        token: Session token for validation
+    """
+    try:
+        if not email or not token:
+            raise HTTPException(
+                status_code=400,
+                detail=DashboardSignOutErrorResponse(
+                    Error="Missing email or token"
+                ).dict(),
+            )
+
+        if not validate_email_with_tld(email):
+            raise HTTPException(
+                status_code=400,
+                detail=DashboardSignOutErrorResponse(
+                    Error="Invalid email format"
+                ).dict(),
+            )
+
+        if not validate_token(token):
+            raise HTTPException(
+                status_code=400,
+                detail=DashboardSignOutErrorResponse(
+                    Error="Invalid token format"
+                ).dict(),
+            )
+
+        if not validate_url(request):
+            raise HTTPException(
+                status_code=400,
+                detail=DashboardSignOutErrorResponse(
+                    Error="Invalid request URL"
+                ).dict(),
+            )
+
+        client = ds_client
+        session_key = client.key("xon_domains_session", email)
+        session_record = client.get(session_key)
+
+        if not session_record:
+            return DashboardSignOutResponse()
+
+        if session_record.get("domain_magic") != token:
+            raise HTTPException(
+                status_code=401,
+                detail=DashboardSignOutErrorResponse(Error="Invalid session").dict(),
+            )
+
+        client.delete(session_key)
+
+        return DashboardSignOutResponse()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        await send_exception_email(
+            api_route="POST /v1/dashboard/sign-out",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"email={email}, token={'provided' if token else 'not_provided'}",
+        )
+        return DashboardSignOutErrorResponse(
             Error="An error occurred during processing"
         )
