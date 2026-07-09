@@ -438,7 +438,7 @@ async def unsubscribe(user_email: str, request: Request):
             # Send unsubscribe email
             await send_unsub_email(user_email, unsub_url)
 
-        return UnsubscribeResponse(status="Success")
+        return UnsubscribeResponse(status="Success", message="UnSubscribed")
 
     except (
         ValueError,
@@ -485,7 +485,7 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
             # Delete user record from datastore
             datastore_client.delete(alert_key)
 
-            return templates.TemplateResponse(request, "unsubscribe_success.html")
+            return templates.TemplateResponse(request, "email_unsub_verify.html")
 
         raise HTTPException(status_code=404, detail="Not found")
 
