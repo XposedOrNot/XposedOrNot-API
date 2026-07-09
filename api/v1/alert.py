@@ -465,12 +465,16 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
             or not validate_variables([unsubscribe_token])
             or not validate_url(request)
         ):
-            raise HTTPException(status_code=404, detail="Not found")
+            return templates.TemplateResponse(
+                request, "email_unsub_error.html", status_code=404
+            )
 
         # Confirm token
         user_email = await confirm_token(unsubscribe_token)
         if not user_email:
-            raise HTTPException(status_code=404, detail="Not found")
+            return templates.TemplateResponse(
+                request, "email_unsub_error.html", status_code=404
+            )
 
         # Datastore operations
         datastore_client = ds_client
@@ -487,11 +491,12 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
 
             return templates.TemplateResponse(request, "email_unsub_verify.html")
 
-        raise HTTPException(status_code=404, detail="Not found")
+        return templates.TemplateResponse(
+            request, "email_unsub_error.html", status_code=404
+        )
 
     except (
         ValueError,
-        HTTPException,
         google_exceptions.GoogleAPIError,
     ) as exception_details:
         await send_exception_email(
@@ -501,4 +506,6 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
             user_agent=request.headers.get("User-Agent"),
             request_params=f"token={'provided' if unsubscribe_token else 'missing'}",
         )
-        raise HTTPException(status_code=404, detail="Not found") from exception_details
+        return templates.TemplateResponse(
+            request, "email_unsub_error.html", status_code=404
+        )
