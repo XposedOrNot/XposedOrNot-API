@@ -91,8 +91,11 @@ setup_globe_middleware(app)
 
 # MCP Integration - Manual endpoint approach
 @app.get("/mcp")
-async def mcp_get_handler():
+async def mcp_get_handler(fastapi_request: Request):
     """Handle MCP GET requests - return server info."""
+    limited = await _mcp_envelope_guard(fastapi_request)
+    if limited:
+        return limited
     return {
         "jsonrpc": "2.0",
         "result": {
@@ -199,7 +202,7 @@ _MCP_TOOLS = [
 # Light rate limit for cheap MCP envelope methods (initialize / tools/list),
 # keyed on the real caller IP. tools/call is throttled by the underlying
 # route's own @custom_rate_limiter when called in-process.
-_MCP_ENVELOPE_LIMIT = parse_rate_limit("5 per second;300 per hour")
+_MCP_ENVELOPE_LIMIT = parse_rate_limit("2 per second;25 per hour;100 per day")
 
 
 def _mcp_error(request_id, code, message, data=None):
@@ -235,6 +238,22 @@ async def _mcp_envelope_limited(request: Request):
     except Exception:  # pylint: disable=broad-except
         # Never let limiter infrastructure errors break the envelope
         return False, 0
+
+
+async def _mcp_envelope_guard(request: Request, request_id=None):
+    """Return a 429 JSON-RPC response when the per-IP envelope limit is hit."""
+    limited, retry_after = await _mcp_envelope_limited(request)
+    if limited:
+        return JSONResponse(
+            status_code=429,
+            content=_mcp_error(
+                request_id,
+                -32000,
+                "Rate limit exceeded",
+                data={"retry_after": retry_after},
+            ),
+        )
+    return None
 
 
 async def _run_mcp_tool(request_id, coro, label, email=None):
@@ -289,11 +308,17 @@ async def mcp_post_handler(fastapi_request: Request):
     try:
         request_body = await fastapi_request.json()
     except Exception:  # pylint: disable=broad-except
+        limited = await _mcp_envelope_guard(fastapi_request)
+        if limited:
+            return limited
         return JSONResponse(
             status_code=400,
             content=_mcp_error(None, -32700, "Parse error: invalid JSON"),
         )
     if not isinstance(request_body, dict):
+        limited = await _mcp_envelope_guard(fastapi_request)
+        if limited:
+            return limited
         return JSONResponse(
             status_code=400,
             content=_mcp_error(None, -32600, "Invalid request"),
@@ -302,18 +327,12 @@ async def mcp_post_handler(fastapi_request: Request):
     req_id = request_body.get("id")
     method = request_body.get("method")
 
-    if method in ("initialize", "tools/list"):
-        limited, retry_after = await _mcp_envelope_limited(fastapi_request)
+    if method != "tools/call":
+        limited = await _mcp_envelope_guard(fastapi_request, req_id)
         if limited:
-            return JSONResponse(
-                status_code=429,
-                content=_mcp_error(
-                    req_id,
-                    -32000,
-                    "Rate limit exceeded",
-                    data={"retry_after": retry_after},
-                ),
-            )
+            return limited
+
+    if method in ("initialize", "tools/list"):
         if method == "initialize":
             return {
                 "jsonrpc": "2.0",
