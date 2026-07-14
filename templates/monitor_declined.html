@@ -1,0 +1,17 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: Request Declined{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle error" aria-hidden="true">
+    <i class="fas fa-times-circle"></i>
+  </div>
+  <h1>Request declined</h1>
+  <p>No problem. The request has been declined and none of your breach information will be shared.</p>
+  <p class="expiry-note">You will not receive further requests from this person.</p>
+  <a href="https://xposedornot.com" class="cta-button">
+    <i class="fas fa-home"></i> Go to XposedOrNot
+  </a>
+</div>
+{% endblock %}

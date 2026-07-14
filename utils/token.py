@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import HTTPException
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
-from config.settings import SECRET_APIKEY, SECURITY_SALT
+from config.settings import MONITOR_TOKEN_SALT, SECRET_APIKEY, SECURITY_SALT
 from utils.redaction import mask_email
 
 # Configure logging
@@ -87,4 +87,49 @@ async def confirm_token(token: str, expiration: int = 86400) -> Optional[str]:
         return None
     except Exception as e:
         logger.error("[TOKEN] Error verifying token: %s", str(e), exc_info=True)
+        return None
+
+
+async def generate_monitor_token(payload: str) -> str:
+    """
+    Generate a signed, purpose-scoped consent token for the monitor flow.
+
+    The payload is the monitor edge identifier ("requester|target"). A distinct
+    salt namespaces these tokens so they cannot be replayed into the alert flow.
+    """
+    try:
+        logger.debug("[TOKEN] Generating monitor token")
+        serializer = URLSafeTimedSerializer(SECRET_APIKEY)
+        token = serializer.dumps(payload, salt=MONITOR_TOKEN_SALT)
+        return token
+    except Exception as e:
+        logger.error(
+            "[TOKEN] Error generating monitor token: %s", str(e), exc_info=True
+        )
+        raise HTTPException(
+            status_code=500, detail="Error generating monitor token"
+        ) from e
+
+
+async def confirm_monitor_token(token: str, expiration: int = 86400) -> Optional[str]:
+    """
+    Verify and decode a monitor consent token.
+
+    Args:
+        token: The token to verify
+        expiration: Token expiration in seconds (default: 24 hours)
+    """
+    try:
+        logger.debug("[TOKEN] Verifying monitor token with expiration: %s", expiration)
+        serializer = URLSafeTimedSerializer(SECRET_APIKEY)
+        payload = serializer.loads(token, salt=MONITOR_TOKEN_SALT, max_age=expiration)
+        return payload
+    except SignatureExpired:
+        logger.warning("[TOKEN] Monitor token expired")
+        return None
+    except BadSignature:
+        logger.error("[TOKEN] Invalid monitor token signature", exc_info=True)
+        return None
+    except Exception as e:
+        logger.error("[TOKEN] Error verifying monitor token: %s", str(e), exc_info=True)
         return None

@@ -469,6 +469,50 @@ class AlertStatusUpdateErrorResponse(BaseModel):
     Error: str
 
 
+class MonitorResponse(BaseModel):
+    """Response model for monitor onboarding/revocation operations."""
+
+    status: str
+    message: str
+
+
+class MonitorErrorResponse(BaseModel):
+    """Error response model for monitor operations."""
+
+    Error: str
+
+
+class MonitorItem(BaseModel):
+    """Model for a single monitored contact in the requester's circle."""
+
+    target_email: str
+    status: str
+    requested_at: Optional[str] = None
+    responded_at: Optional[str] = None
+    shield_override: bool = False
+    breaches: Optional[Dict[str, Any]] = None
+
+
+class MonitorManagement(BaseModel):
+    """Model for the requester's monitor list grouped by status."""
+
+    summary: Dict[str, Any]
+    monitors: List[MonitorItem] = []
+
+
+class MonitorListResponse(BaseModel):
+    """Response model for the my-monitors listing endpoint."""
+
+    status: str
+    Monitor_Management: MonitorManagement
+
+
+class MonitorListErrorResponse(BaseModel):
+    """Error response model for the my-monitors listing endpoint."""
+
+    Error: str
+
+
 class DashboardSignOutResponse(BaseModel):
     """Response model for dashboard sign-out."""
 

@@ -33,6 +33,210 @@ FROM_EMAIL = "notifications@xposedornot.com"
 FROM_NAME = "XposedOrNot Notifications"
 MAILJET_API_URL = "https://api.mailjet.com/v3.1/send"
 
+MONITOR_INVITE_TEMPLATE_ID = 0
+MONITOR_ACCEPTED_TEMPLATE_ID = 0
+MONITOR_NOTICE_TEMPLATE_ID = 0
+
+
+async def send_monitor_invite(
+    email: str,
+    requester_email: str,
+    accept_url: str,
+    decline_url: str,
+    shield_on: bool,
+    ip_address: str,
+    location: str,
+) -> Dict[str, Any]:
+    """
+    Sends a monitor consent request to a target on behalf of a requester.
+
+    TemplateID is a placeholder until the Mailjet template is created.
+    """
+    try:
+        if not API_KEY or not API_SECRET:
+            raise HTTPException(
+                status_code=500,
+                detail="Email service configuration error: API credentials not set",
+            )
+
+        data = {
+            "Messages": [
+                {
+                    "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
+                    "To": [{"Email": email}],
+                    "TemplateID": MONITOR_INVITE_TEMPLATE_ID,
+                    "TemplateLanguage": True,
+                    "Subject": "XposedOrNot: Someone wants to help monitor your breach exposure",
+                    "Variables": {
+                        "requester_email": requester_email,
+                        "accept_url": accept_url,
+                        "decline_url": decline_url,
+                        "shield_on": shield_on,
+                        "ip": ip_address,
+                        "location": location,
+                    },
+                }
+            ]
+        }
+        async with httpx.AsyncClient() as client:
+            try:
+                try:
+                    socket.gethostbyname("api.mailjet.com")
+                except socket.gaierror as e:
+                    logging.error("Could not resolve api.mailjet.com: %s", str(e))
+
+                response = await client.post(
+                    MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=500, detail="Failed to send monitor invite"
+                    )
+                return response.json()
+            except httpx.ConnectError as e:
+                error_msg = "Unable to connect to email service. "
+                error_msg += "Check network connection and firewall settings."
+                raise HTTPException(status_code=500, detail=error_msg) from e
+            except httpx.TimeoutException as e:
+                raise HTTPException(
+                    status_code=500, detail="Email service timeout"
+                ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error("send_monitor_invite failed: %s", sanitize_log_text(str(e)))
+        raise HTTPException(
+            status_code=500, detail="Failed to send monitor invite"
+        ) from e
+
+
+async def send_monitor_accepted(
+    email: str, requester_email: str, withdraw_url: str
+) -> Dict[str, Any]:
+    """
+    Confirms to a target that monitoring is active and gives them a standing
+    withdraw link.
+
+    TemplateID is a placeholder until the Mailjet template is created.
+    """
+    try:
+        if not API_KEY or not API_SECRET:
+            raise HTTPException(
+                status_code=500,
+                detail="Email service configuration error: API credentials not set",
+            )
+
+        data = {
+            "Messages": [
+                {
+                    "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
+                    "To": [{"Email": email}],
+                    "TemplateID": MONITOR_ACCEPTED_TEMPLATE_ID,
+                    "TemplateLanguage": True,
+                    "Subject": "XposedOrNot: You're now protected",
+                    "Variables": {
+                        "requester_email": requester_email,
+                        "withdraw_url": withdraw_url,
+                    },
+                }
+            ]
+        }
+        async with httpx.AsyncClient() as client:
+            try:
+                try:
+                    socket.gethostbyname("api.mailjet.com")
+                except socket.gaierror as e:
+                    logging.error("Could not resolve api.mailjet.com: %s", str(e))
+
+                response = await client.post(
+                    MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=500, detail="Failed to send monitor confirmation"
+                    )
+                return response.json()
+            except httpx.ConnectError as e:
+                error_msg = "Unable to connect to email service. "
+                error_msg += "Check network connection and firewall settings."
+                raise HTTPException(status_code=500, detail=error_msg) from e
+            except httpx.TimeoutException as e:
+                raise HTTPException(
+                    status_code=500, detail="Email service timeout"
+                ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error("send_monitor_accepted failed: %s", sanitize_log_text(str(e)))
+        raise HTTPException(
+            status_code=500, detail="Failed to send monitor confirmation"
+        ) from e
+
+
+async def send_monitor_requester_notice(
+    email: str, target_email: str, decision: str, dashboard_url: str
+) -> Dict[str, Any]:
+    """
+    Notifies a requester that a target accepted or declined their request.
+
+    TemplateID is a placeholder until the Mailjet template is created.
+    """
+    try:
+        if not API_KEY or not API_SECRET:
+            raise HTTPException(
+                status_code=500,
+                detail="Email service configuration error: API credentials not set",
+            )
+
+        data = {
+            "Messages": [
+                {
+                    "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
+                    "To": [{"Email": email}],
+                    "TemplateID": MONITOR_NOTICE_TEMPLATE_ID,
+                    "TemplateLanguage": True,
+                    "Subject": "XposedOrNot: Update on your monitoring request",
+                    "Variables": {
+                        "target_email": target_email,
+                        "decision": decision,
+                        "dashboard_url": dashboard_url,
+                    },
+                }
+            ]
+        }
+        async with httpx.AsyncClient() as client:
+            try:
+                try:
+                    socket.gethostbyname("api.mailjet.com")
+                except socket.gaierror as e:
+                    logging.error("Could not resolve api.mailjet.com: %s", str(e))
+
+                response = await client.post(
+                    MAILJET_API_URL, json=data, auth=(API_KEY, API_SECRET), timeout=30.0
+                )
+                if response.status_code != 200:
+                    raise HTTPException(
+                        status_code=500, detail="Failed to send requester notice"
+                    )
+                return response.json()
+            except httpx.ConnectError as e:
+                error_msg = "Unable to connect to email service. "
+                error_msg += "Check network connection and firewall settings."
+                raise HTTPException(status_code=500, detail=error_msg) from e
+            except httpx.TimeoutException as e:
+                raise HTTPException(
+                    status_code=500, detail="Email service timeout"
+                ) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(
+            "send_monitor_requester_notice failed: %s", sanitize_log_text(str(e))
+        )
+        raise HTTPException(
+            status_code=500, detail="Failed to send requester notice"
+        ) from e
+
 
 async def send_shield_email(
     email: str, confirm_url: str, ip_address: str, browser: str, platform: str

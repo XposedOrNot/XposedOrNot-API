@@ -1,0 +1,17 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: Link Not Valid{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle error" aria-hidden="true">
+    <i class="fas fa-exclamation-triangle"></i>
+  </div>
+  <h1>This link is no longer valid</h1>
+  <p>The link may have expired, already been used, or the request is no longer active.</p>
+  <p class="expiry-note">If you still need to respond, ask the sender to invite you again.</p>
+  <a href="https://xposedornot.com" class="cta-button">
+    <i class="fas fa-home"></i> Go to XposedOrNot
+  </a>
+</div>
+{% endblock %}

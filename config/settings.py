@@ -14,6 +14,7 @@ FERNET_KEY: Optional[str] = os.environ.get("ENCRYPTION_KEY")
 PROJECT_ID: Optional[str] = os.environ.get("PROJECT_ID")
 SECRET_APIKEY: str = os.environ["SECRET_APIKEY"]
 SECURITY_SALT: str = os.environ["SECURITY_SALT"]
+MONITOR_TOKEN_SALT: str = os.environ.get("MONITOR_TOKEN_SALT", "xon-monitor-consent")
 TOPIC_ID: Optional[str] = os.environ.get("TOPIC_ID")
 WTF_CSRF_SECRET_KEY: str = os.environ["WTF_CSRF_SECRET_KEY"]
 XMLAPI_KEY: str = os.environ["XMLAPI_KEY"]

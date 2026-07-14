@@ -489,6 +489,10 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
             # Delete user record from datastore
             datastore_client.delete(alert_key)
 
+            from api.v1.monitor import revoke_monitors_for_target
+
+            revoke_monitors_for_target(user_email)
+
             return templates.TemplateResponse(request, "email_unsub_verify.html")
 
         return templates.TemplateResponse(

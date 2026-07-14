@@ -44,6 +44,7 @@ from api.v1 import (
     enterprise_validation,
     feeds,
     metrics,
+    monitor,
     monthly_digest,
 )
 
@@ -483,6 +484,9 @@ app.include_router(
     prefix="/v1",
     tags=["monthly_digest"],
     include_in_schema=True,
+)
+app.include_router(
+    monitor.router, prefix="/v1", tags=["monitor"], include_in_schema=False
 )
 
 

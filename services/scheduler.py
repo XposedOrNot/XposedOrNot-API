@@ -177,6 +177,11 @@ class SchedulerService:
 
             result = await process_alert_reminders()
             logger.info(f"🔔 REMINDER_TRIGGER: ✅ Completed - {result}")
+
+            from api.v1.monitor import process_monitor_reminders
+
+            monitor_result = await process_monitor_reminders()
+            logger.info(f"🔔 MONITOR_REMINDER_TRIGGER: ✅ Completed - {monitor_result}")
         except Exception as e:
             logger.error(f"🔔 REMINDER_TRIGGER: ❌ Job failed: {str(e)}")
 

@@ -76,6 +76,23 @@ class DomainVerificationRequest(BaseModel):
         return self.verification_type == "dns"
 
 
+class MonitorRequest(BaseModel):
+    """Request model for monitor onboarding and revocation.
+
+    Carries the target email a signed-in requester wants to start or stop
+    monitoring. The requester is authenticated separately via the dashboard
+    session (email + token query params), never from this body.
+    """
+
+    target_email: EmailStr
+
+    class Config:  # pylint: disable=too-few-public-methods
+        """Configuration class for MonitorRequest."""
+
+        validate_by_name = True
+        json_schema_extra = {"example": {"target_email": "mom@example.com"}}
+
+
 class ApiKeyRequest(BaseModel):
     """Request model for API key operations.
 

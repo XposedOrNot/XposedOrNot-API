@@ -1,0 +1,33 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: Confirm Your Choice{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle success" aria-hidden="true">
+    <i class="fas fa-user-shield"></i>
+  </div>
+  {% if action == "accept" %}
+  <h1>Confirm monitoring</h1>
+  <p><strong>{{ requester_email }}</strong> would like to keep an eye on your data-breach exposure and help protect you.</p>
+  <p class="expiry-note">If you accept, they will be able to see your breach details. You can withdraw at any time from the link in your emails.</p>
+  <form method="post" action="{{ action_url }}">
+    <button type="submit" class="cta-button"><i class="fas fa-check"></i> Yes, allow monitoring</button>
+  </form>
+  {% elif action == "decline" %}
+  <h1>Decline request</h1>
+  <p>You are about to decline the monitoring request from <strong>{{ requester_email }}</strong>.</p>
+  <p class="expiry-note">They will not be able to see any of your breach information.</p>
+  <form method="post" action="{{ action_url }}">
+    <button type="submit" class="cta-button"><i class="fas fa-times"></i> Confirm decline</button>
+  </form>
+  {% else %}
+  <h1>Stop sharing</h1>
+  <p>You are about to stop sharing your breach exposure with <strong>{{ requester_email }}</strong>.</p>
+  <p class="expiry-note">They will immediately lose access to your breach information.</p>
+  <form method="post" action="{{ action_url }}">
+    <button type="submit" class="cta-button"><i class="fas fa-user-slash"></i> Stop sharing</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
