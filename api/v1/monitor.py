@@ -58,11 +58,11 @@ logger = logging.getLogger(__name__)
 
 MONITOR_ENABLED = True
 MAX_MONITORS_PER_USER = 25
-MONITOR_INVITE_LIMIT = parse_rate_limit("1 per hour;2 per day")
+MONITOR_INVITE_LIMIT = parse_rate_limit("3 per hour;10 per day")
 REJECT_COOLDOWN_DAYS = 30
 CONSENT_TOKEN_EXPIRY = 7 * 86400
 WITHDRAW_TOKEN_EXPIRY = 365 * 86400
-DASHBOARD_URL = "https://xposedornot.com/my-dashboard"
+DASHBOARD_URL = "https://xon-web-test.xposedornot.com/my-dashboard"
 MONITOR_REMINDER_SCHEDULE_DAYS = {0: 2, 1: 6}
 MONITOR_MAX_REMINDERS = 2
 
@@ -245,17 +245,21 @@ def _create_pending_edge(
     ds_client.put(entity)
 
 
+async def _invite_recently_sent(requester_email: str, target_email: str) -> bool:
+    """Per-pair throttle: True when this requester has invited this target too often."""
+    redis_conn = await get_healthy_redis_connection()
+    recipient_limited, _, _ = await is_rate_limited(
+        f"monitor-invite:{requester_email}:{target_email}",
+        MONITOR_INVITE_LIMIT,
+        redis_conn,
+    )
+    return recipient_limited
+
+
 async def _send_invite(
     request: Request, target_email: str, requester_email: str, token: str
 ) -> None:
-    """Send the consent invite email, subject to a per-recipient throttle."""
-    redis_conn = await get_healthy_redis_connection()
-    recipient_limited, _, _ = await is_rate_limited(
-        f"monitor-invite:{target_email}", MONITOR_INVITE_LIMIT, redis_conn
-    )
-    if recipient_limited:
-        return
-
+    """Send the consent invite email for a pending monitor edge."""
     base_url = str(request.base_url)
     accept_url = f"{base_url}v1/monitor-accept/{token}"
     decline_url = f"{base_url}v1/monitor-decline/{token}"
@@ -332,6 +336,15 @@ async def create_monitor(
             raise HTTPException(
                 status_code=400,
                 detail=MonitorErrorResponse(Error="Monitoring limit reached").dict(),
+            )
+
+        if await _invite_recently_sent(requester_email, target_email):
+            raise HTTPException(
+                status_code=429,
+                detail=MonitorErrorResponse(
+                    Error="You've recently invited this person. "
+                    "Please wait a bit before trying again."
+                ).dict(),
             )
 
         verification_token = await generate_monitor_token(key_name)

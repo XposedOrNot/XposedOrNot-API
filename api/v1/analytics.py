@@ -306,6 +306,7 @@ async def domain_alert(
                 {
                     "magic_timestamp": datetime.datetime.now(),
                     "domain_magic": verification_token,
+                    "dashboard": dashboard or "",
                 }
             )
             datastore_client.put(alert_task_data)
@@ -384,15 +385,21 @@ async def domain_verify(
             )
 
         # Create session data
+        effective_dashboard = d
         try:
             client = ds_client
-            alert_task_data = datastore.Entity(
-                client.key("xon_domains_session", user_email)
+            session_key = client.key("xon_domains_session", user_email)
+            existing_session = client.get(session_key)
+            stored_dashboard = (
+                existing_session.get("dashboard") if existing_session else None
             )
+            effective_dashboard = d or stored_dashboard
+            alert_task_data = datastore.Entity(session_key)
             alert_task_data.update(
                 {
                     "magic_timestamp": datetime.datetime.now(),
                     "domain_magic": verification_token,
+                    "dashboard": effective_dashboard or "",
                 }
             )
             client.put(alert_task_data)
@@ -401,8 +408,8 @@ async def domain_verify(
 
         # Generate dashboard link with properly encoded parameters
         dashboard_page = (
-            "https://xposedornot.com/my-dashboard.html"
-            if d == "my"
+            "https://xon-web-test.xposedornot.com/my-dashboard.html"
+            if effective_dashboard == "my"
             else "https://xposedornot.com/breach-dashboard.html"
         )
         dashboard_link = build_safe_url(
