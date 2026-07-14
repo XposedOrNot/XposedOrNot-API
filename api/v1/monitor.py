@@ -70,6 +70,7 @@ STATUS_PENDING = "pending"
 STATUS_ACCEPTED = "accepted"
 STATUS_REJECTED = "rejected"
 STATUS_REVOKED = "revoked"
+STATUS_WITHDRAWN = "withdrawn"
 
 MONITOR_EXCLUDED_FIELDS = [
     "insert_timestamp",
@@ -367,9 +368,11 @@ async def create_monitor(
         raise HTTPException(status_code=404) from exception_details
 
 
-async def _build_monitor_item(record: datastore.Entity) -> MonitorItem:
+async def _build_monitor_item(
+    record: datastore.Entity, status_override: Optional[str] = None
+) -> MonitorItem:
     """Build a MonitorItem for a single edge, with breaches only when accepted."""
-    status = record.get("status")
+    status = status_override or record.get("status")
     breaches = None
     if status == STATUS_ACCEPTED:
         breaches = await _fetch_target_breaches(record.get("target_email"))
@@ -416,20 +419,31 @@ async def my_monitors(
         query = ds_client.query(kind="xon_monitor")
         query.add_filter("requester_email", "=", requester_email)
 
-        counts = {STATUS_PENDING: 0, STATUS_ACCEPTED: 0, STATUS_REJECTED: 0}
+        counts = {
+            STATUS_PENDING: 0,
+            STATUS_ACCEPTED: 0,
+            STATUS_REJECTED: 0,
+            STATUS_WITHDRAWN: 0,
+        }
         items = []
         for record in query.fetch():
             status = record.get("status")
+            if status == STATUS_REVOKED:
+                if record.get("revoked_by") == "target":
+                    status = STATUS_WITHDRAWN
+                else:
+                    continue
             if status not in counts:
                 continue
             counts[status] += 1
-            items.append(await _build_monitor_item(record))
+            items.append(await _build_monitor_item(record, status_override=status))
 
         summary = {
             "total": sum(counts.values()),
             "pending_count": counts[STATUS_PENDING],
             "accepted_count": counts[STATUS_ACCEPTED],
             "rejected_count": counts[STATUS_REJECTED],
+            "withdrawn_count": counts[STATUS_WITHDRAWN],
         }
         return MonitorListResponse(
             status="Success",
@@ -504,6 +518,7 @@ async def revoke_monitor(
             "responded_at": now,
             "token": "",
             "unsub_token": "",
+            "revoked_by": "requester",
         }
         for expected in (STATUS_PENDING, STATUS_ACCEPTED):
             edge = await _flip_status(edge_key, expected, updates)
@@ -860,6 +875,7 @@ async def monitor_withdraw_confirm(monitor_token: str, request: Request):
                 "responded_at": now,
                 "recent_timestamp": now,
                 "unsub_token": "",
+                "revoked_by": "target",
             },
         )
         if not flipped or flipped.get("status") != STATUS_REVOKED:
