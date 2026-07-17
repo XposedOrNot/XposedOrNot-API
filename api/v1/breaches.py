@@ -31,7 +31,7 @@ from services.shield_cache import get_cached_shield, set_cached_shield
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
 from utils.helpers import string_to_boolean, validate_domain
-from utils.token import validate_dashboard_session
+from utils.token import confirm_token, validate_dashboard_session
 from utils.validation import (
     validate_email_with_tld,
     validate_token,
@@ -265,6 +265,29 @@ def build_breach_analytics_response(
     return BreachAnalyticsResponse(**data)
 
 
+async def authorize_analytics_token(
+    datastore_client, email: str, token: str, alert_record
+) -> bool:
+    """Authorize an analytics token by revalidating signature, expiry and binding.
+
+    The stored alert token is only honored when it still passes cryptographic
+    verification (signature + 24h expiry) and decodes to the requested email,
+    so a leaked or expired verification link cannot be replayed. Falls back to
+    the dashboard magic-link session.
+    """
+    if not validate_token(token):
+        return False
+    if (
+        alert_record
+        and alert_record.get("verified")
+        and alert_record.get("token") == token
+    ):
+        decoded_email = await confirm_token(token)
+        if decoded_email and decoded_email.lower() == email:
+            return True
+    return validate_dashboard_session(datastore_client, email, token)
+
+
 @router.get(
     "/breach-analytics",
     response_model=Union[BreachAnalyticsAuthResponse, BreachAnalyticsResponse],
@@ -302,12 +325,9 @@ async def search_data_breaches(
 
         # Validate token if provided
         if token:
-            if not validate_token(token):
-                raise HTTPException(status_code=403, detail="Invalid token")
-            token_valid = bool(alert_record and alert_record.get("token") == token)
-            if not token_valid:
-                token_valid = validate_dashboard_session(datastore_client, email, token)
-            if not token_valid:
+            if not await authorize_analytics_token(
+                datastore_client, email, token, alert_record
+            ):
                 raise HTTPException(status_code=403, detail="Invalid token")
 
         shield_on_status = bool(
