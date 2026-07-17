@@ -598,7 +598,12 @@ async def send_exception_email(
 
 
 async def send_domain_confirmation(
-    email: str, confirm_url: str, ip_address: str, browser: str, platform: str
+    email: str,
+    confirm_url: str,
+    ip_address: str,
+    browser: str,
+    platform: str,
+    recipient: str = "",
 ) -> Dict[str, Any]:
     """
     Sends XposedOrNot domain Confirmation Email
@@ -620,6 +625,7 @@ async def send_domain_confirmation(
                         "ip": ip_address,
                         "browser": browser,
                         "platform": platform,
+                        "recipient": recipient,
                     },
                 }
             ]

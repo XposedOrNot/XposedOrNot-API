@@ -15,6 +15,7 @@ from typing import List, Union
 import domcheck
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.templating import Jinja2Templates
 from google.api_core import exceptions as google_exceptions
 from google.cloud import datastore
 from pydantic import EmailStr
@@ -29,6 +30,7 @@ from config.settings import (
     DOMAIN_EMAIL_IP_MAX_PER_HOUR,
     DOMAIN_EMAIL_LIMITS_ENABLED,
     DOMAIN_EMAIL_RECIPIENT_COOLDOWN_SECONDS,
+    WEBSITE_BASE_URL,
 )
 from models.base import BaseResponse
 from services.send_email import (
@@ -43,6 +45,7 @@ from utils.request import get_client_ip, get_user_agent_info
 from utils.validation import validate_email_with_tld, validate_variables
 
 router = APIRouter()
+templates = Jinja2Templates(directory="templates")
 
 DOMAIN_EMAIL_ROLES = ("security", "admin", "webmaster", "postmaster", "hostmaster")
 DOMAIN_EMAIL_CHALLENGE_TTL_MINUTES = 30
@@ -74,7 +77,12 @@ class DomainVerificationResponse(BaseResponse):
 
 
 def create_new_record(
-    domain: str, email: str, token: str, mode: str, datastore_client: datastore.Client
+    domain: str,
+    email: str,
+    token: str,
+    mode: str,
+    datastore_client: datastore.Client,
+    verified_via: str = None,
 ):
     """Creates a new domain record with the provided domain, email, token, and verification mode."""
     new_domain_record = datastore.Entity(
@@ -88,18 +96,24 @@ def create_new_record(
             "token": token,
             "verified": True,
             "insert_timestamp": datetime.now(),
+            "verified_via": verified_via,
         }
     )
     datastore_client.put(new_domain_record)
 
 
 async def send_domain_confirmation_email(
-    email: str, token: str, ip_address: str, browser_type: str, client_platform: str
+    email: str,
+    token: str,
+    ip_address: str,
+    browser_type: str,
+    client_platform: str,
+    recipient: str,
 ):
     """Sends domain confirmation email with verification details."""
     confirm_url = f"{BASE_URL.rstrip('/')}/v1/domain_validation?token={token}"
     await send_domain_confirmation(
-        email, confirm_url, ip_address, browser_type, client_platform
+        email, confirm_url, ip_address, browser_type, client_platform, recipient
     )
 
 
@@ -244,17 +258,30 @@ def enforce_email_challenge_limits(domain: str, email: str, client_ip: str) -> N
 
 
 async def verify_email(
-    domain: str, email: str, request: Request
+    domain: str, role_email: str, recipient: str, request: Request
 ) -> DomainVerificationResponse:
-    """Send a verification challenge to an approved role address."""
+    """Send a verification challenge to an approved role address.
+
+    The role address is a one-time proof target that must be one of the five
+    permitted role mailboxes. The recipient is the domain owner / alert address
+    that will own the verified domain and receive breach alerts; it must be a
+    valid mailbox on the same domain so a single controlled role mailbox cannot
+    route breach data off-domain.
+    """
     normalized_domain = domain.strip().lower()
-    normalized_email = email.strip().lower()
-    if normalized_email not in get_domain_verification_emails(normalized_domain):
+    normalized_role = role_email.strip().lower()
+    normalized_recipient = recipient.strip().lower()
+    if normalized_role not in get_domain_verification_emails(normalized_domain):
+        return DomainVerificationResponse(status="error", domainVerification="Failure")
+
+    if not validate_email_with_tld(normalized_recipient):
+        return DomainVerificationResponse(status="error", domainVerification="Failure")
+    if normalized_recipient.rsplit("@", 1)[-1] != normalized_domain:
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
     client_ip_address = get_client_ip(request)
     enforce_email_challenge_limits(
-        normalized_domain, normalized_email, client_ip_address
+        normalized_domain, normalized_role, client_ip_address
     )
 
     token = secrets.token_urlsafe(32)
@@ -267,7 +294,8 @@ async def verify_email(
     challenge.update(
         {
             "domain": normalized_domain,
-            "email": normalized_email,
+            "email": normalized_role,
+            "recipient": normalized_recipient,
             "created_at": now,
             "expires_at": now + timedelta(minutes=DOMAIN_EMAIL_CHALLENGE_TTL_MINUTES),
             "used": False,
@@ -278,11 +306,12 @@ async def verify_email(
     browser_type, client_platform = get_user_agent_info(request)
     try:
         await send_domain_confirmation_email(
-            normalized_email,
+            normalized_role,
             token,
             client_ip_address,
             browser_type,
             client_platform,
+            normalized_recipient,
         )
     except HTTPException:
         datastore_client.delete(challenge.key)
@@ -291,7 +320,14 @@ async def verify_email(
     return DomainVerificationResponse(status="success", domainVerification="Success")
 
 
-@router.get("/domain_validation", response_model=DomainVerificationResponse)
+def _domain_verified_error(request: Request):
+    """Render the friendly domain verification failure page."""
+    return templates.TemplateResponse(
+        request, "domain_verified_error.html", status_code=400
+    )
+
+
+@router.get("/domain_validation", response_model=None)
 @custom_rate_limiter("2 per second;20 per hour;50 per day")
 async def domain_validation(
     request: Request,
@@ -318,16 +354,28 @@ async def domain_validation(
                 raise HTTPException(status_code=404, detail="Verification failed")
 
             domain = challenge.get("domain", "")
-            email = challenge.get("email", "")
+            role_email = challenge.get("email", "")
+            recipient = challenge.get("recipient", "")
             if not validate_domain(
                 domain
-            ) or email not in get_domain_verification_emails(domain):
+            ) or role_email not in get_domain_verification_emails(domain):
+                raise HTTPException(status_code=404, detail="Verification failed")
+            if not validate_email_with_tld(recipient) or (
+                recipient.rsplit("@", 1)[-1] != domain
+            ):
                 raise HTTPException(status_code=404, detail="Verification failed")
 
-            domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
+            domain_key = datastore_client.key("xon_domains", f"{domain}_{recipient}")
             domain_record = datastore_client.get(domain_key)
             if domain_record is None:
-                create_new_record(domain, email, token_hash, "email", datastore_client)
+                create_new_record(
+                    domain,
+                    recipient,
+                    token_hash,
+                    "email",
+                    datastore_client,
+                    verified_via=role_email,
+                )
             else:
                 domain_record["last_verified"] = datetime.utcnow()
                 datastore_client.put(domain_record)
@@ -341,14 +389,18 @@ async def domain_validation(
         client_ip_address = get_client_ip(request)
         browser_type, client_platform = get_user_agent_info(request)
         await send_domain_verified_success(
-            email, client_ip_address, browser_type, client_platform
+            recipient, client_ip_address, browser_type, client_platform
         )
         await send_domain_verification_admin_notification(domain)
-        return DomainVerificationResponse(
-            status="success", domainVerification="Success"
+        return templates.TemplateResponse(
+            request,
+            "domain_verified_success.html",
+            context={
+                "dashboard_url": f"{WEBSITE_BASE_URL.rstrip('/')}/my-dashboard.html"
+            },
         )
     except HTTPException:
-        raise
+        return _domain_verified_error(request)
     except Exception as exc:
         await send_exception_email(
             api_route="GET /v1/domain_validation",
@@ -356,7 +408,7 @@ async def domain_validation(
             exception_type=type(exc).__name__,
             user_agent=request.headers.get("User-Agent"),
         )
-        raise HTTPException(status_code=404, detail="Verification failed") from exc
+        return _domain_verified_error(request)
 
 
 async def verify_dns(
@@ -582,6 +634,7 @@ async def domain_verification(
     d: str = Query(..., description="Domain name"),
     a: EmailStr = Query("catch-all@xposedornot.com", description="Email address"),
     v: str = Query("xon-is-good", description="Verification code"),
+    r: EmailStr = Query("", description="Monitoring recipient email"),
 ):
     """Used for validating domain ownership/authority."""
     try:
@@ -602,7 +655,9 @@ async def domain_verification(
                 domainVerification=get_domain_verification_emails(normalized_domain),
             )
         if z == "d":
-            return await verify_email(normalized_domain, normalized_email, request)
+            return await verify_email(
+                normalized_domain, normalized_email, str(r).strip().lower(), request
+            )
         if z == "e":
             return await verify_dns(
                 normalized_domain, normalized_email, v, prefix, request

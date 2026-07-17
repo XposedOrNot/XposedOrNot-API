@@ -1,0 +1,17 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: Domain Verified{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle success" aria-hidden="true">
+    <i class="fas fa-check-circle"></i>
+  </div>
+  <h1>Domain Verified Successfully</h1>
+  <p>Ownership is confirmed. This domain is now monitored and breach alerts will be delivered to the recipient you chose.</p>
+  <p class="expiry-note">Manage the domain and view its exposure from your dashboard.</p>
+  <a href="{{ dashboard_url }}" class="cta-button">
+    <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+  </a>
+</div>
+{% endblock %}

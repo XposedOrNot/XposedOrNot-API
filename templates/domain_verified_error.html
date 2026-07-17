@@ -1,0 +1,53 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: Domain Verification Failed{% endblock %}
+
+{% block extra_styles %}
+.verify-card .error-reasons {
+  text-align: left;
+  background: #fff5f5;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 20px 0 28px;
+}
+
+.verify-card .error-reasons p {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 8px;
+}
+
+.verify-card .error-reasons ul {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.verify-card .error-reasons li {
+  font-size: 14px;
+  color: #4a5568;
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle error" aria-hidden="true">
+    <i class="fas fa-times-circle"></i>
+  </div>
+  <h1>Domain Verification Failed</h1>
+  <p>We couldn't validate this verification link.</p>
+  <div class="error-reasons">
+    <p>This could happen because:</p>
+    <ul>
+      <li>The link has expired (links are valid for 30 minutes)</li>
+      <li>The link has already been used</li>
+      <li>The link was modified or is incomplete</li>
+    </ul>
+  </div>
+  <a href="https://xposedornot.com" class="cta-button">
+    <i class="fas fa-redo"></i> Try Again
+  </a>
+</div>
+{% endblock %}

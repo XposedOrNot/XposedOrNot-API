@@ -18,6 +18,7 @@ MONITOR_TOKEN_SALT: str = os.environ.get("MONITOR_TOKEN_SALT", "xon-monitor-cons
 TOPIC_ID: Optional[str] = os.environ.get("TOPIC_ID")
 WTF_CSRF_SECRET_KEY: str = os.environ["WTF_CSRF_SECRET_KEY"]
 BASE_URL: str = os.environ.get("BASE_URL", "https://api.xposedornot.com")
+WEBSITE_BASE_URL: str = "https://xposedornot.com"
 
 BOT_ENFORCEMENT_ENABLED: bool = (
     os.environ.get("BOT_ENFORCEMENT_ENABLED", "false").lower() == "true"

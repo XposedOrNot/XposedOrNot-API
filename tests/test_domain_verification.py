@@ -128,8 +128,12 @@ def verification_environment(monkeypatch):
     processing_starts = []
     success_emails = []
 
-    async def fake_send(email, token, ip_address, browser_type, client_platform):
-        sent.append((email, token, ip_address, browser_type, client_platform))
+    async def fake_send(
+        email, token, ip_address, browser_type, client_platform, recipient
+    ):
+        sent.append(
+            (email, token, ip_address, browser_type, client_platform, recipient)
+        )
 
     async def fake_notification(domain):
         notifications.append(domain)
@@ -165,13 +169,34 @@ def test_role_addresses_are_static_and_normalized():
     assert module.get_domain_verification_emails("invalid") == []
 
 
-def test_arbitrary_recipient_is_rejected_without_side_effects(
+def test_arbitrary_role_is_rejected_without_side_effects(
     verification_environment,
 ):
-    """A caller-supplied non-role mailbox cannot receive a challenge."""
+    """A caller-supplied non-role proof mailbox cannot receive a challenge."""
     client, sent, _, processing_starts, success_emails = verification_environment
     response = asyncio.run(
-        module.verify_email("example.com", "owner@example.com", make_request())
+        module.verify_email(
+            "example.com", "owner@example.com", "owner@example.com", make_request()
+        )
+    )
+
+    assert response.status == "error"
+    assert response.domainVerification == "Failure"
+    assert client.entities == {}
+    assert sent == []
+    assert not processing_starts
+    assert not success_emails
+
+
+def test_offdomain_recipient_is_rejected_without_side_effects(
+    verification_environment,
+):
+    """A recipient on a different domain cannot own the verification."""
+    client, sent, _, processing_starts, success_emails = verification_environment
+    response = asyncio.run(
+        module.verify_email(
+            "example.com", "admin@example.com", "attacker@evil.com", make_request()
+        )
     )
 
     assert response.status == "error"
@@ -188,7 +213,9 @@ def test_role_recipient_stays_pending_until_redeemed(verification_environment):
         verification_environment
     )
     response = asyncio.run(
-        module.verify_email("example.com", "security@example.com", make_request())
+        module.verify_email(
+            "example.com", "security@example.com", "owner@example.com", make_request()
+        )
     )
 
     assert response.status == "success"
@@ -201,21 +228,24 @@ def test_role_recipient_stays_pending_until_redeemed(verification_environment):
     token = sent[0][1]
     redeemed = asyncio.run(redeem_challenge(token))
 
-    assert redeemed.status == "success"
-    domain_key = "xon_domains", "example.com_security@example.com"
+    assert redeemed.status_code == 200
+    assert b"Domain Verified Successfully" in redeemed.body
+    domain_key = "xon_domains", "example.com_owner@example.com"
     assert client.entities[domain_key]["verified"] is True
+    assert client.entities[domain_key]["email"] == "owner@example.com"
+    assert client.entities[domain_key]["verified_via"] == "security@example.com"
     assert client.entities[domain_key][
         "token"
     ] == module.hash_domain_verification_token(token)
     assert notifications == ["example.com"]
     assert processing_starts == ["example.com"]
     assert success_emails == [
-        ("security@example.com", "203.0.113.10", "Test Browser", "Test OS")
+        ("owner@example.com", "203.0.113.10", "Test Browser", "Test OS")
     ]
 
-    with pytest.raises(HTTPException) as replay:
-        asyncio.run(redeem_challenge(token))
-    assert replay.value.status_code == 404
+    replay = asyncio.run(redeem_challenge(token))
+    assert replay.status_code == 400
+    assert b"Domain Verification Failed" in replay.body
 
 
 def test_expired_challenge_cannot_verify_domain(verification_environment):
@@ -224,7 +254,9 @@ def test_expired_challenge_cannot_verify_domain(verification_environment):
         verification_environment
     )
     asyncio.run(
-        module.verify_email("example.com", "postmaster@example.com", make_request())
+        module.verify_email(
+            "example.com", "postmaster@example.com", "owner@example.com", make_request()
+        )
     )
     token = sent[0][1]
     challenge_key = (
@@ -235,10 +267,10 @@ def test_expired_challenge_cannot_verify_domain(verification_environment):
         timezone.utc
     ) - timedelta(seconds=1)
 
-    with pytest.raises(HTTPException) as expired:
-        asyncio.run(redeem_challenge(token))
+    expired = asyncio.run(redeem_challenge(token))
 
-    assert expired.value.status_code == 404
+    assert expired.status_code == 400
+    assert b"Domain Verification Failed" in expired.body
     assert not any(key[0] == "xon_domains" for key in client.entities)
     assert notifications == []
     assert not processing_starts
@@ -268,14 +300,21 @@ def test_recipient_cooldown_blocks_repeat_challenge(verification_environment):
     _, sent, _, _, _ = verification_environment
 
     first = asyncio.run(
-        module.verify_email("example.com", "security@example.com", make_request())
+        module.verify_email(
+            "example.com", "security@example.com", "owner@example.com", make_request()
+        )
     )
     assert first.status == "success"
     assert len(sent) == 1
 
     with pytest.raises(HTTPException) as throttled:
         asyncio.run(
-            module.verify_email("example.com", "security@example.com", make_request())
+            module.verify_email(
+                "example.com",
+                "security@example.com",
+                "owner@example.com",
+                make_request(),
+            )
         )
     assert throttled.value.status_code == 429
     assert len(sent) == 1
@@ -290,13 +329,23 @@ def test_domain_hourly_cap_blocks_across_role_addresses(
 
     for role in ("security", "admin"):
         response = asyncio.run(
-            module.verify_email("example.com", f"{role}@example.com", make_request())
+            module.verify_email(
+                "example.com",
+                f"{role}@example.com",
+                "owner@example.com",
+                make_request(),
+            )
         )
         assert response.status == "success"
 
     with pytest.raises(HTTPException) as throttled:
         asyncio.run(
-            module.verify_email("example.com", "webmaster@example.com", make_request())
+            module.verify_email(
+                "example.com",
+                "webmaster@example.com",
+                "owner@example.com",
+                make_request(),
+            )
         )
     assert throttled.value.status_code == 429
     assert len(sent) == 2
@@ -308,13 +357,17 @@ def test_global_daily_budget_blocks_new_domains(verification_environment, monkey
     monkeypatch.setattr(module, "DOMAIN_EMAIL_GLOBAL_DAILY_BUDGET", 1)
 
     first = asyncio.run(
-        module.verify_email("example.com", "security@example.com", make_request())
+        module.verify_email(
+            "example.com", "security@example.com", "owner@example.com", make_request()
+        )
     )
     assert first.status == "success"
 
     with pytest.raises(HTTPException) as throttled:
         asyncio.run(
-            module.verify_email("other.com", "security@other.com", make_request())
+            module.verify_email(
+                "other.com", "security@other.com", "owner@other.com", make_request()
+            )
         )
     assert throttled.value.status_code == 429
     assert len(sent) == 1
@@ -327,7 +380,12 @@ def test_limits_fail_open_when_redis_unavailable(verification_environment, monke
 
     for role in ("security", "admin"):
         response = asyncio.run(
-            module.verify_email("example.com", f"{role}@example.com", make_request())
+            module.verify_email(
+                "example.com",
+                f"{role}@example.com",
+                "owner@example.com",
+                make_request(),
+            )
         )
         assert response.status == "success"
     assert len(sent) == 2
@@ -341,7 +399,12 @@ def test_limits_disabled_skips_redis(verification_environment, monkeypatch):
 
     for _ in range(3):
         response = asyncio.run(
-            module.verify_email("example.com", "security@example.com", make_request())
+            module.verify_email(
+                "example.com",
+                "security@example.com",
+                "owner@example.com",
+                make_request(),
+            )
         )
         assert response.status == "success"
     assert len(sent) == 3
