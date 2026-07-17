@@ -37,6 +37,35 @@ MONITOR_INVITE_TEMPLATE_ID = 8195088
 MONITOR_ACCEPTED_TEMPLATE_ID = 8195306
 MONITOR_NOTICE_TEMPLATE_ID = 8195316
 
+MONITOR_NOTICE_COPY = {
+    "accepted": {
+        "subject": "XposedOrNot: {target} accepted your monitoring request",
+        "headline": "{target} accepted your monitoring request.",
+        "body": (
+            "You're now monitoring {target} for data breach exposure. We'll "
+            "alert you whenever their email turns up in a new breach. "
+            '<a href="{dashboard}">View their exposure</a>.'
+        ),
+    },
+    "declined": {
+        "subject": "XposedOrNot: {target} declined your monitoring request",
+        "headline": "{target} declined your monitoring request.",
+        "body": (
+            "{target} chose not to share their breach exposure. No monitoring "
+            "has been set up, and we won't contact them again on your behalf."
+        ),
+    },
+    "withdrew": {
+        "subject": "XposedOrNot: {target} stopped sharing breach alerts with you",
+        "headline": "{target} stopped sharing breach alerts with you.",
+        "body": (
+            "{target} was being monitored, but has now withdrawn consent. You'll "
+            "no longer receive breach alerts for their email. "
+            '<a href="{dashboard}">Manage My Circle</a>.'
+        ),
+    },
+}
+
 
 async def send_monitor_invite(
     email: str,
@@ -177,9 +206,10 @@ async def send_monitor_requester_notice(
     email: str, target_email: str, decision: str, dashboard_url: str
 ) -> Dict[str, Any]:
     """
-    Notifies a requester that a target accepted or declined their request.
+    Notifies a requester that a target accepted, declined or withdrew.
 
-    TemplateID is a placeholder until the Mailjet template is created.
+    Copy is chosen per decision and rendered into headline/body variables so
+    the Mailjet template stays a simple two-slot shell.
     """
     try:
         if not API_KEY or not API_SECRET:
@@ -188,6 +218,17 @@ async def send_monitor_requester_notice(
                 detail="Email service configuration error: API credentials not set",
             )
 
+        notice = MONITOR_NOTICE_COPY.get(decision)
+        if notice is None:
+            notice = {
+                "subject": "XposedOrNot: Update on your monitoring request",
+                "headline": "Update on your monitoring request.",
+                "body": "There's an update on your request to monitor {target}.",
+            }
+        subject = notice["subject"].format(target=target_email)
+        headline = notice["headline"].format(target=target_email)
+        body = notice["body"].format(target=target_email, dashboard=dashboard_url)
+
         data = {
             "Messages": [
                 {
@@ -195,11 +236,10 @@ async def send_monitor_requester_notice(
                     "To": [{"Email": email}],
                     "TemplateID": MONITOR_NOTICE_TEMPLATE_ID,
                     "TemplateLanguage": True,
-                    "Subject": "XposedOrNot: Update on your monitoring request",
+                    "Subject": subject,
                     "Variables": {
-                        "target_email": target_email,
-                        "decision": decision,
-                        "dashboard_url": dashboard_url,
+                        "headline": headline,
+                        "body": body,
                     },
                 }
             ]

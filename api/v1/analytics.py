@@ -408,7 +408,7 @@ async def domain_verify(
 
         # Generate dashboard link with properly encoded parameters
         dashboard_page = (
-            "https://xon-web-test.xposedornot.com/my-dashboard.html"
+            "https://xposedornot.com/my-dashboard.html"
             if effective_dashboard == "my"
             else "https://xposedornot.com/breach-dashboard.html"
         )

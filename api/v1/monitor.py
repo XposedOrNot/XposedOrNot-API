@@ -62,7 +62,7 @@ MONITOR_INVITE_LIMIT = parse_rate_limit("3 per hour;10 per day")
 REJECT_COOLDOWN_DAYS = 30
 CONSENT_TOKEN_EXPIRY = 7 * 86400
 WITHDRAW_TOKEN_EXPIRY = 365 * 86400
-DASHBOARD_URL = "https://xon-web-test.xposedornot.com/my-dashboard"
+DASHBOARD_URL = "https://xposedornot.com/my-dashboard"
 MONITOR_REMINDER_SCHEDULE_DAYS = {0: 2, 1: 6}
 MONITOR_MAX_REMINDERS = 2
 
