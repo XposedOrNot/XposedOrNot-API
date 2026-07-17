@@ -17,7 +17,6 @@ SECURITY_SALT: str = os.environ["SECURITY_SALT"]
 MONITOR_TOKEN_SALT: str = os.environ.get("MONITOR_TOKEN_SALT", "xon-monitor-consent")
 TOPIC_ID: Optional[str] = os.environ.get("TOPIC_ID")
 WTF_CSRF_SECRET_KEY: str = os.environ["WTF_CSRF_SECRET_KEY"]
-XMLAPI_KEY: str = os.environ["XMLAPI_KEY"]
 BASE_URL: str = os.environ.get("BASE_URL", "https://api.xposedornot.com")
 
 BOT_ENFORCEMENT_ENABLED: bool = (
@@ -32,6 +31,23 @@ LIMITER_DEGRADED_ENABLED: bool = (
 )
 SENIORITY_ENRICH_URL: Optional[str] = os.environ.get("SENIORITY_ENRICH_URL")
 SENIORITY_ENRICH_SECRET: Optional[str] = os.environ.get("SENIORITY_ENRICH_SECRET")
+
+# Domain email verification anti-abuse limits
+DOMAIN_EMAIL_LIMITS_ENABLED: bool = (
+    os.environ.get("DOMAIN_EMAIL_LIMITS_ENABLED", "true").lower() == "true"
+)
+DOMAIN_EMAIL_RECIPIENT_COOLDOWN_SECONDS: int = int(
+    os.environ.get("DOMAIN_EMAIL_RECIPIENT_COOLDOWN_SECONDS", "900")
+)
+DOMAIN_EMAIL_DOMAIN_MAX_PER_HOUR: int = int(
+    os.environ.get("DOMAIN_EMAIL_DOMAIN_MAX_PER_HOUR", "5")
+)
+DOMAIN_EMAIL_IP_MAX_PER_HOUR: int = int(
+    os.environ.get("DOMAIN_EMAIL_IP_MAX_PER_HOUR", "10")
+)
+DOMAIN_EMAIL_GLOBAL_DAILY_BUDGET: int = int(
+    os.environ.get("DOMAIN_EMAIL_GLOBAL_DAILY_BUDGET", "2000")
+)
 
 # Redis Configuration
 REDIS_HOST: str = os.environ.get("REDIS_HOST", "localhost")

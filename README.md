@@ -250,7 +250,6 @@ already set in `docker-compose.yml`; for a local install, copy `.env.example` to
 | `SECURITY_SALT` | Salt for signing verification tokens |
 | `WTF_CSRF_SECRET_KEY` | CSRF protection secret |
 | `ENCRYPTION_KEY` | Fernet key for encrypting stored data |
-| `XMLAPI_KEY` | WhoisXML API key ([whoisxmlapi.com](https://www.whoisxmlapi.com/)) |
 | `AUTH_EMAIL` | Cloudflare account email |
 | `AUTHKEY` | Cloudflare API key |
 | `CF_MAGIC` | Cloudflare integration token |
@@ -318,4 +317,3 @@ If this saved you some trouble, a few things genuinely help:
 - Star the repo so others can find it
 - Fork it and send a pull request; contributions are welcome
 - Share it with someone who'd find it useful
-

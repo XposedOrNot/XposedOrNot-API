@@ -41,6 +41,5 @@ services:
       - CF_MAGIC=your_cf_magic
       - CF_UNBLOCK_MAGIC=your_cf_ublock_magic
       # environment variables for external services
-      - XMLAPI_KEY=your_xmlapi_key # can be aquired from https://www.whoisxmlapi.com/
       - MJ_API_KEY=your_mailjet_api_key # can be aquired from https://app.mailjet.com/
       - MJ_API_SECRET=your_mailjet_api_secret

@@ -1,12 +1,14 @@
 """Domain verification endpoints and utilities."""
 
 # Standard library imports
+import hashlib
 import ipaddress
 import re
+import secrets
 import socket
 import threading
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Union
 
 # Third-party imports
@@ -16,10 +18,18 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from google.api_core import exceptions as google_exceptions
 from google.cloud import datastore
 from pydantic import EmailStr
+from redis import RedisError
 
 # Local imports
-from config.clients import ds_client
-from config.settings import XMLAPI_KEY
+from config.clients import ds_client, redis_client
+from config.settings import (
+    BASE_URL,
+    DOMAIN_EMAIL_DOMAIN_MAX_PER_HOUR,
+    DOMAIN_EMAIL_GLOBAL_DAILY_BUDGET,
+    DOMAIN_EMAIL_IP_MAX_PER_HOUR,
+    DOMAIN_EMAIL_LIMITS_ENABLED,
+    DOMAIN_EMAIL_RECIPIENT_COOLDOWN_SECONDS,
+)
 from models.base import BaseResponse
 from services.send_email import (
     send_domain_confirmation,
@@ -30,16 +40,31 @@ from services.send_email import (
 from services.seniority_enrichment import enrich_domain_seniority
 from utils.custom_limiter import custom_rate_limiter
 from utils.request import get_client_ip, get_user_agent_info
-from utils.token import generate_confirmation_token
 from utils.validation import validate_email_with_tld, validate_variables
 
 router = APIRouter()
+
+DOMAIN_EMAIL_ROLES = ("security", "admin", "webmaster", "postmaster", "hostmaster")
+DOMAIN_EMAIL_CHALLENGE_TTL_MINUTES = 30
 
 
 def validate_domain(domain: str) -> bool:
     """Validate domain with a basic format check."""
     pattern = r"^(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$"
     return bool(re.match(pattern, domain))
+
+
+def get_domain_verification_emails(domain: str) -> List[str]:
+    """Return the permitted role addresses for a validated domain."""
+    normalized_domain = domain.strip().lower()
+    if not validate_domain(normalized_domain):
+        return []
+    return [f"{role}@{normalized_domain}" for role in DOMAIN_EMAIL_ROLES]
+
+
+def hash_domain_verification_token(token: str) -> str:
+    """Return the datastore identifier for a domain verification token."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class DomainVerificationResponse(BaseResponse):
@@ -72,8 +97,7 @@ async def send_domain_confirmation_email(
     email: str, token: str, ip_address: str, browser_type: str, client_platform: str
 ):
     """Sends domain confirmation email with verification details."""
-    # In FastAPI, we'll need to handle URL generation differently
-    confirm_url = f"/v1/domain_validation?token={token}"  # Adjust base URL as needed
+    confirm_url = f"{BASE_URL.rstrip('/')}/v1/domain_validation?token={token}"
     await send_domain_confirmation(
         email, confirm_url, ip_address, browser_type, client_platform
     )
@@ -104,6 +128,7 @@ def process_single_domain(domain: str):
         entity = datastore.Entity(key=entity_key)
         entity.update({"domain": domain, "breach": "No_Breaches", "email_count": 0})
         client.put(entity)
+        enrich_domain_seniority(domain)
         return
 
     processed_count = 0
@@ -141,11 +166,13 @@ def process_single_domain(domain: str):
         processed_count += len(details_entities)
 
     summary_entities = {}
-    for (domain, breach), count in breach_summary.items():
-        entity_key_name = f"{domain}+{breach}"
+    for (current_domain, breach), count in breach_summary.items():
+        entity_key_name = f"{current_domain}+{breach}"
         entity_key = client.key("xon_domains_summary", entity_key_name)
         entity = datastore.Entity(key=entity_key)
-        entity.update({"domain": domain, "breach": breach, "email_count": count})
+        entity.update(
+            {"domain": current_domain, "breach": breach, "email_count": count}
+        )
         summary_entities[entity_key_name] = entity
 
         if len(summary_entities) >= batch_size:
@@ -158,112 +185,178 @@ def process_single_domain(domain: str):
     enrich_domain_seniority(domain)
 
 
-async def check_emails(domain: str) -> DomainVerificationResponse:
-    """Check domain emails using WhoisXML API."""
+def start_domain_processing(domain: str) -> None:
+    """Start asynchronous breach-summary processing for a verified domain."""
+    threading.Thread(target=process_single_domain, args=(domain,)).start()
+
+
+def _fixed_window_exceeded(key: str, limit: int, window_seconds: int) -> bool:
+    """Increment a fixed-window counter and report whether it exceeds the limit."""
+    count = redis_client.incr(key)
+    if count == 1:
+        redis_client.expire(key, window_seconds)
+    return count > limit
+
+
+def enforce_email_challenge_limits(domain: str, email: str, client_ip: str) -> None:
+    """Guard verification emails against bombing via per-target and global limits.
+
+    Applies a per-recipient cooldown, per-domain and per-IP hourly caps, and a
+    global daily email budget. Fails open if Redis is unavailable so a cache
+    outage cannot block legitimate verification.
+    """
+    if not DOMAIN_EMAIL_LIMITS_ENABLED:
+        return
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"https://www.whoisxmlapi.com/whoisserver/WhoisService?"
-                f"apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
-                timeout=20,
+        if not redis_client.set(
+            f"xon:dv:cooldown:rcpt:{email}",
+            "1",
+            nx=True,
+            ex=DOMAIN_EMAIL_RECIPIENT_COOLDOWN_SECONDS,
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many verification requests. Please try again later.",
             )
-
-            if response.status_code != 200:
-                return DomainVerificationResponse(
-                    status="success",
-                    domainVerification=["No email found. Try DNS/HTML Verifications"],
-                )
-
-            who_is = response.json()
-            registrant_email = who_is.get("WhoisRecord", {}).get(
-                "contactEmail",
-                who_is.get("WhoisRecord", {})
-                .get("registryData", {})
-                .get("contactEmail", "No email found. Try DNS/HTML Verifications"),
+        if _fixed_window_exceeded(
+            f"xon:dv:rate:domain:{domain}", DOMAIN_EMAIL_DOMAIN_MAX_PER_HOUR, 3600
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many verification requests. Please try again later.",
             )
-
-            # If we got a string email, convert to list
-            if isinstance(registrant_email, str):
-                if "," in registrant_email:
-                    registrant_email = [
-                        email.strip() for email in registrant_email.split(",")
-                    ]
-                else:
-                    registrant_email = [registrant_email]
-
-            # If we got no email or invalid format, return default message
-            if not registrant_email or registrant_email == [
-                "No email found. Try DNS/HTML Verifications"
-            ]:
-                return DomainVerificationResponse(
-                    status="success",
-                    domainVerification=["No email found. Try DNS/HTML Verifications"],
-                )
-
-            return DomainVerificationResponse(
-                status="success", domainVerification=registrant_email
+        if client_ip and _fixed_window_exceeded(
+            f"xon:dv:rate:ip:{client_ip}", DOMAIN_EMAIL_IP_MAX_PER_HOUR, 3600
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many verification requests. Please try again later.",
             )
-
-    except Exception:
-        return DomainVerificationResponse(
-            status="success",
-            domainVerification=["No email found. Try DNS/HTML Verifications"],
-        )
+        if _fixed_window_exceeded(
+            "xon:dv:budget:global", DOMAIN_EMAIL_GLOBAL_DAILY_BUDGET, 86400
+        ):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many verification requests. Please try again later.",
+            )
+    except RedisError:
+        return
 
 
 async def verify_email(
     domain: str, email: str, request: Request
 ) -> DomainVerificationResponse:
-    """Verify email against domain's WHOIS record."""
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"https://www.whoisxmlapi.com/whoisserver/WhoisService?"
-                f"apiKey={XMLAPI_KEY}&domainName={domain}&outputFormat=JSON",
-                timeout=20,
-            )
-
-            if response.status_code != 200:
-                return DomainVerificationResponse(
-                    status="error", domainVerification="Failure"
-                )
-
-            who_is = response.json()
-            registrant_email = who_is.get("WhoisRecord", {}).get(
-                "contactEmail", "No email found. Try DNS/HTML Verifications"
-            )
-
-            if email.lower() == registrant_email.lower():
-                datastore_client = ds_client
-                domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
-                domain_record = datastore_client.get(domain_key)
-                token = await generate_confirmation_token(email)
-
-                if domain_record is None:
-                    create_new_record(domain, email, token, "email", datastore_client)
-
-                threading.Thread(target=process_single_domain, args=(domain,)).start()
-
-                # Get client information
-                client_ip_address = get_client_ip(request)
-                browser_type, client_platform = get_user_agent_info(request)
-
-                await send_domain_confirmation_email(
-                    email, token, client_ip_address, browser_type, client_platform
-                )
-
-                # Send admin notification
-                await send_domain_verification_admin_notification(domain)
-
-                return DomainVerificationResponse(
-                    status="success", domainVerification="Success"
-                )
-
-            return DomainVerificationResponse(
-                status="error", domainVerification="Failure"
-            )
-    except (httpx.RequestError, httpx.HTTPError, ValueError) as err:
+    """Send a verification challenge to an approved role address."""
+    normalized_domain = domain.strip().lower()
+    normalized_email = email.strip().lower()
+    if normalized_email not in get_domain_verification_emails(normalized_domain):
         return DomainVerificationResponse(status="error", domainVerification="Failure")
+
+    client_ip_address = get_client_ip(request)
+    enforce_email_challenge_limits(
+        normalized_domain, normalized_email, client_ip_address
+    )
+
+    token = secrets.token_urlsafe(32)
+    token_hash = hash_domain_verification_token(token)
+    datastore_client = ds_client
+    challenge = datastore.Entity(
+        datastore_client.key("xon_domain_verification_challenges", token_hash)
+    )
+    now = datetime.now(timezone.utc)
+    challenge.update(
+        {
+            "domain": normalized_domain,
+            "email": normalized_email,
+            "created_at": now,
+            "expires_at": now + timedelta(minutes=DOMAIN_EMAIL_CHALLENGE_TTL_MINUTES),
+            "used": False,
+        }
+    )
+    datastore_client.put(challenge)
+
+    browser_type, client_platform = get_user_agent_info(request)
+    try:
+        await send_domain_confirmation_email(
+            normalized_email,
+            token,
+            client_ip_address,
+            browser_type,
+            client_platform,
+        )
+    except HTTPException:
+        datastore_client.delete(challenge.key)
+        raise
+
+    return DomainVerificationResponse(status="success", domainVerification="Success")
+
+
+@router.get("/domain_validation", response_model=DomainVerificationResponse)
+@custom_rate_limiter("2 per second;20 per hour;50 per day")
+async def domain_validation(
+    request: Request,
+    token: str = Query(..., min_length=32, max_length=128),
+):
+    """Redeem a single-use domain email verification challenge."""
+    token_hash = hash_domain_verification_token(token)
+    datastore_client = ds_client
+    challenge_key = datastore_client.key(
+        "xon_domain_verification_challenges", token_hash
+    )
+
+    try:
+        with datastore_client.transaction():
+            challenge = datastore_client.get(challenge_key)
+            if not challenge or challenge.get("used"):
+                raise HTTPException(status_code=404, detail="Verification failed")
+
+            expires_at = challenge.get("expires_at")
+            if (
+                not isinstance(expires_at, datetime)
+                or datetime.now(timezone.utc) > expires_at
+            ):
+                raise HTTPException(status_code=404, detail="Verification failed")
+
+            domain = challenge.get("domain", "")
+            email = challenge.get("email", "")
+            if not validate_domain(
+                domain
+            ) or email not in get_domain_verification_emails(domain):
+                raise HTTPException(status_code=404, detail="Verification failed")
+
+            domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
+            domain_record = datastore_client.get(domain_key)
+            if domain_record is None:
+                create_new_record(domain, email, token_hash, "email", datastore_client)
+            else:
+                domain_record["last_verified"] = datetime.utcnow()
+                datastore_client.put(domain_record)
+
+            challenge["used"] = True
+            challenge["used_at"] = datetime.now(timezone.utc)
+            datastore_client.put(challenge)
+
+        start_domain_processing(domain)
+
+        client_ip_address = get_client_ip(request)
+        browser_type, client_platform = get_user_agent_info(request)
+        await send_domain_verified_success(
+            email, client_ip_address, browser_type, client_platform
+        )
+        await send_domain_verification_admin_notification(domain)
+        return DomainVerificationResponse(
+            status="success", domainVerification="Success"
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        await send_exception_email(
+            api_route="GET /v1/domain_validation",
+            error_message=str(exc),
+            exception_type=type(exc).__name__,
+            user_agent=request.headers.get("User-Agent"),
+        )
+        raise HTTPException(status_code=404, detail="Verification failed") from exc
 
 
 async def verify_dns(
@@ -284,7 +377,7 @@ async def verify_dns(
             domain_record["last_verified"] = datetime.now()
             datastore_client.put(domain_record)
 
-        threading.Thread(target=process_single_domain, args=(domain,)).start()
+        start_domain_processing(domain)
 
         client_ip_address = get_client_ip(request)
         browser_type, client_platform = get_user_agent_info(request)
@@ -321,7 +414,7 @@ async def verify_html(
             domain_record["last_verified"] = datetime.now()
             datastore_client.put(domain_record)
 
-        threading.Thread(target=process_single_domain, args=(domain,)).start()
+        start_domain_processing(domain)
 
         client_ip_address = get_client_ip(request)
         browser_type, client_platform = get_user_agent_info(request)
@@ -492,21 +585,32 @@ async def domain_verification(
 ):
     """Used for validating domain ownership/authority."""
     try:
-        if not validate_variables([z, d, a, v]):
+        normalized_domain = d.strip().lower()
+        normalized_email = str(a).strip().lower()
+        if not validate_variables([z, normalized_domain, normalized_email, v]):
             raise HTTPException(status_code=400, detail="Invalid input")
 
         prefix = "xon_verification"
-        if not validate_domain(d) or not validate_email_with_tld(a):
+        if not validate_domain(normalized_domain) or not validate_email_with_tld(
+            normalized_email
+        ):
             raise HTTPException(status_code=404, detail="Not found")
 
         if z == "c":
-            return await check_emails(d)
-        elif z == "d":
-            return await verify_email(d, a, request)
-        elif z == "e":
-            return await verify_dns(d, a, v, prefix, request)
-        elif z == "a":
-            return await verify_html(d, a, v, prefix, request)
+            return DomainVerificationResponse(
+                status="success",
+                domainVerification=get_domain_verification_emails(normalized_domain),
+            )
+        if z == "d":
+            return await verify_email(normalized_domain, normalized_email, request)
+        if z == "e":
+            return await verify_dns(
+                normalized_domain, normalized_email, v, prefix, request
+            )
+        if z == "a":
+            return await verify_html(
+                normalized_domain, normalized_email, v, prefix, request
+            )
 
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
