@@ -25,6 +25,3 @@ typing-extensions>=4.16.0
 user-agents
 urllib3>=2.7.0
 uvicorn>=0.51.0
-# py-tlsh
-# py-tlsh>=4.5.0
-# ssdeep
