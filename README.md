@@ -285,6 +285,11 @@ already set in `docker-compose.yml`; for a local install, copy `.env.example` to
 | `DEBUG_EMAIL` | _(none)_ | Override recipient for debug emails |
 | `OPENAI_API_KEY` | _(none)_ | Enables AI-assisted analytics |
 | `SENIORITY_ENRICH_URL` / `SENIORITY_ENRICH_SECRET` | _(none)_ | External seniority-enrichment service |
+| `DOMAIN_EMAIL_LIMITS_ENABLED` | `true` | Kill switch for domain email verification anti-bombing limits |
+| `DOMAIN_EMAIL_RECIPIENT_COOLDOWN_SECONDS` | `900` | Cooldown between challenges to the same role address |
+| `DOMAIN_EMAIL_DOMAIN_MAX_PER_HOUR` | `5` | Max verification emails per domain per hour |
+| `DOMAIN_EMAIL_IP_MAX_PER_HOUR` | `10` | Max verification emails per client IP per hour |
+| `DOMAIN_EMAIL_GLOBAL_DAILY_BUDGET` | `2000` | Global daily cap on verification emails |
 
 ## Contributing
 
