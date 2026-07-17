@@ -96,7 +96,6 @@ endpoints you'll reach for most:
 |--------|------|--------------|
 | GET | `/v1/check-email/{email}` | Quick check: is this email in a known breach? |
 | GET | `/v1/breach-analytics?email=` | Detailed breach analytics for an email |
-| GET | `/v2/breach-analytics?email=` | Newer v2 analytics response |
 | GET | `/v1/breaches` | List all known breaches (optional `?domain=`) |
 | GET | `/v1/domain-breach-summary` | Summary of breaches for a domain |
 
@@ -283,7 +282,6 @@ already set in `docker-compose.yml`; for a local install, copy `.env.example` to
 | `PORT` | `8080` | Port the server listens on |
 | `ENABLE_SCHEDULER` | `false` | Run the background digest scheduler |
 | `DEBUG_EMAIL` | _(none)_ | Override recipient for debug emails |
-| `OPENAI_API_KEY` | _(none)_ | Enables AI-assisted analytics |
 | `SENIORITY_ENRICH_URL` / `SENIORITY_ENRICH_SECRET` | _(none)_ | External seniority-enrichment service |
 | `DOMAIN_EMAIL_LIMITS_ENABLED` | `true` | Kill switch for domain email verification anti-bombing limits |
 | `DOMAIN_EMAIL_RECIPIENT_COOLDOWN_SECONDS` | `900` | Cooldown between challenges to the same role address |

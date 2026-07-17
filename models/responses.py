@@ -127,12 +127,6 @@ class BreachAnalyticsAuthResponse(BreachAnalyticsResponse):
     ShieldOn: bool = False
 
 
-class BreachAnalyticsV2Response(BaseModel):
-    """Response model for breach analytics v2 endpoint."""
-
-    AI_Summary: str
-
-
 class EmptyBreachResponse(BaseModel):
     """Response model for empty breach results."""
 

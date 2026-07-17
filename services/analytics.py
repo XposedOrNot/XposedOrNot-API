@@ -1,32 +1,18 @@
 """Analytics-related service functions."""
 
 # Standard library imports
-import json
 import logging
-import os
 from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional, Set
 
 # Third-party imports
 from fastapi import HTTPException
-from openai import OpenAI
-from openai import OpenAIError
 
 from config.clients import ds_client
 from services.breach_catalog import get_breach
 
-# Initialize OpenAI client
-ai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-
 # Logger
 logger = logging.getLogger(__name__)
-
-# Constants
-TEMPERATURE = 0.7  # OpenAI temperature parameter
-
-# AI summary bounds (cost and context-limit protection)
-AI_MAX_INPUT_CHARS = 12000
-AI_MAX_OUTPUT_TOKENS = 800
 
 # Data categories mapping
 data_categories = {
@@ -223,35 +209,6 @@ data_categories = {
     "Sexual preferences": {"category": "🩺 Health Information", "group": "H"},
     "Browsers": {"category": "🖥️ Device and Network Information", "group": "G"},
 }
-
-# AI prompts for breach data analysis
-AI_SYSTEM_PROMPT = (
-    "You are a cybersecurity expert providing clear, actionable insights about data breaches. "
-    "Summarize the breach details in a conversational tone, analytical and provide recommendations "
-    "based on risks. Avoid calling or referencing other security products or tools and keep "
-    "recommendations generic."
-)
-
-AI_USER_PROMPT_TEMPLATE = (
-    "Here is the breach data: {breach_data}. "
-    "Analyze and provide an insightful summary in a conversational tone with analytical data, "
-    "risks along with recommendations. Limit the recommendation to the user level only. "
-    "Start with a single para summarizing the breaches with title summary of key data breaches. "
-    "if the breaches are too large in count, talk about the ones with significant risk or size. "
-    "Next section should be the risk assessment. highlight the issues. "
-    "Call out all plain text password breaches. finally provide a recommendation with bullets "
-    "with title Recommendations for you. All topics can have titles in bold text. "
-    "also highlight text which needs focus or attention. Make the language simple and make it "
-    "humanized. all titles should start with these emojis. Add magnifying glass for summary, "
-    "red siren for risk assessment and blue shield for recommendations. add para breaks or "
-    "line breaks as appropriate and make it look presentable. after recommendations add a line "
-    "break and then give that final one liner or two as closure. finally you can also add one "
-    "additional line with a blog link to how to avoid account take over and what to do if your "
-    "data is breached - https://blog.xposedornot.com/what-should-you-do-after-data-breach/. "
-    "add line breaks <br> afer every section and one between section and subsequent text. "
-    "Use markdown for easy readability and highlight essential points."
-)
-
 
 # Data type normalization for handling typos, variants, and compound entries
 DATA_TYPE_ALIASES = {
@@ -891,31 +848,6 @@ def _combine_metrics(regular_metrics: Dict, sensitive_metrics: Dict) -> Dict:
     combined["risk"] = [{"risk_label": risk_label, "risk_score": risk_score}]
 
     return combined
-
-
-def get_ai_summary(breach_data: Dict[str, Any]) -> str:
-    """Generate AI-powered summary of breach data."""
-    try:
-        system_prompt = AI_SYSTEM_PROMPT
-
-        serialized = json.dumps(breach_data, indent=2)
-        if len(serialized) > AI_MAX_INPUT_CHARS:
-            serialized = serialized[:AI_MAX_INPUT_CHARS] + "\n... [truncated]"
-
-        user_prompt = AI_USER_PROMPT_TEMPLATE.format(breach_data=serialized)
-
-        response = ai_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            model="gpt-4",
-            temperature=TEMPERATURE,
-            max_tokens=AI_MAX_OUTPUT_TOKENS,
-        )
-        return response.choices[0].message.content
-    except (ValueError, KeyError, json.JSONDecodeError, OpenAIError) as e:
-        return "Error fetching AI summary: " + str(e)
 
 
 async def get_detailed_metrics() -> Dict[str, Any]:

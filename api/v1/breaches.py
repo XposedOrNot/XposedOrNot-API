@@ -18,17 +18,13 @@ from config.settings import MAX_EMAIL_LENGTH
 from models.responses import (
     BreachAnalyticsAuthResponse,
     BreachAnalyticsResponse,
-    BreachAnalyticsV2Response,
     BreachDetailResponse,
     BreachListResponse,
     DomainBreachSummaryResponse,
     EmailBreachErrorResponse,
     EmailBreachResponse,
 )
-from services.analytics import (
-    get_ai_summary,
-    get_summary_and_metrics,
-)
+from services.analytics import get_summary_and_metrics
 from services.breach import get_breaches, get_exposure, get_sensitive_exposure
 from services.breach_catalog import get_breach
 from services.shield_cache import get_cached_shield, set_cached_shield
@@ -258,108 +254,6 @@ async def get_xposed_breaches(
         raise HTTPException(
             status_code=404, detail="An error occurred during processing"
         ) from e
-
-
-@router.get("/v2/breach-analytics", response_model=BreachAnalyticsV2Response)
-@custom_rate_limiter("2 per second;25 per hour;100 per day")
-async def search_data_breaches_v2(
-    request: Request, email: Optional[str] = None, token: Optional[str] = None
-) -> BreachAnalyticsV2Response:
-    """Returns AI summary and details of data breaches for a given email."""
-    if (
-        not email
-        or not validate_email_with_tld(email)
-        or not validate_url(request)
-        or len(email) > MAX_EMAIL_LENGTH
-    ):
-        raise HTTPException(status_code=404, detail="Not found")
-
-    try:
-        email = email.lower()
-        datastore_client = ds_client
-
-        # Privacy: shieldOn blocks unauthenticated access
-        if token:
-            alert_key = datastore_client.key("xon_alert", email)
-            alert_record = datastore_client.get(alert_key)
-        else:
-            shield_on = get_cached_shield(email)
-            if shield_on is None:
-                alert_key = datastore_client.key("xon_alert", email)
-                alert_record = datastore_client.get(alert_key)
-                shield_on = bool(alert_record and alert_record.get("shieldOn", False))
-                set_cached_shield(email, shield_on)
-            if shield_on:
-                raise HTTPException(status_code=404, detail="Not found")
-
-        # Validate token if provided
-        if token:
-            if not validate_token(token):
-                raise HTTPException(status_code=403, detail="Invalid token")
-            token_valid = bool(alert_record and alert_record.get("token") == token)
-            if not token_valid:
-                token_valid = validate_dashboard_session(datastore_client, email, token)
-            if not token_valid:
-                raise HTTPException(status_code=403, detail="Invalid token")
-
-        breach_data = await get_exposure(email)
-        sensitive_data = await get_sensitive_exposure(email) if token else None
-
-        if not breach_data and not sensitive_data:
-            return BreachAnalyticsV2Response(AI_Summary="")
-
-        # Handle sensitive data if available
-        if breach_data and sensitive_data and token:
-            if isinstance(breach_data, dict) and isinstance(sensitive_data, dict):
-                existing_sites = (
-                    set(breach_data["site"].split(";"))
-                    if "site" in breach_data and breach_data["site"]
-                    else set()
-                )
-                sensitive_sites = (
-                    set(sensitive_data["site"].split(";"))
-                    if "site" in sensitive_data and sensitive_data["site"]
-                    else set()
-                )
-                unique_sites = existing_sites.union(sensitive_sites)
-                breach_data["site"] = ";".join(unique_sites)
-
-        # Get summary and metrics
-        (
-            breach_summary,
-            paste_summary,
-            exposed_breaches,
-            exposed_pastes,
-            breach_metrics,
-            paste_metrics,
-        ) = await get_summary_and_metrics(breach_data, sensitive_data)
-
-        if not (breach_summary or paste_summary):
-            return BreachAnalyticsV2Response(AI_Summary="")
-
-        breach_data = {
-            "ExposedBreaches": exposed_breaches,
-            "BreachesSummary": breach_summary or {},
-            "BreachMetrics": breach_metrics,
-            "PastesSummary": paste_summary or {},
-            "ExposedPastes": exposed_pastes,
-            "PasteMetrics": paste_metrics,
-        }
-
-        ai_summary = get_ai_summary(breach_data)
-        return BreachAnalyticsV2Response(AI_Summary=ai_summary)
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        await send_exception_email(
-            api_route="GET /v1/v2/breach-analytics",
-            error_message=str(exc),
-            exception_type=type(exc).__name__,
-            user_agent=request.headers.get("User-Agent"),
-            request_params=f"email={email}, token={'provided' if token else 'not_provided'}",
-        )
-        raise HTTPException(status_code=404, detail="Not found") from exc
 
 
 def build_breach_analytics_response(
