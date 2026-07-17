@@ -642,7 +642,7 @@ async def domain_verification(
     d: str = Query(..., description="Domain name"),
     a: EmailStr = Query("catch-all@xposedornot.com", description="Email address"),
     v: str = Query("xon-is-good", description="Verification code"),
-    r: EmailStr = Query("", description="Monitoring recipient email"),
+    r: str = Query("", description="Monitoring recipient email"),
 ):
     """Used for validating domain ownership/authority."""
     try:
