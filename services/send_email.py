@@ -604,6 +604,7 @@ async def send_domain_confirmation(
     browser: str,
     platform: str,
     recipient: str = "",
+    domain: str = "",
 ) -> Dict[str, Any]:
     """
     Sends XposedOrNot domain Confirmation Email
@@ -626,6 +627,7 @@ async def send_domain_confirmation(
                         "browser": browser,
                         "platform": platform,
                         "recipient": recipient,
+                        "domain": domain,
                     },
                 }
             ]

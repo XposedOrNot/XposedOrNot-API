@@ -129,10 +129,10 @@ def verification_environment(monkeypatch):
     success_emails = []
 
     async def fake_send(
-        email, token, ip_address, browser_type, client_platform, recipient
+        email, token, ip_address, browser_type, client_platform, recipient, domain
     ):
         sent.append(
-            (email, token, ip_address, browser_type, client_platform, recipient)
+            (email, token, ip_address, browser_type, client_platform, recipient, domain)
         )
 
     async def fake_notification(domain):

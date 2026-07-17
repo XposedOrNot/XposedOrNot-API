@@ -109,11 +109,18 @@ async def send_domain_confirmation_email(
     browser_type: str,
     client_platform: str,
     recipient: str,
+    domain: str,
 ):
     """Sends domain confirmation email with verification details."""
     confirm_url = f"{BASE_URL.rstrip('/')}/v1/domain_validation?token={token}"
     await send_domain_confirmation(
-        email, confirm_url, ip_address, browser_type, client_platform, recipient
+        email,
+        confirm_url,
+        ip_address,
+        browser_type,
+        client_platform,
+        recipient,
+        domain,
     )
 
 
@@ -312,6 +319,7 @@ async def verify_email(
             browser_type,
             client_platform,
             normalized_recipient,
+            normalized_domain,
         )
     except HTTPException:
         datastore_client.delete(challenge.key)
