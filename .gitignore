@@ -12,6 +12,8 @@ instance/
 .env
 .venv
 .vscode
+.codex/
+.claude/
 env/
 venv/
 ENV/
