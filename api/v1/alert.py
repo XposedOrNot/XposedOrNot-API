@@ -283,6 +283,8 @@ async def alert_me_verification(verification_token: str, request: Request):
                         alert_task["verify_timestamp"] = datetime.now()
                         alert_task["verified"] = True
                         alert_task["token"] = verification_token
+                    alert_task["unSubscribeOn"] = False
+                    alert_task.pop("unsub_token", None)
                     datastore_client.put(alert_task)
                 break
             except (
