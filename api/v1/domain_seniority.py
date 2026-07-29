@@ -12,7 +12,7 @@ from config.clients import ds_client
 from models.base import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
-from utils.token import confirm_token
+from utils.token import validate_dashboard_session
 from utils.validation import validate_email_with_tld, validate_token
 
 router = APIRouter()
@@ -68,18 +68,16 @@ class AllDomainsSeniorityResponse(BaseResponse):
 
 
 async def verify_user_access(email: str, token: str) -> bool:
-    """Verify user access based on email and token."""
+    """Verify user access against the shared dashboard session.
+
+    Uses the same xon_domains_session / domain_magic / 12h check as the
+    other CxO dashboard routes (e.g. send_domain_breaches) so a valid
+    dashboard session grants access to every page in the cluster.
+    """
     if not email or not token:
         return False
     try:
-        verified_email = await confirm_token(token)
-        if not verified_email or verified_email.lower() != email.lower():
-            return False
-        datastore_client = ds_client
-        alert_key = datastore_client.key("xon_alert", email.lower())
-        alert_record = datastore_client.get(alert_key)
-        is_verified = bool(alert_record and alert_record.get("verified", False))
-        return is_verified
+        return validate_dashboard_session(ds_client, email, token)
     except Exception:
         return False
 
