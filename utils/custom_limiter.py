@@ -303,7 +303,12 @@ async def _discard_window_member(
 
 _BOT_FP_LIMITS = parse_rate_limit("5 per minute;100 per day")
 
-CF_ESCALATION_ENDPOINTS = {"/v1/check-email/{email}", "/v1/breach-analytics"}
+CF_ESCALATION_ENDPOINTS = {
+    "/v1/check-email/{email}",
+    "/v1/breach-analytics",
+    "/v1/domain-breaches/",
+    "/v1/domain-breaches/{_:path}",
+}
 _CF_OVERAGE_TTL_SECONDS = 86400
 _CF_OFFENSE_WINDOW_SECONDS = 7 * 86400
 _cf_block_tasks: set = set()
@@ -527,6 +532,22 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                 )
                 if bot_limited:
                     await _discard_window_member(redis_conn, key, member)
+                    await increment_violation(client_ip, redis_conn)
+                    if endpoint in CF_ESCALATION_ENDPOINTS:
+                        escalated = await escalate_day_limit_abuse(
+                            client_ip, endpoint, redis_conn
+                        )
+                        if escalated:
+                            raise HTTPException(
+                                status_code=HTTP_403_FORBIDDEN,
+                                detail={
+                                    "error": "Access blocked",
+                                    "detail": (
+                                        "Rate limit repeatedly exceeded. "
+                                        "Access is blocked for 24 hours."
+                                    ),
+                                },
+                            )
                     raise HTTPException(
                         status_code=HTTP_429_TOO_MANY_REQUESTS,
                         detail={
