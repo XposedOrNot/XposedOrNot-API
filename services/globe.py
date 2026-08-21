@@ -64,7 +64,7 @@ def _log_missing_geo_headers() -> None:
 def generate_request_hash(data: Dict[str, Any]) -> str:
     """Generate a hash for deduplication of requests."""
     data_str = json.dumps(data, sort_keys=True)
-    return hashlib.md5(data_str.encode()).hexdigest()
+    return hashlib.sha256(data_str.encode()).hexdigest()
 
 
 async def publish_to_pubsub(data: Dict[str, Any]) -> None:
