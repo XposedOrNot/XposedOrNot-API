@@ -5,6 +5,7 @@ import asyncio
 import json
 import os
 import time
+from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
@@ -49,6 +50,7 @@ from api.v1 import (
 )
 
 # Local imports - Services
+from services.analytics import get_detailed_metrics
 from services.cloudflare import unblock
 from services.scheduler import start_scheduler
 
@@ -536,20 +538,84 @@ async def health_check(request: Request, token: str = None):
     )
 
 
+LANDING_STATS_FALLBACK = {
+    "records_headline": "11.5 billion",
+    "records_display": "11.5B+",
+    "breaches_display": "775+",
+    "passwords_display": "835M+",
+    "last_breach_display": None,
+}
+
+
+def _format_compact_count(value):
+    """Format a large count as a compact display string."""
+    number = float(value)
+    if number >= 1_000_000_000:
+        text = f"{number / 1_000_000_000:.2f}".rstrip("0").rstrip(".")
+        return f"{text}B"
+    if number >= 1_000_000:
+        return f"{number / 1_000_000:.0f}M"
+    return f"{int(number):,}"
+
+
+def _format_records_headline(value):
+    """Format the record count as a billions phrase for the hero headline."""
+    billions = int(value) // 100_000_000 / 10
+    text = f"{billions:.1f}".rstrip("0").rstrip(".")
+    return f"{text} billion"
+
+
+def _format_breach_date(value):
+    """Format an ISO timestamp as a short display date."""
+    try:
+        return datetime.fromisoformat(value).strftime("%b %d, %Y")
+    except (TypeError, ValueError):
+        return None
+
+
+async def _get_landing_stats():
+    """Build landing page stats from cached metrics with a static fallback."""
+    try:
+        data = metrics.get_cached_metrics("metrics:basic:v2")
+        if not data:
+            detailed = await get_detailed_metrics()
+            data = {
+                "Breaches_Count": detailed["breaches_count"],
+                "Breaches_Records": detailed["breaches_total_records"],
+                "Pastes_Count": str(detailed["pastes_count"]),
+                "Pastes_Records": detailed["pastes_total_records"],
+                "Last_Breach_Added": metrics.get_last_breach_added(detailed),
+            }
+            metrics.cache_metrics("metrics:basic:v2", data)
+        return {
+            "records_headline": _format_records_headline(data["Breaches_Records"]),
+            "records_display": _format_compact_count(data["Breaches_Records"]),
+            "breaches_display": str(int(data["Breaches_Count"])),
+            "passwords_display": _format_compact_count(data["Pastes_Records"]),
+            "last_breach_display": _format_breach_date(data.get("Last_Breach_Added")),
+        }
+    except Exception:  # pylint: disable=broad-except
+        return dict(LANDING_STATS_FALLBACK)
+
+
 @app.get("/", include_in_schema=False)
-async def index():
+async def index(request: Request):
     """Returns default landing page."""
-    return HTMLResponse(content=open("templates/index.html", encoding="utf-8").read())
+    return templates.TemplateResponse(
+        request, "index.html", context=await _get_landing_stats()
+    )
 
 
 @app.get("/v1/help/", include_in_schema=False)
 @custom_rate_limiter(RATE_LIMIT_HELP)
-async def helper(request: Request):  # pylint: disable=unused-argument
+async def helper(request: Request):
     """
     Provides basic guidance to the API documentation page.
     Returns an HTML response with the documentation landing page.
     """
-    return HTMLResponse(content=open("templates/index.html", encoding="utf-8").read())
+    return templates.TemplateResponse(
+        request, "index.html", context=await _get_landing_stats()
+    )
 
 
 @app.get("/robots.txt", include_in_schema=False)
