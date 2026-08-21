@@ -49,23 +49,19 @@ def setup_security_headers(app: FastAPI) -> None:
         response = await call_next(request)
         csp_value = (
             "default-src 'self';"
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+            "script-src 'self' "
             "https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com "
-            "https://www.googletagmanager.com https://*.googletagmanager.com "
-            "https://www.google-analytics.com https://*.cloudflareinsights.com;"
+            "https://*.cloudflareinsights.com;"
             "style-src 'self' 'unsafe-inline' "
             "https://cdnjs.cloudflare.com https://fonts.googleapis.com "
             "https://xposedornot.com https://maxcdn.bootstrapcdn.com;"
-            "img-src 'self' https://xposedornot.com https://fastapi.tiangolo.com data: "
-            "https://www.googletagmanager.com https://*.google-analytics.com "
-            "https://*.googletagmanager.com;"
+            "img-src 'self' https://xposedornot.com https://fastapi.tiangolo.com data:;"
             "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;"
             "object-src 'none';"
             "base-uri 'self';"
             "connect-src 'self' https://xposedornot.com https://api.xposedornot.com "
             "https://cdnjs.cloudflare.com https://maxcdn.bootstrapcdn.com "
-            "https://*.google-analytics.com https://*.analytics.google.com "
-            "https://*.googletagmanager.com https://*.cloudflareinsights.com;"
+            "https://*.cloudflareinsights.com;"
             "worker-src 'self' blob:;"
         )
 
