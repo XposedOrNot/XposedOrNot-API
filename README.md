@@ -14,7 +14,7 @@
 <a href="https://www.bestpractices.dev/projects/11418"><img src="https://www.bestpractices.dev/projects/11418/badge?v=1" alt="OpenSSF Best Practices"></a>
 
 <p align="center">     
-    <a href="https://xposedornot.docs.apiary.io/" target="_blank">XposedOrNot API Playground</a>    ·
+    <a href="https://api.xposedornot.com/docs" target="_blank">XposedOrNot API Playground</a>    ·
     <a href="https://xposedornot.com" target="_blank"> XposedOrNot.com</a>
 </p> <br>  
 </p>  
@@ -32,7 +32,7 @@ This repo is the API that powers it all: the breach lookups, the analytics, and 
 Give it a try below, and if you find it useful, I'd love for you to build something with it.
 
 Devanand Premkumar, creator of XposedOrNot
-[![X](https://img.shields.io/badge/X-blue?style=flat-square&logo=x&logoColor=white)](https://x.com/devaonbreaches)
+[![Twitter/X](https://img.shields.io/badge/Twitter%2FX-blue?style=flat-square&logo=x&logoColor=white)](https://x.com/devaonbreaches)
 [![Mastodon](https://img.shields.io/badge/-Mastodon-blue?style=flat-square&logo=mastodon&logoColor=white)](https://infosec.exchange/@DevaOnBreaches)
 
 ## Quick Example
@@ -84,7 +84,7 @@ $5/month with rate limits up to 25,000 requests/minute, API-key access, and
 commercial support. It's the same breach data, and it's what keeps the free
 tier free.
 
-For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and [API playground](https://xposedornot.docs.apiary.io/).
+For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and the [API playground](https://api.xposedornot.com/docs).
 
 ## API Endpoints
 
