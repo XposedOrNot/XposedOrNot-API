@@ -206,8 +206,10 @@ This project is fully open-source and uses automated security tooling (Black, Py
 2. **Install Required Packages**
 
     ```shell
-    sudo apt-get install -y google-cloud-sdk google-cloud-sdk-app-engine-python python3-pip build-essential libffi-dev python3-dev 
+    sudo apt-get install -y python3-pip build-essential libffi-dev python3-dev
     ```
+
+    Then [install the gcloud CLI](https://cloud.google.com/sdk/docs/install) — it's not in the stock Debian/Ubuntu repositories and is needed for step 4 (Datastore authentication or the local emulator).
 
 3. **Install Python Libraries**
 
