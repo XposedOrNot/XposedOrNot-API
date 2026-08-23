@@ -3,12 +3,13 @@
 <p align="center">
 🎉 Your free API for real-time data breach monitoring and analytics. <br>
 <a href="https://github.com/XposedOrNot/XposedOrNot-API/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue"></a>
-<a href="https://github.com/psf/black"><img src="https://img.shields.io/static/v1?label=code%20style&message=black&color=blue"></a>
-<img src="https://img.shields.io/badge/code%20style-pep8-blue.svg">
 <a href="https://github.com/XposedOrNot/XposedOrNot-API/blob/master/CONTRIBUTING.md"><img src="https://img.shields.io/badge/Contributions-Welcome-brightgreen"></a>
 <a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/black.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/black.yml/badge.svg" alt="Black"></a>
 <a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pylint.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pylint.yml/badge.svg" alt="Pylint"></a>
  <a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/codeql.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/codeql.yml/badge.svg" alt="CodeQL"></a>
+<a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/bandit.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/bandit.yml/badge.svg" alt="Bandit"></a>
+<a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pip-audit.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/pip-audit.yml/badge.svg" alt="Dependency Audit"></a>
+<a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/fuzzing.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/fuzzing.yml/badge.svg" alt="Atheris Fuzzing"></a>
 <a href="https://securityscorecards.dev/viewer/?uri=github.com/XposedOrNot/XposedOrNot-API"><img src="https://api.securityscorecards.dev/projects/github.com/XposedOrNot/XposedOrNot-API/badge" alt="OpenSSF Scorecard"></a>
 <a href="https://www.bestpractices.dev/projects/11418"><img src="https://www.bestpractices.dev/projects/11418/badge?v=1" alt="OpenSSF Best Practices"></a>
 
