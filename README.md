@@ -12,12 +12,12 @@
 <a href="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/fuzzing.yml"><img src="https://github.com/XposedOrNot/XposedOrNot-API/actions/workflows/fuzzing.yml/badge.svg" alt="Atheris Fuzzing"></a>
 <a href="https://securityscorecards.dev/viewer/?uri=github.com/XposedOrNot/XposedOrNot-API"><img src="https://api.securityscorecards.dev/projects/github.com/XposedOrNot/XposedOrNot-API/badge" alt="OpenSSF Scorecard"></a>
 <a href="https://www.bestpractices.dev/projects/11418"><img src="https://www.bestpractices.dev/projects/11418/badge?v=1" alt="OpenSSF Best Practices"></a>
+</p>
 
-<p align="center">     
+<p align="center">
     <a href="https://api.xposedornot.com/docs" target="_blank">XposedOrNot API Playground</a>    ·
     <a href="https://xposedornot.com" target="_blank"> XposedOrNot.com</a>
-</p> <br>  
-</p>  
+</p> <br>
 <p align="center">
   <img src="https://github.com/XposedOrNot/XposedOrNot-Website/blob/master/static/images/xon.webp" alt="XposedOrNot demo">
 </p>
@@ -84,7 +84,7 @@ $5/month with rate limits up to 25,000 requests/minute, API-key access, and
 commercial support. It's the same breach data, and it's what keeps the free
 tier free.
 
-For full documentation, see the [API docs](https://XposedOrNot.com/api_doc) and the [API playground](https://api.xposedornot.com/docs).
+For full documentation, see the [API docs](https://xposedornot.com/api_doc) and the [API playground](https://api.xposedornot.com/docs).
 
 ## API Endpoints
 
@@ -135,7 +135,7 @@ curl -L -X POST \
 
 An invalid key (or one with no verified domains) returns `401 Invalid or missing
 API key`; omitting the `x-api-key` header entirely returns `422`. See the
-[API docs](https://XposedOrNot.com/api_doc) for the full domain verification and
+[API docs](https://xposedornot.com/api_doc) for the full domain verification and
 alert-subscription flows.
 
 ## Use it from your AI tools (MCP)
@@ -165,12 +165,14 @@ XposedOrNot was the first open-source tool to monitor and alert on data breaches
 - Run a single combined search across both breaches and pastes
 - Check whether a password has been exposed without ever revealing your identity
 
-Prefer to just look something up without writing code? You can do all of this on the website too: https://XposedOrNot.com.
+Prefer to just look something up without writing code? You can do all of this on the website too: https://xposedornot.com.
 
 
 ## Security
 
 This project is fully open-source and uses automated security tooling (Black, Pylint, CodeQL, OpenSSF Scorecard). For security details, see [SECURITY.md](SECURITY.md).
+
+Please do not report security vulnerabilities through public GitHub issues. Instead, refer to our [Responsible Disclosure Guidelines](https://xposedornot.com/responsible-disclosure) for reporting these issues in a secure manner.
 
 ## Prerequisites
 
@@ -294,21 +296,16 @@ already set in `docker-compose.yml`; for a local install, copy `.env.example` to
 
 ## Contributing
 
-Please read [CONTRIBUTING.md](https://github.com/XposedOrNot/XposedOrNot-API/blob/master/CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
 
 
 ## Authors
 
-* **Devanand Premkumar** - *Initial work* - [XposedOrNot-API](https://github.com/XposedOrNot/XposedOrNot-API)
+* **Devanand Premkumar** - *Initial work* - [DevaOnBreaches](https://github.com/DevaOnBreaches)
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details
-
-## Security Vulnerability Reporting
-
-Please do not report security vulnerabilities through public GitHub issues. Instead, refer to our [Responsible Disclosure Guidelines](https://xposedornot.com/responsible-disclosure) for reporting these issues in a secure manner.
-
 
 ## Acknowledgments
 
@@ -320,6 +317,6 @@ Please do not report security vulnerabilities through public GitHub issues. Inst
 
 If this saved you some trouble, a few things genuinely help:
 
-- Star the repo so others can find it
+- ⭐ Star the repo so others can find it
 - Fork it and send a pull request; contributions are welcome
 - Share it with someone who'd find it useful
