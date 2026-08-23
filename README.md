@@ -174,7 +174,7 @@ This project is fully open-source and uses automated security tooling (Black, Py
 ## Prerequisites
 
 - **Docker** (recommended): Docker 20.10+ and Docker Compose V2
-- **Local install**: Python 3.9+, Google Cloud SDK
+- **Local install**: Python 3.11+, Google Cloud SDK
 
 ## Quick Start for Local Development
 
