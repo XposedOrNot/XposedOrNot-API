@@ -32,8 +32,8 @@ This repo is the API that powers it all: the breach lookups, the analytics, and 
 Give it a try below, and if you find it useful, I'd love for you to build something with it.
 
 Devanand Premkumar, creator of XposedOrNot
-[![Twitter](https://img.shields.io/badge/Twitter-blue?style=flat-square&logo=twitter&logoColor=white&url=https%3A%2F%2Ftwitter.com%2Fdevaonbreaches)](https://twitter.com/devaonbreaches)
-[![Mastodon](https://img.shields.io/badge/-Mastodon-blue?style=flat-square&logo=mastodon&logoColor=white&link=https://infosec.exchange/@DevaOnBreaches)](https://infosec.exchange/@DevaOnBreaches)
+[![X](https://img.shields.io/badge/X-blue?style=flat-square&logo=x&logoColor=white)](https://x.com/devaonbreaches)
+[![Mastodon](https://img.shields.io/badge/-Mastodon-blue?style=flat-square&logo=mastodon&logoColor=white)](https://infosec.exchange/@DevaOnBreaches)
 
 ## Quick Example
 
