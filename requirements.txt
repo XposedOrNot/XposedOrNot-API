@@ -8,7 +8,7 @@ feedgen>=1.0.0
 google-cloud-datastore
 google-cloud-pubsub
 httpx>=0.28.1
-idna>=3.18
+idna>=3.19
 itsdangerous
 jinja2>=3.1.6
 lxml>=6.1.2
