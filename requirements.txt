@@ -14,7 +14,7 @@ jinja2>=3.1.6
 lxml>=6.1.2
 mailjet_rest
 ppdeep>=20260221
-pydantic>=2.13.4
+pydantic>=2.13.5
 python-dateutil
 redis==8.0.0
 requests>=2.34.2
