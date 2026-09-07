@@ -11,7 +11,7 @@ httpx>=0.28.1
 idna>=3.19
 itsdangerous
 jinja2>=3.1.6
-lxml>=6.1.2
+lxml>=6.1.3
 mailjet_rest
 ppdeep>=20260221
 pydantic>=2.13.5
