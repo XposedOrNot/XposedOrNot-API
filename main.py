@@ -95,6 +95,8 @@ setup_globe_middleware(app)
 
 
 # MCP Integration - Manual endpoint approach
+_MCP_PROTOCOL_VERSIONS = ("2025-06-18", "2024-11-05")
+
 _MCP_ALLOWED_ORIGINS = {
     "https://xposedornot.com",
     "https://www.xposedornot.com",
@@ -432,11 +434,18 @@ async def mcp_post_handler(fastapi_request: Request):
 
     if method in ("initialize", "tools/list"):
         if method == "initialize":
+            init_params = request_body.get("params", {}) or {}
+            requested_version = init_params.get("protocolVersion")
+            protocol_version = (
+                requested_version
+                if requested_version in _MCP_PROTOCOL_VERSIONS
+                else _MCP_PROTOCOL_VERSIONS[0]
+            )
             return {
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": protocol_version,
                     "capabilities": {"tools": {}},
                     "serverInfo": {
                         "name": "XON_MCP",
