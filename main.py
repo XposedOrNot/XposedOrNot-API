@@ -339,11 +339,17 @@ async def _run_mcp_tool(request_id, coro, label, email=None, transform=None):
                 else {"detail": exc.detail}
             )
         elif exc.status_code == 429:
+            retry_after = (
+                exc.detail.get("retry_after") if isinstance(exc.detail, dict) else None
+            )
+            message = f"Rate limit reached for {label}."
+            if retry_after:
+                message += f" Retry after {retry_after} seconds."
             return _mcp_error(
                 request_id,
                 -32000,
-                "Rate limit exceeded",
-                data={"status": 429, "detail": exc.detail},
+                message,
+                data={"status": 429, "retry_after": retry_after},
             )
         else:
             detail = (
