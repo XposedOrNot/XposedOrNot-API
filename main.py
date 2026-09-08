@@ -190,6 +190,13 @@ _MCP_TOOLS = [
                         "Optional specific breach identifier, for example Adobe"
                     ),
                 },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "default": 25,
+                    "description": "Maximum breaches to return, default 25",
+                },
             },
             "required": [],
         },
@@ -295,7 +302,7 @@ async def _mcp_envelope_guard(request: Request, request_id=None):
     return None
 
 
-async def _run_mcp_tool(request_id, coro, label, email=None):
+async def _run_mcp_tool(request_id, coro, label, email=None, transform=None):
     """
     Run an in-process route coroutine and wrap it as a JSON-RPC response.
 
@@ -331,6 +338,8 @@ async def _run_mcp_tool(request_id, coro, label, email=None):
         print(f"MCP {label} error: {exc}")
         return _mcp_error(request_id, -32603, f"Internal error: failed to run {label}")
 
+    if transform is not None:
+        data = transform(data)
     prefix = f"{label} for {email}" if email else label
     text = f"{prefix}: {json.dumps(data, default=str)}"
     return {
@@ -424,15 +433,51 @@ async def mcp_post_handler(fastapi_request: Request):
             )
 
         if tool_name == "list_breaches":
+            breach_id = tool_args.get("breach_id") or None
+            try:
+                limit = int(tool_args.get("limit") or 25)
+            except (TypeError, ValueError):
+                return _mcp_error(
+                    req_id, -32602, "limit must be an integer between 1 and 100"
+                )
+            limit = max(1, min(limit, 100))
+
+            def _trim_breach_list(data):
+                breach_rows = (
+                    data.get("exposedBreaches") if isinstance(data, dict) else None
+                )
+                if not isinstance(breach_rows, list):
+                    return data
+                total = len(breach_rows)
+                trimmed = breach_rows[:limit]
+                if not breach_id:
+                    trimmed = [
+                        {
+                            key: value
+                            for key, value in row.items()
+                            if key != "exposureDescription"
+                        }
+                        for row in trimmed
+                    ]
+                data["exposedBreaches"] = trimmed
+                if total > limit:
+                    data["message"] = (
+                        f"Showing {limit} of {total} breaches. Filter by domain "
+                        "or breach_id, or raise limit (max 100), to narrow results."
+                    )
+                return data
+
             return await _run_mcp_tool(
                 req_id,
                 breaches.get_xposed_breaches(
                     request=fastapi_request,
+                    response=Response(),
                     domain=tool_args.get("domain") or None,
-                    breach_id=tool_args.get("breach_id") or None,
+                    breach_id=breach_id,
                     if_modified_since=None,
                 ),
                 "Breach list",
+                transform=_trim_breach_list,
             )
 
         if tool_name == "domain_breach_summary":
