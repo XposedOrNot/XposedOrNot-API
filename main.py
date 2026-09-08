@@ -310,7 +310,7 @@ async def _mcp_envelope_guard(request: Request, request_id=None):
     return None
 
 
-async def _run_mcp_tool(request_id, coro, label, email=None, transform=None):
+async def _run_mcp_tool(request_id, coro, label, transform=None):
     """
     Run an in-process route coroutine and wrap it as a JSON-RPC response.
 
@@ -362,8 +362,7 @@ async def _run_mcp_tool(request_id, coro, label, email=None, transform=None):
 
     if transform is not None:
         data = transform(data)
-    prefix = f"{label} for {email}" if email else label
-    text = f"{prefix}: {json.dumps(data, default=str)}"
+    text = json.dumps(data, default=str)
     return {
         "jsonrpc": "2.0",
         "id": request_id,
@@ -447,7 +446,6 @@ async def mcp_post_handler(fastapi_request: Request):
                     request=fastapi_request, email=email, details=False
                 ),
                 "Breach check results",
-                email=email,
             )
 
         if tool_name == "get_breach_analytics":
@@ -463,7 +461,6 @@ async def mcp_post_handler(fastapi_request: Request):
                     request=fastapi_request, email=email, token=None
                 ),
                 "Breach analytics",
-                email=email,
             )
 
         if tool_name == "list_breaches":
@@ -529,7 +526,6 @@ async def mcp_post_handler(fastapi_request: Request):
                 req_id,
                 breaches.get_domain_breach_summary(request=fastapi_request, d=domain),
                 "Domain breach summary",
-                email=domain,
             )
 
         if tool_name == "get_breach_metrics":
