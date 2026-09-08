@@ -96,23 +96,13 @@ setup_globe_middleware(app)
 
 # MCP Integration - Manual endpoint approach
 @app.get("/mcp")
-async def mcp_get_handler(fastapi_request: Request):
-    """Handle MCP GET requests - return server info."""
-    limited = await _mcp_envelope_guard(fastapi_request)
-    if limited:
-        return limited
-    return {
-        "jsonrpc": "2.0",
-        "result": {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {"tools": {}},
-            "serverInfo": {
-                "name": "XON_MCP",
-                "title": "XposedOrNot Breach Intelligence",
-                "version": API_VERSION,
-            },
-        },
-    }
+async def mcp_get_handler():
+    """Reject GET per streamable HTTP; MCP requests are POST-only."""
+    return JSONResponse(
+        status_code=405,
+        content={"detail": "Method Not Allowed. Send MCP JSON-RPC requests via POST."},
+        headers={"Allow": "POST"},
+    )
 
 
 # MCP tool definitions (advertised via tools/list)
