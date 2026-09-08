@@ -375,10 +375,16 @@ async def mcp_post_handler(fastapi_request: Request):
     req_id = request_body.get("id")
     method = request_body.get("method")
 
+    if isinstance(method, str) and method.startswith("notifications/"):
+        return Response(status_code=202)
+
     if method != "tools/call":
         limited = await _mcp_envelope_guard(fastapi_request, req_id)
         if limited:
             return limited
+
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
     if method in ("initialize", "tools/list"):
         if method == "initialize":
