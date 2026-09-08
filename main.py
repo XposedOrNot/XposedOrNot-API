@@ -95,9 +95,29 @@ setup_globe_middleware(app)
 
 
 # MCP Integration - Manual endpoint approach
+_MCP_ALLOWED_ORIGINS = {
+    "https://xposedornot.com",
+    "https://www.xposedornot.com",
+}
+
+
+def _mcp_origin_forbidden(request: Request):
+    """Reject browser-origin MCP requests not sent from our own site."""
+    origin = request.headers.get("origin")
+    if origin and origin not in _MCP_ALLOWED_ORIGINS:
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Origin not allowed for this endpoint."},
+        )
+    return None
+
+
 @app.get("/mcp")
-async def mcp_get_handler():
+async def mcp_get_handler(fastapi_request: Request):
     """Reject GET per streamable HTTP; MCP requests are POST-only."""
+    forbidden = _mcp_origin_forbidden(fastapi_request)
+    if forbidden:
+        return forbidden
     return JSONResponse(
         status_code=405,
         content={"detail": "Method Not Allowed. Send MCP JSON-RPC requests via POST."},
@@ -373,6 +393,9 @@ async def _run_mcp_tool(request_id, coro, label, transform=None):
 @app.post("/mcp")
 async def mcp_post_handler(fastapi_request: Request):
     """Handle MCP protocol requests manually."""
+    forbidden = _mcp_origin_forbidden(fastapi_request)
+    if forbidden:
+        return forbidden
     # Guard malformed JSON (previously raised an unhandled 500)
     try:
         request_body = await fastapi_request.json()
@@ -399,13 +422,13 @@ async def mcp_post_handler(fastapi_request: Request):
     if isinstance(method, str) and method.startswith("notifications/"):
         return Response(status_code=202)
 
+    if method == "ping":
+        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
+
     if method != "tools/call":
         limited = await _mcp_envelope_guard(fastapi_request, req_id)
         if limited:
             return limited
-
-    if method == "ping":
-        return {"jsonrpc": "2.0", "id": req_id, "result": {}}
 
     if method in ("initialize", "tools/list"):
         if method == "initialize":
