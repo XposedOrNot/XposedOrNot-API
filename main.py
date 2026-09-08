@@ -25,6 +25,7 @@ from config.settings import (
     API_TITLE,
     API_DESCRIPTION,
     CF_UNBLOCK_MAGIC,
+    MAX_EMAIL_LENGTH,
     OPENAPI_SERVERS,
 )
 from config.limiter import (
@@ -65,7 +66,8 @@ from utils.custom_limiter import (
     parse_rate_limit,
     redis_pool,
 )
-from utils.helpers import get_client_ip
+from utils.helpers import get_client_ip, validate_domain
+from utils.validation import validate_email_with_tld
 from utils.scan_protection import handle_404_with_protection
 
 # Initialize FastAPI app
@@ -251,6 +253,22 @@ _MCP_TOOLS = [
 _MCP_ENVELOPE_LIMIT = parse_rate_limit("2 per second;25 per hour;100 per day")
 
 
+def _validate_mcp_email(request_id, email):
+    """Return an actionable -32602 error for an invalid email, else None."""
+    if (
+        not isinstance(email, str)
+        or len(email) > MAX_EMAIL_LENGTH
+        or not validate_email_with_tld(email)
+    ):
+        return _mcp_error(
+            request_id,
+            -32602,
+            f"'{str(email)[:64]}' is not a valid email address. "
+            "Provide a full address such as user@example.com.",
+        )
+    return None
+
+
 def _mcp_error(request_id, code, message, data=None):
     """Build a JSON-RPC error envelope."""
     err = {"code": code, "message": message}
@@ -328,15 +346,23 @@ async def _run_mcp_tool(request_id, coro, label, email=None, transform=None):
                 data={"status": 429, "detail": exc.detail},
             )
         else:
+            detail = (
+                exc.detail if isinstance(exc.detail, str) else json.dumps(exc.detail)
+            )
             return _mcp_error(
                 request_id,
                 -32603,
-                f"Failed to run {label}",
+                f"{label} failed (HTTP {exc.status_code}): {detail}",
                 data={"status": exc.status_code},
             )
     except Exception as exc:  # pylint: disable=broad-except
         print(f"MCP {label} error: {exc}")
-        return _mcp_error(request_id, -32603, f"Internal error: failed to run {label}")
+        return _mcp_error(
+            request_id,
+            -32603,
+            f"Internal error while running {label}. Please retry; if it "
+            "persists the service may be having issues.",
+        )
 
     if transform is not None:
         data = transform(data)
@@ -416,6 +442,9 @@ async def mcp_post_handler(fastapi_request: Request):
             email = tool_args.get("email")
             if not email:
                 return _mcp_error(req_id, -32602, "Missing email parameter")
+            invalid = _validate_mcp_email(req_id, email)
+            if invalid:
+                return invalid
             return await _run_mcp_tool(
                 req_id,
                 breaches.search_email(
@@ -429,6 +458,9 @@ async def mcp_post_handler(fastapi_request: Request):
             email = tool_args.get("email")
             if not email:
                 return _mcp_error(req_id, -32602, "Missing email parameter")
+            invalid = _validate_mcp_email(req_id, email)
+            if invalid:
+                return invalid
             return await _run_mcp_tool(
                 req_id,
                 breaches.search_data_breaches(
@@ -490,6 +522,13 @@ async def mcp_post_handler(fastapi_request: Request):
             domain = tool_args.get("domain")
             if not domain:
                 return _mcp_error(req_id, -32602, "Missing domain parameter")
+            if not isinstance(domain, str) or not validate_domain(domain):
+                return _mcp_error(
+                    req_id,
+                    -32602,
+                    f"'{str(domain)[:64]}' is not a valid domain. "
+                    "Provide a bare domain such as example.com.",
+                )
             return await _run_mcp_tool(
                 req_id,
                 breaches.get_domain_breach_summary(request=fastapi_request, d=domain),
