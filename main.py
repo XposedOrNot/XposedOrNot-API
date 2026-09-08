@@ -104,69 +104,100 @@ async def mcp_get_handler(fastapi_request: Request):
         "result": {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "XON_MCP", "version": "1.0.0"},
+            "serverInfo": {
+                "name": "XON_MCP",
+                "title": "XposedOrNot Breach Intelligence",
+                "version": API_VERSION,
+            },
         },
     }
 
 
 # MCP tool definitions (advertised via tools/list)
+_READ_ONLY = {
+    "readOnlyHint": True,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
+
 _MCP_TOOLS = [
     {
         "name": "check_email_breaches",
-        "description": ("Check if an email address appears in any known data breaches"),
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "description": "Email address to check for breaches",
-                }
-            },
-            "required": ["email"],
-        },
-    },
-    {
-        "name": "get_breach_analytics",
+        "title": "Check Email for Breaches",
         "description": (
-            "Get detailed analytics and statistics about breaches "
-            "for a specific email address"
+            "Check whether an email address appears in the XposedOrNot index of "
+            "known public data breaches. Returns the list of breach names only. "
+            "Never returns passwords."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "email": {
                     "type": "string",
-                    "description": "Email address to get analytics for",
-                },
-                "token": {
-                    "type": "string",
-                    "description": "Optional token for accessing sensitive data",
-                    "default": "",
-                },
+                    "format": "email",
+                    "description": "Email address to check for breaches",
+                }
             },
             "required": ["email"],
         },
+        "annotations": _READ_ONLY,
+    },
+    {
+        "name": "get_breach_analytics",
+        "title": "Get Email Breach Analytics",
+        "description": (
+            "Get a detailed breach history for one email address: the breaches "
+            "it appeared in with dates and descriptions, exposure broken down "
+            "by industry and by year, risk scoring, and any paste exposure. "
+            "Never returns passwords."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Email address to get analytics for",
+                }
+            },
+            "required": ["email"],
+        },
+        "annotations": _READ_ONLY,
     },
     {
         "name": "list_breaches",
-        "description": "Get a list of all known data breaches in the system",
+        "title": "List Indexed Breaches",
+        "description": (
+            "List breaches in the XposedOrNot catalog, optionally filtered by "
+            "the breached company domain or by a specific breach ID. Returns "
+            "breach name, date, industry, record count, categories of data "
+            "exposed and a reference URL."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "domain": {
                     "type": "string",
-                    "description": "Optional domain to filter breaches",
+                    "description": (
+                        "Optional domain of the breached company, "
+                        "for example adobe.com"
+                    ),
                 },
                 "breach_id": {
                     "type": "string",
-                    "description": "Optional specific breach ID to get",
+                    "description": (
+                        "Optional specific breach identifier, for example Adobe"
+                    ),
                 },
             },
             "required": [],
         },
+        "annotations": _READ_ONLY,
     },
     {
         "name": "domain_breach_summary",
+        "title": "Summarize Domain Breach Exposure",
         "description": (
             "Get an aggregate breach summary for a domain, including the number "
             "of breaches, affected email accounts, pastes, and the most recent "
@@ -182,23 +213,28 @@ _MCP_TOOLS = [
             },
             "required": ["domain"],
         },
+        "annotations": _READ_ONLY,
     },
     {
         "name": "get_breach_metrics",
+        "title": "Get Breach Index Metrics",
         "description": (
             "Get system-wide breach statistics: total breaches and records "
             "indexed, breaches per year and industry, the largest and most "
             "recent breaches, and when the latest breach was added."
         ),
         "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "annotations": _READ_ONLY,
     },
     {
         "name": "get_recent_breaches",
+        "title": "Get Recent Breaches",
         "description": (
             "Get the latest data breach news and recently added breaches "
             "tracked by XposedOrNot."
         ),
         "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "annotations": _READ_ONLY,
     },
 ]
 
@@ -343,7 +379,11 @@ async def mcp_post_handler(fastapi_request: Request):
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": {"tools": {}},
-                    "serverInfo": {"name": "XON_MCP", "version": "1.0.0"},
+                    "serverInfo": {
+                        "name": "XON_MCP",
+                        "title": "XposedOrNot Breach Intelligence",
+                        "version": API_VERSION,
+                    },
                 },
             }
         return {
@@ -374,11 +414,10 @@ async def mcp_post_handler(fastapi_request: Request):
             email = tool_args.get("email")
             if not email:
                 return _mcp_error(req_id, -32602, "Missing email parameter")
-            token = tool_args.get("token") or None
             return await _run_mcp_tool(
                 req_id,
                 breaches.search_data_breaches(
-                    request=fastapi_request, email=email, token=token
+                    request=fastapi_request, email=email, token=None
                 ),
                 "Breach analytics",
                 email=email,
