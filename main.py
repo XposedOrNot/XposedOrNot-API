@@ -579,6 +579,34 @@ async def mcp_post_handler(fastapi_request: Request):
     return _mcp_error(req_id, -32601, "Method not found")
 
 
+_MCP_SERVER_CARD = {
+    "serverInfo": {
+        "name": "XON_MCP",
+        "version": API_VERSION,
+        "title": "XposedOrNot Breach Intelligence",
+        "description": (
+            "Real-time data-breach lookup and analytics for emails and domains."
+        ),
+        "vendor": "XposedOrNot",
+        "homepage": "https://xposedornot.com",
+        "documentation": "https://xposedornot.com/api_doc",
+        "repository": "https://github.com/XposedOrNot/XposedOrNot-API",
+        "license": "MIT",
+    },
+    "protocolVersion": _MCP_PROTOCOL_VERSIONS[0],
+    "supportedProtocolVersions": list(_MCP_PROTOCOL_VERSIONS),
+    "transport": {"type": "http", "url": "https://api.xposedornot.com/mcp"},
+    "capabilities": {"tools": {}},
+    "tools": _MCP_TOOLS,
+}
+
+
+@app.get("/.well-known/mcp/server-card.json", include_in_schema=False)
+async def serve_mcp_server_card():
+    """Serve the MCP server card built from the live tool definitions."""
+    return JSONResponse(content=_MCP_SERVER_CARD)
+
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 

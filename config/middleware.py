@@ -22,6 +22,7 @@ PUBLIC_CACHEABLE_PATHS = frozenset(
         "/v1/xon-pulse",
         "/v1/analytics/pulse",
         "/v1/rss",
+        "/.well-known/mcp/server-card.json",
     }
 )
 PUBLIC_CACHE_CONTROL = "public, max-age=3600"
