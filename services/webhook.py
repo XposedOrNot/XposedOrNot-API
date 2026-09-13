@@ -45,24 +45,24 @@ async def verify_webhook_channel(channel_data: ChannelSetupRequest, email: str) 
     return await _verify_webhook_channel(channel_data, email)
 
 
-async def rotate_webhook_secret(channel_data: ChannelSetupRequest, email: str) -> str:
+async def rotate_webhook_secret(email: str) -> str:
     """Rotate the signing secret. Returns the new secret (shown once)."""
-    return await _rotate_webhook_secret(channel_data, email)
+    return await _rotate_webhook_secret(email)
 
 
-async def delete_webhook_channel(channel_data: ChannelSetupRequest, email: str) -> bool:
+async def delete_webhook_channel(email: str) -> bool:
     """Delete a generic webhook channel configuration."""
-    return await delete_messaging_channel(channel_data, "webhook", email)
+    return await delete_messaging_channel("webhook", email)
 
 
-async def get_webhook_channel_config(domain: str, email: str) -> Optional[Dict]:
+async def get_webhook_channel_config(email: str) -> Optional[Dict]:
     """Get a generic webhook channel configuration (secrets masked)."""
-    return await _get_webhook_channel_config(domain, email)
+    return await _get_webhook_channel_config(email)
 
 
-def _load_delivery_target(domain: str, email: str):
+def _load_delivery_target(email: str):
     """Return the raw channel entity if it is verified and active, else None."""
-    key = datastore_client.key(get_channel_kind("webhook"), f"{email}_{domain}")
+    key = datastore_client.key(get_channel_kind("webhook"), email)
     entity = datastore_client.get(key)
     if not entity or not entity.get("verified") or not entity.get("active"):
         return None
@@ -108,17 +108,20 @@ async def send_webhook_alert(
     Returns False (never raises) so a sender loop can continue; failures are
     counted on the row and the channel is auto-disabled after
     ``MAX_CONSECUTIVE_FAILURES``.
+
+    ``domain`` identifies the breach being announced; the channel itself is
+    account-wide and looked up by ``email``.
     """
-    entity = await asyncio.to_thread(_load_delivery_target, domain, email)
+    entity = await asyncio.to_thread(_load_delivery_target, email)
     if entity is None:
-        logger.info(f"No active webhook channel for {domain}; skipping")
+        logger.info(f"No active webhook channel for owner={email}; skipping {domain}")
         return False
 
     try:
         webhook_url = decrypt_webhook(entity.get("webhook"))
         signing_secret = decrypt_webhook(entity.get("signing_secret"))
     except ValueError as exc:
-        logger.error(f"Webhook channel for {domain} is undecryptable: {exc}")
+        logger.error(f"Webhook channel for owner={email} is undecryptable: {exc}")
         await asyncio.to_thread(_record_delivery_outcome, entity, False, str(exc))
         return False
     custom_headers = _decrypt_custom_headers(entity.get("custom_headers"))

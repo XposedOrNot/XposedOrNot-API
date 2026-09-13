@@ -35,14 +35,14 @@ async def verify_slack_channel(channel_data: ChannelSetupRequest, email: str) ->
     return await verify_messaging_channel(channel_data, "slack", email)
 
 
-async def delete_slack_channel(channel_data: ChannelSetupRequest, email: str) -> bool:
+async def delete_slack_channel(email: str) -> bool:
     """Delete a Slack channel configuration."""
-    return await delete_messaging_channel(channel_data, "slack", email)
+    return await delete_messaging_channel("slack", email)
 
 
-async def get_slack_channel_config(domain: str, email: str) -> Optional[Dict]:
+async def get_slack_channel_config(email: str) -> Optional[Dict]:
     """Get Slack channel configuration (webhook decrypted)."""
-    return await get_channel_config(domain, email, "slack")
+    return await get_channel_config(email, "slack")
 
 
 def build_slack_breach_message(
@@ -105,14 +105,17 @@ async def send_slack_alert(domain: str, email: str, message: Dict) -> bool:
 
     Returns False (never raises) when the channel is missing, unverified,
     inactive, or Slack rejects the post, so a sender loop can continue.
+
+    ``domain`` identifies the breach being announced; the channel itself is
+    account-wide and looked up by ``email``.
     """
-    config = await get_slack_channel_config(domain, email)
+    config = await get_slack_channel_config(email)
     if not config or not config.get("active") or not config.get("verified"):
-        logger.info(f"No active Slack channel for {domain}; skipping")
+        logger.info(f"No active Slack channel for owner={email}; skipping {domain}")
         return False
     webhook_url = config.get("webhook")
     if not webhook_url:
-        logger.warning(f"Slack channel for {domain} has no usable webhook URL")
+        logger.warning(f"Slack channel for owner={email} has no usable webhook URL")
         return False
     try:
         async with shared_http_client() as client:

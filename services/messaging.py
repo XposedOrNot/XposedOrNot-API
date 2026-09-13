@@ -1,7 +1,9 @@
 """Common messaging service functionality (Slack, Teams, generic webhook).
 
-Channels are owned by the verified domain owner (email) resolved by
-``utils.channel_auth``; rows are keyed ``{owner_email}_{domain}``.
+Channels are account-wide: one Slack, one Teams and one webhook channel per
+verified owner (email) resolved by ``utils.channel_auth``; rows are keyed
+``{owner_email}``. Alerts for every domain the owner has verified are
+delivered to the same channel.
 """
 
 import asyncio
@@ -42,7 +44,7 @@ def generate_verification_code(length: int = 8) -> str:
 
 
 async def send_slack_verification_message(
-    webhook_url: str, verification_code: str, domain: str
+    webhook_url: str, verification_code: str
 ) -> bool:
     """
     Send verification code to Slack channel via webhook.
@@ -50,7 +52,6 @@ async def send_slack_verification_message(
     Args:
         webhook_url: The Slack webhook URL
         verification_code: The verification code to send
-        domain: The domain being configured
 
     Returns:
         bool: True if message was sent successfully
@@ -74,8 +75,7 @@ async def send_slack_verification_message(
                     "text": {
                         "type": "mrkdwn",
                         "text": (
-                            "*Verification Required*\n\nYour verification "
-                            f"token for domain `{domain}` is:"
+                            "*Verification Required*\n\nYour verification " "token is:"
                         ),
                     },
                 },
@@ -102,7 +102,8 @@ async def send_slack_verification_message(
                             "type": "mrkdwn",
                             "text": (
                                 "Once verified, you'll receive real-time "
-                                "breach notifications for your domain."
+                                "breach notifications for your verified "
+                                "domains."
                             ),
                         }
                     ],
@@ -114,9 +115,7 @@ async def send_slack_verification_message(
             response = await client.post(webhook_url, json=message)
             response.raise_for_status()
 
-        logger.info(
-            f"Successfully sent Slack verification message for domain: {domain}"
-        )
+        logger.info("Successfully sent Slack verification message")
         return True
 
     except httpx.HTTPError as e:
@@ -127,13 +126,12 @@ async def send_slack_verification_message(
         ) from e
 
 
-async def send_slack_success_message(webhook_url: str, domain: str) -> bool:
+async def send_slack_success_message(webhook_url: str) -> bool:
     """
     Send verification success confirmation to Slack channel.
 
     Args:
         webhook_url: The Slack webhook URL
-        domain: The domain that was verified
 
     Returns:
         bool: True if message was sent successfully
@@ -155,7 +153,7 @@ async def send_slack_success_message(webhook_url: str, domain: str) -> bool:
                         "type": "mrkdwn",
                         "text": (
                             "Your Slack channel is now successfully connected "
-                            f"to *XposedOrNot* for domain `{domain}`."
+                            "to *XposedOrNot*."
                         ),
                     },
                 },
@@ -176,7 +174,7 @@ async def send_slack_success_message(webhook_url: str, domain: str) -> bool:
                             "type": "mrkdwn",
                             "text": (
                                 "Stay informed about security incidents "
-                                "affecting your domain in real-time."
+                                "affecting your verified domains in real-time."
                             ),
                         }
                     ],
@@ -188,9 +186,7 @@ async def send_slack_success_message(webhook_url: str, domain: str) -> bool:
             response = await client.post(webhook_url, json=message)
             response.raise_for_status()
 
-        logger.info(
-            f"Successfully sent Slack verification success message for domain: {domain}"
-        )
+        logger.info("Successfully sent Slack verification success message")
         return True
 
     except httpx.HTTPError as e:
@@ -199,7 +195,7 @@ async def send_slack_success_message(webhook_url: str, domain: str) -> bool:
 
 
 async def send_teams_verification_message(
-    webhook_url: str, verification_code: str, domain: str
+    webhook_url: str, verification_code: str
 ) -> bool:
     """
     Send verification code to Teams channel via webhook.
@@ -207,7 +203,6 @@ async def send_teams_verification_message(
     Args:
         webhook_url: The Teams webhook URL
         verification_code: The verification code to send
-        domain: The domain being configured
 
     Returns:
         bool: True if message was sent successfully
@@ -244,7 +239,6 @@ async def send_teams_verification_message(
                                 {
                                     "type": "FactSet",
                                     "facts": [
-                                        {"title": "Domain:", "value": domain},
                                         {
                                             "title": "Verification Code:",
                                             "value": verification_code,
@@ -265,7 +259,8 @@ async def send_teams_verification_message(
                                         "to complete the verification "
                                         "process. Once verified, you'll "
                                         "receive real-time breach "
-                                        "notifications for your domain."
+                                        "notifications for your verified "
+                                        "domains."
                                     ),
                                     "wrap": True,
                                 },
@@ -285,7 +280,6 @@ async def send_teams_verification_message(
                     {
                         "activityTitle": "**Verification Required**",
                         "facts": [
-                            {"name": "Domain:", "value": domain},
                             {
                                 "name": "Verification Token:",
                                 "value": f"**{verification_code}**",
@@ -296,7 +290,7 @@ async def send_teams_verification_message(
                             "paste it back into your application to complete "
                             "the verification process.\n\nOnce verified, "
                             "you'll receive real-time breach notifications "
-                            "for your domain."
+                            "for your verified domains."
                         ),
                     }
                 ],
@@ -306,9 +300,7 @@ async def send_teams_verification_message(
             response = await client.post(webhook_url, json=message)
             response.raise_for_status()
 
-        logger.info(
-            f"Successfully sent Teams verification message for domain: {domain}"
-        )
+        logger.info("Successfully sent Teams verification message")
         return True
 
     except httpx.HTTPError as e:
@@ -319,13 +311,12 @@ async def send_teams_verification_message(
         ) from e
 
 
-async def send_teams_success_message(webhook_url: str, domain: str) -> bool:
+async def send_teams_success_message(webhook_url: str) -> bool:
     """
     Send verification success confirmation to Teams channel.
 
     Args:
         webhook_url: The Teams webhook URL
-        domain: The domain that was verified
 
     Returns:
         bool: True if message was sent successfully
@@ -354,7 +345,7 @@ async def send_teams_success_message(webhook_url: str, domain: str) -> bool:
                                     "text": (
                                         "Your Teams channel is now "
                                         "successfully connected to "
-                                        f"**XposedOrNot** for domain `{domain}`."
+                                        "**XposedOrNot**."
                                     ),
                                     "wrap": True,
                                     "spacing": "Medium",
@@ -365,7 +356,8 @@ async def send_teams_success_message(webhook_url: str, domain: str) -> bool:
                                         "🔔 You will start receiving new data "
                                         "breach notifications here. Stay "
                                         "informed about security incidents "
-                                        "affecting your domain in real-time."
+                                        "affecting your verified domains in "
+                                        "real-time."
                                     ),
                                     "wrap": True,
                                 },
@@ -385,13 +377,13 @@ async def send_teams_success_message(webhook_url: str, domain: str) -> bool:
                     {
                         "activityTitle": (
                             "Your Teams channel is now successfully connected "
-                            f"to **XposedOrNot** for domain `{domain}`."
+                            "to **XposedOrNot**."
                         ),
                         "text": (
                             "🔔 You will start receiving new data breach "
                             "notifications here.\n\nStay informed about "
-                            "security incidents affecting your domain in "
-                            "real-time."
+                            "security incidents affecting your verified "
+                            "domains in real-time."
                         ),
                     }
                 ],
@@ -401,9 +393,7 @@ async def send_teams_success_message(webhook_url: str, domain: str) -> bool:
             response = await client.post(webhook_url, json=message)
             response.raise_for_status()
 
-        logger.info(
-            f"Successfully sent Teams verification success message for domain: {domain}"
-        )
+        logger.info("Successfully sent Teams verification success message")
         return True
 
     except httpx.HTTPError as e:
@@ -549,7 +539,6 @@ async def deliver_signed_webhook(
 async def send_webhook_verification_message(
     webhook_url: str,
     verification_code: str,
-    domain: str,
     signing_secret: str,
     custom_headers: Optional[Dict[str, str]] = None,
 ) -> bool:
@@ -557,7 +546,6 @@ async def send_webhook_verification_message(
     payload = {
         "event": "verification",
         "service": SERVICE_NAME,
-        "domain": domain,
         "verification_code": verification_code,
         "message": (
             "Verify your XposedOrNot webhook channel by submitting this "
@@ -571,7 +559,6 @@ async def send_webhook_verification_message(
 
 async def send_webhook_success_message(
     webhook_url: str,
-    domain: str,
     signing_secret: str,
     custom_headers: Optional[Dict[str, str]] = None,
 ) -> bool:
@@ -579,10 +566,10 @@ async def send_webhook_success_message(
     payload = {
         "event": "verification_success",
         "service": SERVICE_NAME,
-        "domain": domain,
         "message": (
             "Your XposedOrNot webhook channel is verified and active. You will "
-            "start receiving signed data-breach notifications for this domain."
+            "start receiving signed data-breach notifications for your "
+            "verified domains."
         ),
     }
     return await deliver_signed_webhook(
@@ -598,7 +585,7 @@ async def setup_webhook_channel(
     channel_data: ChannelSetupRequest, email: str
 ) -> Tuple[bool, str]:
     """
-    Set up (or reconfigure) a generic webhook channel for a domain.
+    Set up (or reconfigure) the owner's generic webhook channel.
 
     Behavior:
     - Brand-new channel: generate a signing secret, send a verification ping,
@@ -614,10 +601,10 @@ async def setup_webhook_channel(
         Tuple[bool, str]: (success, signing_secret) — signing_secret is non-empty
         only when a brand-new secret was generated (show-once).
     """
-    if not all([channel_data.domain, channel_data.webhook]):
+    if not channel_data.webhook:
         raise HTTPException(
             status_code=400,
-            detail="Missing required fields: domain or webhook",
+            detail="Missing required field: webhook",
         )
     if not email:
         raise HTTPException(
@@ -641,8 +628,7 @@ async def setup_webhook_channel(
             raise HTTPException(status_code=400, detail=headers_reason)
 
     kind = get_channel_kind("webhook")
-    entity_key_name = f"{email}_{channel_data.domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     existing_entity = await asyncio.to_thread(datastore_client.get, channel_key)
 
     now = _utcnow()
@@ -676,10 +662,7 @@ async def setup_webhook_channel(
             }
         )
         await asyncio.to_thread(datastore_client.put, existing_entity)
-        logger.info(
-            f"Updated verified webhook channel in place for "
-            f"owner={email}, domain={channel_data.domain}"
-        )
+        logger.info(f"Updated verified webhook channel in place for owner={email}")
         return True, ""
 
     signing_secret_plain = ""
@@ -698,8 +681,7 @@ async def setup_webhook_channel(
     channel_entity.update(
         {
             "owner_email": email,
-            "domain": channel_data.domain,
-            "scope": "domain",
+            "scope": "owner",
             "source": CHANNEL_SOURCE,
             "created_by": email,
             "webhook": encrypted_webhook,
@@ -734,7 +716,6 @@ async def setup_webhook_channel(
         await send_webhook_verification_message(
             channel_data.webhook,
             verification_code,
-            channel_data.domain,
             secret_for_signing,
             normalized_headers,
         )
@@ -745,39 +726,31 @@ async def setup_webhook_channel(
         ) + 1
         await asyncio.to_thread(datastore_client.put, channel_entity)
         logger.warning(
-            f"Webhook verification ping failed for owner={email}, "
-            f"domain={channel_data.domain}: {ping_exc.detail}"
+            f"Webhook verification ping failed for owner={email}: {ping_exc.detail}"
         )
         raise
 
     await asyncio.to_thread(datastore_client.put, channel_entity)
-    logger.info(
-        f"Set up webhook channel for owner={email}, "
-        f"domain={channel_data.domain} (re-verification required)"
-    )
+    logger.info(f"Set up webhook channel for owner={email} (re-verification required)")
     return True, signing_secret_plain
 
 
 async def verify_webhook_channel(channel_data: ChannelSetupRequest, email: str) -> bool:
     """Verify a webhook channel using the code delivered to the endpoint."""
-    if not all([channel_data.domain, channel_data.verify_token]):
+    if not channel_data.verify_token:
         raise HTTPException(
             status_code=400,
-            detail="Missing required fields: domain or verify_token",
+            detail="Missing required field: verify_token",
         )
     if not email:
         raise HTTPException(status_code=400, detail="Missing required parameter: email")
 
     kind = get_channel_kind("webhook")
-    entity_key_name = f"{email}_{channel_data.domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     channel_entity = await asyncio.to_thread(datastore_client.get, channel_key)
 
     if not channel_entity:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Webhook channel not found for domain {channel_data.domain}",
-        )
+        raise HTTPException(status_code=404, detail="Webhook channel not found")
 
     if channel_entity.get("owner_email") != email:
         raise HTTPException(status_code=403, detail="Channel belongs to another owner")
@@ -807,9 +780,7 @@ async def verify_webhook_channel(channel_data: ChannelSetupRequest, email: str) 
         }
     )
     await asyncio.to_thread(datastore_client.put, channel_entity)
-    logger.info(
-        f"Verified webhook channel for owner={email}, domain={channel_data.domain}"
-    )
+    logger.info(f"Verified webhook channel for owner={email}")
 
     try:
         encrypted_webhook = channel_entity.get("webhook")
@@ -817,7 +788,6 @@ async def verify_webhook_channel(channel_data: ChannelSetupRequest, email: str) 
         if encrypted_webhook and signing_secret_enc:
             await send_webhook_success_message(
                 decrypt_webhook(encrypted_webhook),
-                channel_data.domain,
                 decrypt_webhook(signing_secret_enc),
                 _decrypt_custom_headers(channel_entity.get("custom_headers")),
             )
@@ -827,12 +797,12 @@ async def verify_webhook_channel(channel_data: ChannelSetupRequest, email: str) 
     return True
 
 
-async def rotate_webhook_secret(channel_data: ChannelSetupRequest, email: str) -> str:
+async def rotate_webhook_secret(email: str) -> str:
     """Async wrapper: sync Datastore work runs off the event loop."""
-    return await asyncio.to_thread(_rotate_webhook_secret_sync, channel_data, email)
+    return await asyncio.to_thread(_rotate_webhook_secret_sync, email)
 
 
-def _rotate_webhook_secret_sync(channel_data: ChannelSetupRequest, email: str) -> str:
+def _rotate_webhook_secret_sync(email: str) -> str:
     """
     Rotate a webhook channel's signing secret with an overlap grace window.
 
@@ -840,14 +810,11 @@ def _rotate_webhook_secret_sync(channel_data: ChannelSetupRequest, email: str) -
     receivers still switching over) and a new secret is generated and
     returned ONCE. The channel stays verified/active.
     """
-    if not channel_data.domain:
-        raise HTTPException(status_code=400, detail="Missing required field: domain")
     if not email:
         raise HTTPException(status_code=400, detail="Missing required parameter: email")
 
     kind = get_channel_kind("webhook")
-    entity_key_name = f"{email}_{channel_data.domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     channel_entity = datastore_client.get(channel_key)
 
     if not channel_entity:
@@ -867,10 +834,7 @@ def _rotate_webhook_secret_sync(channel_data: ChannelSetupRequest, email: str) -
         }
     )
     datastore_client.put(channel_entity)
-    logger.info(
-        f"Rotated webhook signing secret for owner={email}, "
-        f"domain={channel_data.domain}"
-    )
+    logger.info(f"Rotated webhook signing secret for owner={email}")
     return new_secret
 
 
@@ -884,12 +848,12 @@ def _decrypt_custom_headers(encrypted_headers: Optional[str]) -> Dict[str, str]:
         return {}
 
 
-async def get_webhook_channel_config(domain: str, email: str) -> Optional[Dict]:
+async def get_webhook_channel_config(email: str) -> Optional[Dict]:
     """Async wrapper: sync Datastore work runs off the event loop."""
-    return await asyncio.to_thread(_get_webhook_channel_config_sync, domain, email)
+    return await asyncio.to_thread(_get_webhook_channel_config_sync, email)
 
 
-def _get_webhook_channel_config_sync(domain: str, email: str) -> Optional[Dict]:
+def _get_webhook_channel_config_sync(email: str) -> Optional[Dict]:
     """
     Get a webhook channel's configuration (masked).
 
@@ -897,14 +861,11 @@ def _get_webhook_channel_config_sync(domain: str, email: str) -> Optional[Dict]:
     only presence flags / header names. The signing secret is shown once at
     setup/rotation.
     """
-    if not all([domain, email]):
-        raise HTTPException(
-            status_code=400, detail="Missing required fields: domain or email"
-        )
+    if not email:
+        raise HTTPException(status_code=400, detail="Missing required field: email")
 
     kind = get_channel_kind("webhook")
-    entity_key_name = f"{email}_{domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     channel_entity = datastore_client.get(channel_key)
 
     if not channel_entity:
@@ -916,7 +877,7 @@ def _get_webhook_channel_config_sync(domain: str, email: str) -> Optional[Dict]:
         try:
             decrypted_webhook = decrypt_webhook(encrypted_webhook)
         except ValueError as exc:
-            logger.error(f"Failed to decrypt webhook for {domain}: {str(exc)}")
+            logger.error(f"Failed to decrypt webhook for {email}: {str(exc)}")
 
     custom_header_keys: List[str] = list(
         _decrypt_custom_headers(channel_entity.get("custom_headers")).keys()
@@ -930,8 +891,7 @@ def _get_webhook_channel_config_sync(domain: str, email: str) -> Optional[Dict]:
 
     return {
         "email": channel_entity.get("owner_email") or channel_entity.get("created_by"),
-        "domain": channel_entity.get("domain"),
-        "scope": channel_entity.get("scope", "domain"),
+        "scope": channel_entity.get("scope", "owner"),
         "created_by": channel_entity.get("created_by"),
         "webhook": decrypted_webhook,
         "verified": channel_entity.get("verified", False),
@@ -957,17 +917,17 @@ async def setup_messaging_channel(
     Set up a messaging channel for a given platform (Slack or Teams).
 
     Args:
-        channel_data: Channel setup data including domain and webhook.
+        channel_data: Channel setup data including the webhook URL.
         platform: The messaging platform ('slack' or 'teams').
         email: Verified domain owner resolved by utils.channel_auth.
 
     Returns:
         Tuple[bool, str]: (success, verification_code)
     """
-    if not all([channel_data.domain, channel_data.webhook]):
+    if not channel_data.webhook:
         raise HTTPException(
             status_code=400,
-            detail="Missing required fields: domain or webhook",
+            detail="Missing required field: webhook",
         )
 
     if not email:
@@ -977,8 +937,7 @@ async def setup_messaging_channel(
         )
 
     kind = get_channel_kind(platform)
-    entity_key_name = f"{email}_{channel_data.domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     existing_entity = await asyncio.to_thread(datastore_client.get, channel_key)
 
     if existing_entity:
@@ -988,15 +947,11 @@ async def setup_messaging_channel(
                 status_code=409,
                 detail=(
                     f"{platform.capitalize()} channel already configured and "
-                    f"verified for domain {channel_data.domain}. Please "
-                    "delete the existing channel first if you want to "
-                    "reconfigure."
+                    "verified for this account. Please delete the existing "
+                    "channel first if you want to reconfigure."
                 ),
             )
-        logger.info(
-            f"Re-initializing unverified {platform} channel for "
-            f"owner={email}, domain={channel_data.domain}"
-        )
+        logger.info(f"Re-initializing unverified {platform} channel for owner={email}")
 
     if platform == "slack":
         if not validate_slack_webhook_url(channel_data.webhook):
@@ -1030,13 +985,9 @@ async def setup_messaging_channel(
     verification_code = generate_verification_code()
 
     if platform == "slack":
-        await send_slack_verification_message(
-            channel_data.webhook, verification_code, channel_data.domain
-        )
+        await send_slack_verification_message(channel_data.webhook, verification_code)
     elif platform == "teams":
-        await send_teams_verification_message(
-            channel_data.webhook, verification_code, channel_data.domain
-        )
+        await send_teams_verification_message(channel_data.webhook, verification_code)
 
     channel_entity = datastore.Entity(key=channel_key)
 
@@ -1044,8 +995,7 @@ async def setup_messaging_channel(
     channel_entity.update(
         {
             "owner_email": email,
-            "domain": channel_data.domain,
-            "scope": "domain",
+            "scope": "owner",
             "source": CHANNEL_SOURCE,
             "created_by": email,
             "webhook": encrypted_webhook,
@@ -1059,7 +1009,7 @@ async def setup_messaging_channel(
     await asyncio.to_thread(datastore_client.put, channel_entity)
     logger.info(
         f"Successfully set up {platform} channel for owner={email}, "
-        f"domain={channel_data.domain}, sent verification code to channel"
+        "sent verification code to channel"
     )
     return True, ""
 
@@ -1078,23 +1028,23 @@ async def verify_messaging_channel(
     Returns:
         bool: True if verification was successful.
     """
-    if not all([channel_data.domain, channel_data.verify_token]):
+    if not channel_data.verify_token:
         raise HTTPException(
             status_code=400,
-            detail="Missing required fields: domain or verify_token",
+            detail="Missing required field: verify_token",
         )
 
     if not email:
         raise HTTPException(status_code=400, detail="Missing required parameter: email")
 
     kind = get_channel_kind(platform)
-    entity_key_name = f"{email}_{channel_data.domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     channel_entity = await asyncio.to_thread(datastore_client.get, channel_key)
 
     if not channel_entity:
-        detail = f"{platform.capitalize()} channel not found for domain {channel_data.domain}"
-        raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(
+            status_code=404, detail=f"{platform.capitalize()} channel not found"
+        )
 
     if channel_entity.get("owner_email") != email:
         raise HTTPException(status_code=403, detail="Channel belongs to another owner")
@@ -1121,9 +1071,7 @@ async def verify_messaging_channel(
         }
     )
     await asyncio.to_thread(datastore_client.put, channel_entity)
-    logger.info(
-        f"Successfully verified {platform} channel for owner={email}, domain={channel_data.domain}"
-    )
+    logger.info(f"Successfully verified {platform} channel for owner={email}")
 
     try:
         encrypted_webhook = channel_entity.get("webhook")
@@ -1131,40 +1079,36 @@ async def verify_messaging_channel(
             decrypted_webhook = decrypt_webhook(encrypted_webhook)
 
             if platform == "slack":
-                await send_slack_success_message(decrypted_webhook, channel_data.domain)
+                await send_slack_success_message(decrypted_webhook)
             elif platform == "teams":
-                await send_teams_success_message(decrypted_webhook, channel_data.domain)
+                await send_teams_success_message(decrypted_webhook)
     except Exception as e:  # pylint: disable=broad-except
         logger.error(f"Failed to send success message to {platform}: {str(e)}")
 
     return True
 
 
-async def get_channel_config(domain: str, email: str, platform: str) -> Optional[Dict]:
+async def get_channel_config(email: str, platform: str) -> Optional[Dict]:
     """Async wrapper: sync Datastore work runs off the event loop."""
-    return await asyncio.to_thread(_get_channel_config_sync, domain, email, platform)
+    return await asyncio.to_thread(_get_channel_config_sync, email, platform)
 
 
-def _get_channel_config_sync(domain: str, email: str, platform: str) -> Optional[Dict]:
+def _get_channel_config_sync(email: str, platform: str) -> Optional[Dict]:
     """
     Get channel configuration for a given platform.
 
     Args:
-        domain: The domain to get configuration for.
         email: Verified domain owner resolved by utils.channel_auth.
         platform: The messaging platform ('slack' or 'teams').
 
     Returns:
         Optional[Dict]: Channel configuration if found (with decrypted webhook).
     """
-    if not all([domain, email]):
-        raise HTTPException(
-            status_code=400, detail="Missing required fields: domain or email"
-        )
+    if not email:
+        raise HTTPException(status_code=400, detail="Missing required field: email")
 
     kind = get_channel_kind(platform)
-    entity_key_name = f"{email}_{domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     channel_entity = datastore_client.get(channel_key)
 
     if not channel_entity:
@@ -1176,7 +1120,7 @@ def _get_channel_config_sync(domain: str, email: str, platform: str) -> Optional
         try:
             decrypted_webhook = decrypt_webhook(encrypted_webhook)
         except ValueError as e:
-            logger.error(f"Failed to decrypt webhook for {domain}: {str(e)}")
+            logger.error(f"Failed to decrypt webhook for {email}: {str(e)}")
             decrypted_webhook = None
 
     created_at = channel_entity.get("created_at")
@@ -1185,7 +1129,6 @@ def _get_channel_config_sync(domain: str, email: str, platform: str) -> Optional
 
     return {
         "email": channel_entity.get("owner_email") or channel_entity.get("created_by"),
-        "domain": channel_entity.get("domain"),
         "created_by": channel_entity.get("created_by"),
         "webhook": decrypted_webhook,
         "verified": channel_entity.get("verified", False),
@@ -1196,38 +1139,27 @@ def _get_channel_config_sync(domain: str, email: str, platform: str) -> Optional
     }
 
 
-async def delete_messaging_channel(
-    channel_data: ChannelSetupRequest, platform: str, email: str
-) -> bool:
+async def delete_messaging_channel(platform: str, email: str) -> bool:
     """Async wrapper: sync Datastore work runs off the event loop."""
-    return await asyncio.to_thread(
-        _delete_messaging_channel_sync, channel_data, platform, email
-    )
+    return await asyncio.to_thread(_delete_messaging_channel_sync, platform, email)
 
 
-def _delete_messaging_channel_sync(
-    channel_data: ChannelSetupRequest, platform: str, email: str
-) -> bool:
+def _delete_messaging_channel_sync(platform: str, email: str) -> bool:
     """
     Delete a messaging channel for a given platform.
 
     Args:
-        channel_data: Channel data for deletion.
         platform: The messaging platform ('slack' or 'teams').
         email: Verified domain owner resolved by utils.channel_auth.
 
     Returns:
         bool: True if deletion was successful.
     """
-    if not channel_data.domain:
-        raise HTTPException(status_code=400, detail="Missing required field: domain")
-
     if not email:
         raise HTTPException(status_code=400, detail="Missing required parameter: email")
 
     kind = get_channel_kind(platform)
-    entity_key_name = f"{email}_{channel_data.domain}"
-    channel_key = datastore_client.key(kind, entity_key_name)
+    channel_key = datastore_client.key(kind, email)
     channel_entity = datastore_client.get(channel_key)
 
     if not channel_entity:
@@ -1239,7 +1171,5 @@ def _delete_messaging_channel_sync(
         raise HTTPException(status_code=403, detail="Channel belongs to another owner")
 
     datastore_client.delete(channel_key)
-    logger.info(
-        f"Successfully deleted {platform} channel for owner={email}, domain={channel_data.domain}"
-    )
+    logger.info(f"Successfully deleted {platform} channel for owner={email}")
     return True

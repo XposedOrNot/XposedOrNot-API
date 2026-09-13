@@ -1,8 +1,10 @@
 """Slack channel API endpoints (verified domain owners).
 
-Ownership is proven via ``utils.channel_auth`` (API key or dashboard
-session + verified domain). Config retrieval is a POST so session tokens
-never appear in URLs or access logs.
+Channels are account-wide: one Slack channel per owner, receiving alerts
+for every domain the owner has verified. Ownership is proven via
+``utils.channel_auth`` (API key or dashboard session + at least one verified
+domain). Config retrieval is a POST so session tokens never appear in URLs
+or access logs.
 """
 
 from fastapi import APIRouter, HTTPException, Request
@@ -20,9 +22,8 @@ from services.slack import (
     setup_slack_channel,
     verify_slack_channel,
 )
-from utils.channel_auth import resolve_domain_owner, verify_domain_ownership
+from utils.channel_auth import owns_any_verified_domain, resolve_domain_owner
 from utils.custom_limiter import custom_rate_limiter
-from utils.helpers import validate_domain
 from utils.validation import validate_url
 
 router = APIRouter()
@@ -36,24 +37,22 @@ RATE_LIMIT_CHANNEL_CONFIG = "10 per second;100 per hour"
 async def setup_slack_channel_endpoint(
     request: Request, channel_data: ChannelSetupRequest
 ) -> ChannelSetupResponse:
-    """Set up, verify or delete the Slack channel of a verified domain."""
+    """Set up, verify or delete the owner's Slack channel."""
     try:
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")
-
-        domain = (channel_data.domain or "").strip().lower()
-        if not validate_domain(domain):
-            raise HTTPException(status_code=400, detail="Invalid domain")
-        channel_data.domain = domain
 
         email = await resolve_domain_owner(
             request, channel_data.email, channel_data.token
         )
 
-        if not await verify_domain_ownership(email, domain):
+        if not await owns_any_verified_domain(email):
             raise HTTPException(
                 status_code=403,
-                detail="Domain must be verified before setting up notification channels",
+                detail=(
+                    "At least one verified domain is required before setting "
+                    "up notification channels"
+                ),
             )
 
         if channel_data.action == "setup":
@@ -88,7 +87,7 @@ async def setup_slack_channel_endpoint(
             )
 
         if channel_data.action == "delete":
-            success = await delete_slack_channel(channel_data, email)
+            success = await delete_slack_channel(email)
             if not success:
                 raise HTTPException(
                     status_code=400, detail="Slack channel deletion failed"
@@ -107,7 +106,7 @@ async def setup_slack_channel_endpoint(
             error_message=str(exc),
             exception_type=type(exc).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"domain={channel_data.domain}, action={channel_data.action}",
+            request_params=f"action={channel_data.action}",
         )
         raise HTTPException(status_code=500, detail="Internal server error") from exc
 
@@ -117,25 +116,21 @@ async def setup_slack_channel_endpoint(
 async def get_slack_channel_config_endpoint(
     request: Request, config_data: ChannelConfigRequest
 ) -> ChannelConfigResponse:
-    """Get the Slack channel configuration for a verified domain."""
+    """Get the owner's Slack channel configuration."""
     try:
         if not validate_url(request):
             raise HTTPException(status_code=400, detail="Invalid request URL")
 
-        domain = (config_data.domain or "").strip().lower()
-        if not validate_domain(domain):
-            raise HTTPException(status_code=400, detail="Invalid domain")
-
         owner = await resolve_domain_owner(
             request, config_data.email, config_data.token
         )
-        if not await verify_domain_ownership(owner, domain):
+        if not await owns_any_verified_domain(owner):
             raise HTTPException(
                 status_code=403,
-                detail="User is not authorized to access this domain's configuration.",
+                detail="User is not authorized to access this configuration.",
             )
 
-        config = await get_slack_channel_config(domain, owner)
+        config = await get_slack_channel_config(owner)
         if not config:
             raise HTTPException(status_code=404, detail="Configuration not found")
 
@@ -150,6 +145,5 @@ async def get_slack_channel_config_endpoint(
             error_message=str(exc),
             exception_type=type(exc).__name__,
             user_agent=request.headers.get("User-Agent"),
-            request_params=f"domain={config_data.domain}",
         )
         raise HTTPException(status_code=500, detail="Internal server error") from exc

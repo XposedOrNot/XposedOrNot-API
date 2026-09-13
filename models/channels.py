@@ -1,9 +1,10 @@
 """Request/response models for notification channels (Slack, Teams, webhook).
 
-Authentication fields (`email` + `token` for a dashboard session) are
-optional because an `x-api-key` header is an equally valid way to prove
-ownership. Config retrieval is a POST with a request body so session tokens
-never appear in URLs or access logs.
+Channels are account-wide (one per platform per verified owner), so requests
+carry no domain. Authentication fields (`email` + `token` for a dashboard
+session) are optional because an `x-api-key` header is an equally valid way
+to prove ownership. Config retrieval is a POST with a request body so
+session tokens never appear in URLs or access logs.
 """
 
 from typing import Dict, List, Optional
@@ -16,7 +17,6 @@ from models.base import BaseResponse
 class ChannelSetupRequest(BaseModel):
     """Request model for channel setup operations."""
 
-    domain: str = Field(..., description="Verified domain the channel is for")
     action: str = Field(
         ...,
         description="Action to perform: setup / verify / delete "
@@ -45,7 +45,6 @@ class ChannelSetupRequest(BaseModel):
 class ChannelConfigRequest(BaseModel):
     """Request model for channel configuration retrieval."""
 
-    domain: str = Field(..., description="Verified domain the channel is for")
     email: Optional[EmailStr] = Field(
         None, description="Domain owner email (dashboard session auth)"
     )
@@ -62,7 +61,6 @@ class ChannelConfigResponse(BaseResponse):
     """Response model for Slack/Teams channel configuration retrieval."""
 
     email: Optional[str] = Field(None, description="Domain owner email")
-    domain: Optional[str] = Field(None, description="Domain name")
     created_by: Optional[str] = Field(
         None, description="Email of user who created the channel"
     )
@@ -87,8 +85,7 @@ class WebhookConfigResponse(BaseResponse):
     """Response model for generic webhook channel configuration retrieval."""
 
     email: Optional[str] = Field(None, description="Domain owner email")
-    domain: Optional[str] = Field(None, description="Domain name")
-    scope: Optional[str] = Field(None, description="Channel scope (always 'domain')")
+    scope: Optional[str] = Field(None, description="Channel scope (always 'owner')")
     created_by: Optional[str] = Field(
         None, description="Email of user who created the channel"
     )

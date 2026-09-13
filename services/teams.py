@@ -36,14 +36,14 @@ async def verify_teams_channel(channel_data: ChannelSetupRequest, email: str) ->
     return await verify_messaging_channel(channel_data, "teams", email)
 
 
-async def delete_teams_channel(channel_data: ChannelSetupRequest, email: str) -> bool:
+async def delete_teams_channel(email: str) -> bool:
     """Delete a Teams channel configuration."""
-    return await delete_messaging_channel(channel_data, "teams", email)
+    return await delete_messaging_channel("teams", email)
 
 
-async def get_teams_channel_config(domain: str, email: str) -> Optional[Dict]:
+async def get_teams_channel_config(email: str) -> Optional[Dict]:
     """Get Teams channel configuration (webhook decrypted)."""
-    return await get_channel_config(domain, email, "teams")
+    return await get_channel_config(email, "teams")
 
 
 def build_teams_breach_card(
@@ -110,14 +110,17 @@ async def send_teams_alert(domain: str, email: str, card: Dict) -> bool:
 
     Returns False (never raises) when the channel is missing, unverified,
     inactive, or Teams rejects the post, so a sender loop can continue.
+
+    ``domain`` identifies the breach being announced; the channel itself is
+    account-wide and looked up by ``email``.
     """
-    config = await get_teams_channel_config(domain, email)
+    config = await get_teams_channel_config(email)
     if not config or not config.get("active") or not config.get("verified"):
-        logger.info(f"No active Teams channel for {domain}; skipping")
+        logger.info(f"No active Teams channel for owner={email}; skipping {domain}")
         return False
     webhook_url = config.get("webhook")
     if not webhook_url:
-        logger.warning(f"Teams channel for {domain} has no usable webhook URL")
+        logger.warning(f"Teams channel for owner={email} has no usable webhook URL")
         return False
 
     teams_data = {

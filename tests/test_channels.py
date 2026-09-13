@@ -1,8 +1,9 @@
 """Tests for the notification-channel core and the generic webhook channel.
 
-Runs the real service, auth and route code with in-memory fakes for the only
-I/O involved: Datastore, outbound HTTP (httpx), DNS resolution, the rate
-limiter and the exception mailer.
+Channels are account-wide (one per platform per verified owner). Runs the
+real service, auth and route code with in-memory fakes for the only I/O
+involved: Datastore, outbound HTTP (httpx), DNS resolution, the rate limiter
+and the exception mailer.
 """
 
 # pylint: disable=redefined-outer-name,protected-access,too-many-lines
@@ -208,6 +209,7 @@ def make_request(headers=None, path="/v1/webhook/setup", query=""):
 
 OWNER = "owner@example.com"
 OTHER = "other@rival.com"
+NODOMAIN = "nodomain@example.net"
 DOMAIN = "example.com"
 API_KEY = "key-owner-123"
 SESSION = "magic-token-abc"
@@ -253,6 +255,14 @@ def env(monkeypatch):
             verified=True,
         )
     )
+    ds.put(
+        FakeEntity(
+            FakeKey("xon_domains", f"second.com_{OWNER}"),
+            email=OWNER,
+            domain="second.com",
+            verified=True,
+        )
+    )
     ds.put(FakeEntity(FakeKey("xon_api_key", OTHER), api_key="key-other"))
     ds.put(
         FakeEntity(
@@ -262,20 +272,29 @@ def env(monkeypatch):
             verified=True,
         )
     )
+    ds.put(FakeEntity(FakeKey("xon_api_key", NODOMAIN), api_key="key-nodomain"))
+    ds.put(
+        FakeEntity(
+            FakeKey("xon_domains", f"pending.net_{NODOMAIN}"),
+            email=NODOMAIN,
+            domain="pending.net",
+            verified=False,
+        )
+    )
     return types.SimpleNamespace(ds=ds, http=http)
 
 
 def req(platform, action, **kw):
-    data = {"domain": DOMAIN, "action": action}
+    data = {"action": action}
     if action == "setup" and "webhook" not in kw:
         data["webhook"] = VALID_URL.get(platform, HOOK_URL)
     data.update(kw)
     return ChannelSetupRequest(**data)
 
 
-def row(env, platform, email=OWNER, domain=DOMAIN):
+def row(env, platform, email=OWNER):
     kind = messaging.PLATFORM_MAP[platform]
-    return env.ds.get(FakeKey(kind, f"{email}_{domain}"))
+    return env.ds.get(FakeKey(kind, email))
 
 
 def code_from_slack_post(post):
@@ -308,6 +327,11 @@ def code_from_webhook_post(post):
     return json.loads(post["content"])["verification_code"]
 
 
+# --------------------------------------------------------------------------
+# Slack / Teams onboarding (shared messaging core)
+# --------------------------------------------------------------------------
+
+
 @pytest.mark.parametrize("platform", ["slack", "teams"])
 def test_chat_setup_stores_pending_row_and_posts_code(env, platform):
     ok, code = run(
@@ -321,13 +345,14 @@ def test_chat_setup_stores_pending_row_and_posts_code(env, platform):
 
     entity = row(env, platform)
     assert entity is not None
+    assert entity.key.name == OWNER
     assert entity["owner_email"] == OWNER
     assert entity["created_by"] == OWNER
-    assert entity["domain"] == DOMAIN
-    assert entity["scope"] == "domain"
+    assert entity["scope"] == "owner"
     assert entity["source"] == "community"
     assert entity["verified"] is False and entity["active"] is False
     assert "custid" not in entity and "token" not in entity and "tokens" not in entity
+    assert "domain" not in entity
     assert entity["webhook"] != VALID_URL[platform]
     assert webhook_security.decrypt_webhook(entity["webhook"]) == VALID_URL[platform]
     assert len(entity["verify_token"]) == 8
@@ -384,6 +409,7 @@ def test_chat_verify_then_conflict_then_delete(env, platform):
     assert exc.value.status_code == 403
     assert row(env, platform)["verified"] is False
 
+    # Another owner has no channel row of their own (different key => 404).
     with pytest.raises(HTTPException) as exc:
         run(
             messaging.verify_messaging_channel(
@@ -403,38 +429,30 @@ def test_chat_verify_then_conflict_then_delete(env, platform):
     entity = row(env, platform)
     assert entity["verified"] is True and entity["active"] is True
     assert isinstance(entity["verified_at"], datetime)
-    assert len(env.http.posts) == 2
+    assert len(env.http.posts) == 2  # code + success message
     assert "Verification Successful" in json.dumps(env.http.posts[1]["json"])
 
+    # Re-setup of a verified channel is refused.
     with pytest.raises(HTTPException) as exc:
         run(messaging.setup_messaging_channel(req(platform, "setup"), platform, OWNER))
     assert exc.value.status_code == 409
 
-    config = run(messaging.get_channel_config(DOMAIN, OWNER, platform))
+    config = run(messaging.get_channel_config(OWNER, platform))
     assert config["email"] == OWNER
     assert config["webhook"] == VALID_URL[platform]
     assert config["verified"] is True and config["active"] is True
-    assert "custid" not in config
+    assert "custid" not in config and "domain" not in config
     assert config["verified_at"].startswith(str(datetime.now(timezone.utc).year))
 
-    assert run(messaging.get_channel_config(DOMAIN, OTHER, platform)) is None
+    assert run(messaging.get_channel_config(OTHER, platform)) is None
 
     with pytest.raises(HTTPException) as exc:
-        run(
-            messaging.delete_messaging_channel(req(platform, "delete"), platform, OTHER)
-        )
+        run(messaging.delete_messaging_channel(platform, OTHER))
     assert exc.value.status_code == 404
-    assert (
-        run(
-            messaging.delete_messaging_channel(req(platform, "delete"), platform, OWNER)
-        )
-        is True
-    )
+    assert run(messaging.delete_messaging_channel(platform, OWNER)) is True
     assert row(env, platform) is None
     with pytest.raises(HTTPException) as exc:
-        run(
-            messaging.delete_messaging_channel(req(platform, "delete"), platform, OWNER)
-        )
+        run(messaging.delete_messaging_channel(platform, OWNER))
     assert exc.value.status_code == 404
 
 
@@ -463,6 +481,11 @@ def test_setup_requires_owner_email(env):
     with pytest.raises(HTTPException) as exc:
         run(messaging.setup_messaging_channel(req("slack", "setup"), "slack", ""))
     assert exc.value.status_code == 400
+
+
+# --------------------------------------------------------------------------
+# Generic webhook onboarding + signing contract
+# --------------------------------------------------------------------------
 
 
 def _assert_signed(post, secret, event):
@@ -494,13 +517,14 @@ def test_webhook_setup_new_channel_signs_ping_and_returns_secret_once(env):
     assert post["url"] == HOOK_URL
     body = json.loads(post["content"])
     assert body["event"] == "verification" and body["service"] == "XposedOrNot"
-    assert body["domain"] == DOMAIN
     assert post["headers"]["Authorization"] == "Bearer abc"
     assert post["headers"]["X-Team"] == "sec"
     _assert_signed(post, secret, "verification")
 
     entity = row(env, "webhook")
+    assert entity.key.name == OWNER
     assert entity["owner_email"] == OWNER and entity["source"] == "community"
+    assert entity["scope"] == "owner" and "domain" not in entity
     assert entity["verified"] is False and entity["active"] is False
     assert webhook_security.decrypt_webhook(entity["signing_secret"]) == secret
     assert json.loads(webhook_security.decrypt_webhook(entity["custom_headers"])) == {
@@ -514,10 +538,10 @@ def test_webhook_setup_new_channel_signs_ping_and_returns_secret_once(env):
 @pytest.mark.parametrize(
     "url",
     [
-        "http://hooks.example.org/xon",
-        "https://internal.example.org/hook",
+        "http://hooks.example.org/xon",  # not https
+        "https://internal.example.org/hook",  # resolves private
         "https://unresolvable.test/hook",
-        "https://" + "a" * 2100 + ".com/",
+        "https://" + "a" * 2100 + ".com/",  # too long
         "https:///nohost",
     ],
 )
@@ -557,13 +581,14 @@ def test_webhook_setup_ping_failure_keeps_pending_row_and_reshows_secret(env):
     with pytest.raises(HTTPException) as exc:
         run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
     assert exc.value.status_code == 400
-    assert len(env.http.posts) == messaging.WEBHOOK_MAX_ATTEMPTS
+    assert len(env.http.posts) == messaging.WEBHOOK_MAX_ATTEMPTS  # retried 5xx
     entity = row(env, "webhook")
     assert entity["verified"] is False and entity["active"] is False
     assert entity["consecutive_failures"] == 1
     assert "HTTP 500" in entity["last_verification_error"]
     stored_secret = webhook_security.decrypt_webhook(entity["signing_secret"])
 
+    # Endpoint fixed: never-verified channel re-shows the SAME secret.
     env.http.responses.pop(HOOK_URL)
     ok, secret = run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
     assert ok and secret == stored_secret
@@ -604,6 +629,7 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
     assert json.loads(success_ping["content"])["event"] == "verification_success"
     _assert_signed(success_ping, secret, "verification_success")
 
+    # Same URL, verified: in-place header update, no ping, no secret, stays active.
     posts_before = len(env.http.posts)
     ok, shown = run(
         messaging.setup_webhook_channel(
@@ -618,6 +644,7 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
         "X-Team": "blue"
     }
 
+    # Changed URL: reset to unverified, secret preserved but NOT re-shown.
     new_url = "https://hooks2.example.org/xon"
     ok, shown = run(
         messaging.setup_webhook_channel(req("webhook", "setup", webhook=new_url), OWNER)
@@ -628,6 +655,7 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
     assert webhook_security.decrypt_webhook(entity["signing_secret"]) == secret
     assert webhook_security.decrypt_webhook(entity["webhook"]) == new_url
     assert env.http.posts[-1]["url"] == new_url
+    # headers omitted on this call => preserved
     assert json.loads(webhook_security.decrypt_webhook(entity["custom_headers"])) == {
         "X-Team": "blue"
     }
@@ -639,9 +667,8 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
         )
     )
 
-    new_secret = run(
-        messaging.rotate_webhook_secret(req("webhook", "rotate_secret"), OWNER)
-    )
+    # Rotate: new secret, old kept as previous, still active.
+    new_secret = run(messaging.rotate_webhook_secret(OWNER))
     assert new_secret != secret and len(new_secret) == 64
     entity = row(env, "webhook")
     assert webhook_security.decrypt_webhook(entity["signing_secret"]) == new_secret
@@ -650,11 +677,12 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
     assert entity["active"] is True
 
     with pytest.raises(HTTPException) as exc:
-        run(messaging.rotate_webhook_secret(req("webhook", "rotate_secret"), OTHER))
+        run(messaging.rotate_webhook_secret(OTHER))
     assert exc.value.status_code == 404
 
-    config = run(messaging.get_webhook_channel_config(DOMAIN, OWNER))
-    assert config["email"] == OWNER and config["scope"] == "domain"
+    config = run(messaging.get_webhook_channel_config(OWNER))
+    assert config["email"] == OWNER and config["scope"] == "owner"
+    assert "domain" not in config
     assert config["signing_secret_set"] is True
     assert config["custom_header_keys"] == ["X-Team"]
     assert "signing_secret" not in config and "blue" not in json.dumps(config)
@@ -664,9 +692,14 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
 
 def test_webhook_rotate_and_config_missing_channel(env):
     with pytest.raises(HTTPException) as exc:
-        run(messaging.rotate_webhook_secret(req("webhook", "rotate_secret"), OWNER))
+        run(messaging.rotate_webhook_secret(OWNER))
     assert exc.value.status_code == 404
-    assert run(messaging.get_webhook_channel_config(DOMAIN, OWNER)) is None
+    assert run(messaging.get_webhook_channel_config(OWNER)) is None
+
+
+# --------------------------------------------------------------------------
+# Delivery (signed alert sender)
+# --------------------------------------------------------------------------
 
 
 def _verified_webhook(env):
@@ -688,7 +721,9 @@ def test_send_webhook_alert_success_failure_and_autodisable(env):
         "domain": DOMAIN,
         "breach": {"id": "b1", "name": "ExampleBreach"},
     }
-    assert run(webhook.send_webhook_alert(DOMAIN, OWNER, payload)) is False
+    assert (
+        run(webhook.send_webhook_alert(DOMAIN, OWNER, payload)) is False
+    )  # no channel
     secret = _verified_webhook(env)
 
     assert run(webhook.send_webhook_alert(DOMAIN, OWNER, payload)) is True
@@ -710,18 +745,38 @@ def test_send_webhook_alert_success_failure_and_autodisable(env):
     assert run(webhook.send_webhook_alert(DOMAIN, OWNER, payload)) is False
     entity = row(env, "webhook")
     assert entity["active"] is False and isinstance(entity["disabled_at"], datetime)
-    assert entity["verified"] is True
+    assert (
+        entity["verified"] is True
+    )  # verification stands; owner re-activates via setup+verify
 
     posts = len(env.http.posts)
-    assert run(webhook.send_webhook_alert(DOMAIN, OWNER, payload)) is False
+    assert (
+        run(webhook.send_webhook_alert(DOMAIN, OWNER, payload)) is False
+    )  # inactive => no post
     assert len(env.http.posts) == posts
 
-    env.ds.get(FakeKey("xon_webhook_channel", f"{OWNER}_{DOMAIN}")).update(
+    # Success after one failure resets the counter.
+    env.ds.get(FakeKey("xon_webhook_channel", OWNER)).update(
         {"active": True, "consecutive_failures": 3}
     )
     env.http.responses.pop(HOOK_URL)
     assert run(webhook.send_webhook_alert(DOMAIN, OWNER, payload)) is True
     assert row(env, "webhook")["consecutive_failures"] == 0
+
+
+def test_alerts_for_multiple_domains_share_one_channel(env):
+    secret = _verified_webhook(env)
+    for domain in (DOMAIN, "second.com"):
+        payload = {"event": "breach_alert", "domain": domain}
+        assert run(webhook.send_webhook_alert(domain, OWNER, payload)) is True
+    assert len(env.http.posts) == 2
+    assert {p["url"] for p in env.http.posts} == {HOOK_URL}
+    for post in env.http.posts:
+        _assert_signed(post, secret, "breach_alert")
+    assert [json.loads(p["content"])["domain"] for p in env.http.posts] == [
+        DOMAIN,
+        "second.com",
+    ]
 
 
 def test_webhook_alert_rechecks_ssrf_at_send_time(env, monkeypatch):
@@ -737,6 +792,11 @@ def test_webhook_alert_rechecks_ssrf_at_send_time(env, monkeypatch):
     assert "disallowed" in row(env, "webhook")["last_delivery_error"]
 
 
+# --------------------------------------------------------------------------
+# Auth / ownership
+# --------------------------------------------------------------------------
+
+
 def test_resolve_owner_api_key_and_session(env):
     assert (
         run(
@@ -746,6 +806,7 @@ def test_resolve_owner_api_key_and_session(env):
         )
         == OWNER
     )
+    # header wins over body creds
     assert (
         run(
             channel_auth.resolve_domain_owner(
@@ -764,7 +825,7 @@ def test_resolve_owner_api_key_and_session(env):
         ({"x-api-key": "bad key!"}, None, None),
         ({"x-api-key": "  "}, None, None),
         ({}, OWNER, "wrong"),
-        ({}, OTHER, SESSION),
+        ({}, OTHER, SESSION),  # session belongs to OWNER
         ({}, "not-an-email", SESSION),
         ({}, OWNER, None),
         ({}, None, None),
@@ -783,35 +844,23 @@ def test_resolve_owner_expired_session(env):
     assert exc.value.status_code == 401
 
 
-def test_verify_domain_ownership_paths(env):
-    assert run(channel_auth.verify_domain_ownership(OWNER, DOMAIN)) is True
-    assert run(channel_auth.verify_domain_ownership(OWNER, "EXAMPLE.com")) is True
-    assert run(channel_auth.verify_domain_ownership(OTHER, DOMAIN)) is False
-    assert run(channel_auth.verify_domain_ownership(OWNER, "rival.com")) is False
-    assert run(channel_auth.verify_domain_ownership("", DOMAIN)) is False
-    assert run(channel_auth.verify_domain_ownership(OWNER, "")) is False
-    env.ds.put(
-        FakeEntity(
-            FakeKey("xon_domains", f"pending.com_{OWNER}"),
-            email=OWNER,
-            domain="pending.com",
-            verified=False,
-        )
-    )
-    assert run(channel_auth.verify_domain_ownership(OWNER, "pending.com")) is False
-    env.ds.put(
-        FakeEntity(
-            FakeKey("xon_domains", "legacy-id"),
-            email=OWNER,
-            domain="legacy.com",
-            verified=True,
-        )
-    )
-    assert run(channel_auth.verify_domain_ownership(OWNER, "legacy.com")) is True
+def test_owns_any_verified_domain(env):
+    assert run(channel_auth.owns_any_verified_domain(OWNER)) is True
+    assert run(channel_auth.owns_any_verified_domain(OWNER.upper())) is True
+    assert run(channel_auth.owns_any_verified_domain(OTHER)) is True
+    # only an unverified row => not eligible
+    assert run(channel_auth.owns_any_verified_domain(NODOMAIN)) is False
+    assert run(channel_auth.owns_any_verified_domain("")) is False
+    assert run(channel_auth.owns_any_verified_domain("ghost@nowhere.net")) is False
 
 
-def cfg_req(domain=DOMAIN, **kw):
-    return ChannelConfigRequest(domain=domain, **kw)
+# --------------------------------------------------------------------------
+# Routes (end to end through auth + service)
+# --------------------------------------------------------------------------
+
+
+def cfg_req(**kw):
+    return ChannelConfigRequest(**kw)
 
 
 def test_webhook_route_lifecycle_and_masked_config(env):
@@ -865,7 +914,7 @@ def test_webhook_route_with_session_auth(env):
     resp = run(
         webhook_routes.setup_webhook_channel_endpoint(
             request,
-            req("webhook", "setup", domain="Example.COM", email=OWNER, token=SESSION),
+            req("webhook", "setup", email=OWNER, token=SESSION),
         )
     )
     assert resp.status == "success"
@@ -879,6 +928,7 @@ def test_webhook_route_with_session_auth(env):
 
 
 def test_route_auth_and_input_failures(env):
+    # no credentials
     with pytest.raises(HTTPException) as exc:
         run(
             webhook_routes.setup_webhook_channel_endpoint(
@@ -886,18 +936,19 @@ def test_route_auth_and_input_failures(env):
             )
         )
     assert exc.value.status_code == 401
+    # authenticated but no verified domain on the account
     with pytest.raises(HTTPException) as exc:
         run(
             webhook_routes.setup_webhook_channel_endpoint(
-                make_request({"x-api-key": "key-other"}), req("webhook", "setup")
+                make_request({"x-api-key": "key-nodomain"}), req("webhook", "setup")
             )
         )
     assert exc.value.status_code == 403
-    assert row(env, "webhook") is None and env.http.posts == []
+    assert row(env, "webhook", email=NODOMAIN) is None and env.http.posts == []
+    # invalid action / missing webhook / missing verify token
     for body in [
-        req("webhook", "setup", domain="not a domain"),
         req("webhook", "frobnicate"),
-        ChannelSetupRequest(domain=DOMAIN, action="setup"),
+        ChannelSetupRequest(action="setup"),
         req("webhook", "verify"),
     ]:
         with pytest.raises(HTTPException) as exc:
@@ -907,10 +958,11 @@ def test_route_auth_and_input_failures(env):
                 )
             )
         assert exc.value.status_code == 400, body
+    # config without a verified domain on the account
     with pytest.raises(HTTPException) as exc:
         run(
             webhook_routes.get_webhook_channel_config_endpoint(
-                make_request({"x-api-key": "key-other"}), cfg_req()
+                make_request({"x-api-key": "key-nodomain"}), cfg_req()
             )
         )
     assert exc.value.status_code == 403
@@ -957,6 +1009,11 @@ def test_webhook_route_rejects_private_url_without_touching_store(env):
     assert row(env, "webhook") is None and env.http.posts == []
 
 
+# --------------------------------------------------------------------------
+# Slack service + routes
+# --------------------------------------------------------------------------
+
+
 def _verified_chat(env, platform):
     run(messaging.setup_messaging_channel(req(platform, "setup"), platform, OWNER))
     code = row(env, platform)["verify_token"]
@@ -985,6 +1042,7 @@ def test_send_slack_alert_paths(env):
     assert env.http.posts == []
     _verified_chat(env, "slack")
     assert run(slack.send_slack_alert(DOMAIN, OWNER, msg)) is True
+    assert run(slack.send_slack_alert("second.com", OWNER, msg)) is True
     assert env.http.posts[0]["url"] == SLACK_URL and env.http.posts[0]["json"] is msg
     assert "1,200,000" in json.dumps(msg) and "example.com" in json.dumps(msg)
     env.http.responses[SLACK_URL] = [500]
@@ -995,9 +1053,7 @@ def test_send_slack_alert_paths(env):
 def test_slack_route_full_lifecycle_with_api_key(env):
     request = make_request({"x-api-key": API_KEY}, path="/v1/slack/setup")
     resp = run(
-        slack_routes.setup_slack_channel_endpoint(
-            request, req("slack", "setup", domain="Example.COM")
-        )
+        slack_routes.setup_slack_channel_endpoint(request, req("slack", "setup"))
     )
     assert resp.status == "success" and "Verification code sent" in resp.message
     code = row(env, "slack")["verify_token"]
@@ -1056,20 +1112,25 @@ def test_slack_route_auth_failures(env):
     with pytest.raises(HTTPException) as exc:
         run(
             slack_routes.setup_slack_channel_endpoint(
-                make_request({"x-api-key": "key-other"}, path="/v1/slack/setup"),
+                make_request({"x-api-key": "key-nodomain"}, path="/v1/slack/setup"),
                 req("slack", "setup"),
             )
         )
     assert exc.value.status_code == 403
-    assert row(env, "slack") is None and env.http.posts == []
+    assert row(env, "slack", email=NODOMAIN) is None and env.http.posts == []
     with pytest.raises(HTTPException) as exc:
         run(
             slack_routes.get_slack_channel_config_endpoint(
-                make_request({"x-api-key": "key-other"}, path="/v1/slack/config"),
+                make_request({"x-api-key": "key-nodomain"}, path="/v1/slack/config"),
                 cfg_req(),
             )
         )
     assert exc.value.status_code == 403
+
+
+# --------------------------------------------------------------------------
+# Teams service + routes
+# --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -1132,9 +1193,7 @@ def test_send_teams_alert_wraps_adaptive_card(env):
 def test_teams_route_full_lifecycle_with_api_key(env):
     request = make_request({"x-api-key": API_KEY}, path="/v1/teams/setup")
     resp = run(
-        teams_routes.setup_teams_channel_endpoint(
-            request, req("teams", "setup", domain="Example.COM")
-        )
+        teams_routes.setup_teams_channel_endpoint(request, req("teams", "setup"))
     )
     assert resp.status == "success" and "Verification code sent" in resp.message
     code = row(env, "teams")["verify_token"]
@@ -1193,16 +1252,16 @@ def test_teams_route_auth_failures(env):
     with pytest.raises(HTTPException) as exc:
         run(
             teams_routes.setup_teams_channel_endpoint(
-                make_request({"x-api-key": "key-other"}, path="/v1/teams/setup"),
+                make_request({"x-api-key": "key-nodomain"}, path="/v1/teams/setup"),
                 req("teams", "setup"),
             )
         )
     assert exc.value.status_code == 403
-    assert row(env, "teams") is None and env.http.posts == []
+    assert row(env, "teams", email=NODOMAIN) is None and env.http.posts == []
     with pytest.raises(HTTPException) as exc:
         run(
             teams_routes.get_teams_channel_config_endpoint(
-                make_request({"x-api-key": "key-other"}, path="/v1/teams/config"),
+                make_request({"x-api-key": "key-nodomain"}, path="/v1/teams/config"),
                 cfg_req(),
             )
         )

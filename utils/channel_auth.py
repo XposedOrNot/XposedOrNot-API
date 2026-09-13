@@ -1,13 +1,14 @@
-"""Owner resolution and domain-ownership checks for notification-channel routes.
+"""Owner resolution and ownership checks for notification-channel routes.
 
-A notification channel belongs to the verified owner of a domain, proven one
-of two ways (both already exist in this codebase):
+Notification channels are account-wide: one per platform per owner. The
+caller is authenticated one of two ways (both already exist in this
+codebase):
 
 1. ``x-api-key`` header  -> ``xon_api_key`` row (key name = owner email).
 2. ``email`` + ``token``  -> dashboard magic-link session in
    ``xon_domains_session`` (``utils.token.validate_dashboard_session``).
 
-The owner must then hold a verified ``xon_domains`` row for the domain.
+The owner must then hold at least one verified ``xon_domains`` row.
 """
 
 import asyncio
@@ -80,17 +81,10 @@ async def resolve_domain_owner(
     )
 
 
-def _owns_verified_domain_sync(
-    email: str, domain: str, client: datastore.Client
-) -> bool:
-    """True when ``email`` holds a verified ``xon_domains`` row for ``domain``."""
-    entity = client.get(client.key("xon_domains", f"{domain}_{email}"))
-    if entity and entity.get("verified"):
-        return True
-
+def _owns_any_verified_domain_sync(email: str, client: datastore.Client) -> bool:
+    """True when ``email`` holds at least one verified ``xon_domains`` row."""
     query = client.query(kind="xon_domains")
     query.add_filter("email", "=", email)
-    query.add_filter("domain", "=", domain)
     query.add_filter("verified", "=", True)
     try:
         return len(list(query.fetch(limit=1))) > 0
@@ -99,13 +93,12 @@ def _owns_verified_domain_sync(
         return False
 
 
-async def verify_domain_ownership(email: str, domain: str) -> bool:
+async def owns_any_verified_domain(email: str) -> bool:
     """Async wrapper: Datastore work runs off the event loop."""
-    if not email or not domain:
+    if not email:
         return False
     return await asyncio.to_thread(
-        _owns_verified_domain_sync,
+        _owns_any_verified_domain_sync,
         email.strip().lower(),
-        domain.strip().lower(),
         ds_client,
     )
