@@ -48,6 +48,8 @@ from api.v1 import (
     metrics,
     monitor,
     monthly_digest,
+    slack,
+    webhook,
 )
 
 # Local imports - Services
@@ -67,6 +69,7 @@ from utils.custom_limiter import (
     redis_pool,
 )
 from utils.helpers import get_client_ip, validate_domain
+from utils.http_client import aclose_http_client
 from utils.validation import validate_email_with_tld
 from utils.scan_protection import handle_404_with_protection
 
@@ -670,6 +673,12 @@ app.include_router(
 )
 app.include_router(
     monitor.router, prefix="/v1", tags=["monitor"], include_in_schema=False
+)
+app.include_router(
+    slack.router, prefix="/v1", tags=["notifications"], include_in_schema=False
+)
+app.include_router(
+    webhook.router, prefix="/v1", tags=["notifications"], include_in_schema=False
 )
 
 
@@ -1380,6 +1389,10 @@ async def shutdown_event():
         print("Redis connection pool close was cancelled during shutdown")
     except Exception as e:
         print(f"Error closing Redis connection pool: {e}")
+    try:
+        await asyncio.wait_for(aclose_http_client(), timeout=5.0)
+    except Exception as e:
+        print(f"Error closing shared HTTP client: {e}")
 
 
 if __name__ == "__main__":
