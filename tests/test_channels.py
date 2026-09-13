@@ -69,9 +69,10 @@ for _name, _stub in (
 
 # pylint: disable=wrong-import-position
 from api.v1 import slack as slack_routes  # noqa: E402
+from api.v1 import teams as teams_routes  # noqa: E402
 from api.v1 import webhook as webhook_routes  # noqa: E402
 from models.channels import ChannelConfigRequest, ChannelSetupRequest  # noqa: E402
-from services import messaging, slack, webhook  # noqa: E402
+from services import messaging, slack, teams, webhook  # noqa: E402
 from utils import channel_auth, http_client, webhook_security  # noqa: E402
 
 for _name, _orig in _ORIGINALS.items():
@@ -1065,6 +1066,143 @@ def test_slack_route_auth_failures(env):
         run(
             slack_routes.get_slack_channel_config_endpoint(
                 make_request({"x-api-key": "key-other"}, path="/v1/slack/config"),
+                cfg_req(),
+            )
+        )
+    assert exc.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "url,ok",
+    [
+        ("https://outlook.office.com/webhook/abc123", True),
+        ("https://contoso.webhook.office.com/webhookb2/abc/IncomingWebhook/def", True),
+        ("https://prod-01.westus.logic.azure.com:443/workflows/abc", False),
+        ("https://eu.api.powerplatform.com/powerautomate/flows/abc/triggers", True),
+        ("https://outlook.office.com/other/abc", False),
+        ("https://contoso.webhook.office.com/other/abc", False),
+        ("http://contoso.webhook.office.com/webhookb2/abc", False),
+        ("https://evil.com/x.webhook.office.com/webhookb2/abc", False),
+        ("https://169.254.169.254/x.webhook.office.com/webhookb2/abc", False),
+    ],
+)
+def test_teams_url_allowlist(url, ok):
+    assert webhook_security.validate_teams_webhook_url(url) is ok
+
+
+def test_teams_powerplatform_setup_sends_adaptive_card(env):
+    flow_url = "https://eu.api.powerplatform.com/powerautomate/flows/abc/triggers"
+    run(
+        messaging.setup_messaging_channel(
+            req("teams", "setup", webhook=flow_url), "teams", OWNER
+        )
+    )
+    post = env.http.posts[0]
+    assert post["url"] == flow_url
+    assert post["json"]["type"] == "message"
+    card = post["json"]["attachments"][0]["content"]
+    assert card["type"] == "AdaptiveCard"
+    assert _find_code(card) == row(env, "teams")["verify_token"]
+
+
+def test_send_teams_alert_wraps_adaptive_card(env):
+    card = teams.build_teams_breach_card(
+        DOMAIN, "ExampleBreach", "2026-08-01", 5, ["Emails"], 1
+    )
+    assert card["type"] == "AdaptiveCard" and "actions" not in card
+    with_url = teams.build_teams_breach_card(
+        DOMAIN, "ExampleBreach", "2026-08-01", 5, ["Emails"], 1, "https://x.com/d"
+    )
+    assert with_url["actions"][0]["url"] == "https://x.com/d"
+    assert run(teams.send_teams_alert(DOMAIN, OWNER, card)) is False
+    _verified_chat(env, "teams")
+    assert run(teams.send_teams_alert(DOMAIN, OWNER, card)) is True
+    sent = env.http.posts[0]["json"]
+    assert sent["type"] == "message"
+    assert (
+        sent["attachments"][0]["contentType"]
+        == "application/vnd.microsoft.card.adaptive"
+    )
+    assert sent["attachments"][0]["content"] is card
+    env.http.responses[TEAMS_URL] = httpx.ConnectError("boom")
+    assert run(teams.send_teams_alert(DOMAIN, OWNER, card)) is False
+    assert run(teams.send_teams_alert(DOMAIN, OTHER, card)) is False
+
+
+def test_teams_route_full_lifecycle_with_api_key(env):
+    request = make_request({"x-api-key": API_KEY}, path="/v1/teams/setup")
+    resp = run(
+        teams_routes.setup_teams_channel_endpoint(
+            request, req("teams", "setup", domain="Example.COM")
+        )
+    )
+    assert resp.status == "success" and "Verification code sent" in resp.message
+    code = row(env, "teams")["verify_token"]
+
+    resp = run(
+        teams_routes.setup_teams_channel_endpoint(
+            request, req("teams", "verify", verify_token=code)
+        )
+    )
+    assert resp.message == "Teams channel verified successfully"
+
+    cfg = run(
+        teams_routes.get_teams_channel_config_endpoint(
+            make_request({"x-api-key": API_KEY}, path="/v1/teams/config"), cfg_req()
+        )
+    )
+    assert cfg.email == OWNER and cfg.webhook == TEAMS_URL and cfg.verified is True
+
+    resp = run(
+        teams_routes.setup_teams_channel_endpoint(request, req("teams", "delete"))
+    )
+    assert resp.message == "Teams channel deleted successfully"
+    with pytest.raises(HTTPException) as exc:
+        run(
+            teams_routes.get_teams_channel_config_endpoint(
+                make_request({"x-api-key": API_KEY}, path="/v1/teams/config"), cfg_req()
+            )
+        )
+    assert exc.value.status_code == 404
+
+
+def test_teams_route_with_session_auth(env):
+    request = make_request(path="/v1/teams/setup")
+    resp = run(
+        teams_routes.setup_teams_channel_endpoint(
+            request, req("teams", "setup", email=OWNER, token=SESSION)
+        )
+    )
+    assert resp.status == "success"
+    cfg = run(
+        teams_routes.get_teams_channel_config_endpoint(
+            make_request(path="/v1/teams/config"), cfg_req(email=OWNER, token=SESSION)
+        )
+    )
+    assert cfg.verified is False and cfg.webhook == TEAMS_URL
+
+
+def test_teams_route_auth_failures(env):
+    with pytest.raises(HTTPException) as exc:
+        run(
+            teams_routes.setup_teams_channel_endpoint(
+                make_request(path="/v1/teams/setup"), req("teams", "setup")
+            )
+        )
+    assert exc.value.status_code == 401
+    with pytest.raises(HTTPException) as exc:
+        run(
+            teams_routes.setup_teams_channel_endpoint(
+                make_request({"x-api-key": "key-other"}, path="/v1/teams/setup"),
+                req("teams", "setup"),
+            )
+        )
+    assert exc.value.status_code == 403
+    assert row(env, "teams") is None and env.http.posts == []
+    with pytest.raises(HTTPException) as exc:
+        run(
+            teams_routes.get_teams_channel_config_endpoint(
+                make_request({"x-api-key": "key-other"}, path="/v1/teams/config"),
                 cfg_req(),
             )
         )

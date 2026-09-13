@@ -49,6 +49,7 @@ from api.v1 import (
     monitor,
     monthly_digest,
     slack,
+    teams,
     webhook,
 )
 
@@ -676,6 +677,9 @@ app.include_router(
 )
 app.include_router(
     slack.router, prefix="/v1", tags=["notifications"], include_in_schema=False
+)
+app.include_router(
+    teams.router, prefix="/v1", tags=["notifications"], include_in_schema=False
 )
 app.include_router(
     webhook.router, prefix="/v1", tags=["notifications"], include_in_schema=False
