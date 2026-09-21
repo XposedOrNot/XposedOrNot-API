@@ -23,5 +23,5 @@ starlette>=1.6.0
 tld>=0.13.2
 typing-extensions>=4.16.0
 user-agents
-urllib3>=2.7.0
+urllib3>=2.8.0
 uvicorn>=0.53.0
