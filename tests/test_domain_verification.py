@@ -154,6 +154,9 @@ def verification_environment(monkeypatch):
     monkeypatch.setattr(
         module, "get_user_agent_info", lambda request: ("Test Browser", "Test OS")
     )
+    monkeypatch.setattr(
+        module, "validate_email_deliverable", lambda email: (True, email)
+    )
     return client, sent, notifications, processing_starts, success_emails
 
 
@@ -205,6 +208,55 @@ def test_offdomain_recipient_is_rejected_without_side_effects(
     assert sent == []
     assert not processing_starts
     assert not success_emails
+
+
+def test_undeliverable_recipient_is_rejected_without_side_effects(
+    verification_environment, monkeypatch
+):
+    """A recipient whose domain cannot receive mail gets no challenge."""
+    client, sent, _, processing_starts, success_emails = verification_environment
+    monkeypatch.setattr(
+        module,
+        "validate_email_deliverable",
+        lambda email: (False, "Unable to deliver email to this address"),
+    )
+
+    response = asyncio.run(
+        module.verify_email(
+            "example.com", "security@example.com", "owner@example.com", make_request()
+        )
+    )
+
+    assert response.status == "error"
+    assert response.domainVerification == "Failure"
+    assert client.entities == {}
+    assert sent == []
+    assert not processing_starts
+    assert not success_emails
+
+
+def test_deliverability_is_checked_against_the_recipient_address(
+    verification_environment, monkeypatch
+):
+    """The deliverability gate inspects the recipient, not the role mailbox."""
+    _, sent, _, _, _ = verification_environment
+    checked = []
+
+    def record(email):
+        checked.append(email)
+        return True, email
+
+    monkeypatch.setattr(module, "validate_email_deliverable", record)
+
+    response = asyncio.run(
+        module.verify_email(
+            "example.com", "security@example.com", "owner@example.com", make_request()
+        )
+    )
+
+    assert response.status == "success"
+    assert checked == ["owner@example.com"]
+    assert len(sent) == 1
 
 
 def test_role_recipient_stays_pending_until_redeemed(verification_environment):
