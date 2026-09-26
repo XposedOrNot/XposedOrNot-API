@@ -42,7 +42,11 @@ from services.send_email import (
 from services.seniority_enrichment import enrich_domain_seniority
 from utils.custom_limiter import custom_rate_limiter
 from utils.request import get_client_ip, get_user_agent_info
-from utils.validation import validate_email_with_tld, validate_variables
+from utils.validation import (
+    validate_email_deliverable,
+    validate_email_with_tld,
+    validate_variables,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -284,6 +288,10 @@ async def verify_email(
     if not validate_email_with_tld(normalized_recipient):
         return DomainVerificationResponse(status="error", domainVerification="Failure")
     if normalized_recipient.rsplit("@", 1)[-1] != normalized_domain:
+        return DomainVerificationResponse(status="error", domainVerification="Failure")
+
+    is_deliverable, _ = validate_email_deliverable(normalized_recipient)
+    if not is_deliverable:
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
     client_ip_address = get_client_ip(request)

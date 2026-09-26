@@ -892,6 +892,14 @@ async def activate_shield(
                 content={"Error": "Not found"},
             )
 
+        is_deliverable, validated_email = validate_email_deliverable(email)
+        if not is_deliverable:
+            return JSONResponse(
+                status_code=400,
+                content={"Error": "Unable to deliver email to this address"},
+            )
+        email = validated_email
+
         datastore_client = ds_client
         alert_key = datastore_client.key("xon_alert", email)
         alert_task = datastore_client.get(alert_key)
