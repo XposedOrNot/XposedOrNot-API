@@ -142,12 +142,28 @@ alert-subscription flows.
 
 XposedOrNot ships a built-in [Model Context Protocol](https://modelcontextprotocol.io)
 server, so AI assistants can check breaches directly. Point your MCP client at
-`https://api.xposedornot.com/mcp` (JSON-RPC 2.0 over HTTP).
+`https://api.xposedornot.com/mcp` (Streamable HTTP, JSON-RPC 2.0 over POST).
+No API key or authentication is needed; all tools are read-only and never
+return passwords.
 
 Tools exposed:
 - **`check_email_breaches`**: check if an email appears in any known breach
-- **`get_breach_analytics`**: detailed breach stats for an email
-- **`list_breaches`**: list known breaches (optionally filtered by domain)
+- **`get_breach_analytics`**: detailed breach history, risk score and paste
+  exposure for an email
+- **`list_breaches`**: browse the breach catalog, filter by domain or breach ID
+- **`domain_breach_summary`**: aggregate breach counts for a domain
+- **`get_breach_metrics`**: system-wide breach statistics
+- **`get_recent_breaches`**: most recently added breaches, newest first
+
+Quick connect:
+
+```bash
+claude mcp add --transport http xposedornot https://api.xposedornot.com/mcp
+```
+
+For Cline, Cursor, Gemini CLI and other clients, see
+[llms-install.md](llms-install.md). A machine-readable server card is at
+`https://api.xposedornot.com/.well-known/mcp/server-card.json`.
 
 A quick `tools/list` call:
 

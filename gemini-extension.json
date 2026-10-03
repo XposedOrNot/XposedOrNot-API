@@ -1,0 +1,10 @@
+{
+  "name": "xposedornot",
+  "version": "2.0.0",
+  "description": "Check emails and domains against the XposedOrNot data-breach index: breach exposure, analytics, domain summaries and the latest breaches.",
+  "mcpServers": {
+    "xposedornot": {
+      "httpUrl": "https://api.xposedornot.com/mcp"
+    }
+  }
+}

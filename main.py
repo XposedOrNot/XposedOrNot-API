@@ -613,7 +613,7 @@ _MCP_SERVER_CARD = {
         ),
         "vendor": "XposedOrNot",
         "homepage": "https://xposedornot.com",
-        "documentation": "https://xposedornot.com/api_doc",
+        "documentation": "https://xposedornot.com/mcp",
         "repository": "https://github.com/XposedOrNot/XposedOrNot-API",
         "license": "MIT",
     },

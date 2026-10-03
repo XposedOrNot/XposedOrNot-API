@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "xposedornot": {
+      "type": "http",
+      "url": "https://api.xposedornot.com/mcp"
+    }
+  }
+}

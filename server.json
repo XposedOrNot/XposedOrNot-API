@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "com.xposedornot/xposedornot",
+  "description": "Real-time data-breach lookup and analytics for emails and domains from XposedOrNot.",
+  "repository": {
+    "url": "https://github.com/XposedOrNot/XposedOrNot-API",
+    "source": "github"
+  },
+  "version": "2.0.0",
+  "websiteUrl": "https://xposedornot.com/mcp",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.xposedornot.com/mcp"
+    }
+  ]
+}
