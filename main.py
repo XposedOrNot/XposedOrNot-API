@@ -255,10 +255,22 @@ _MCP_TOOLS = [
         "name": "get_recent_breaches",
         "title": "Get Recent Breaches",
         "description": (
-            "Get the latest data breach news and recently added breaches "
-            "tracked by XposedOrNot."
+            "Get the breaches most recently added to XposedOrNot, newest first. "
+            "Returns title, date, a short summary and a URL for each."
         ),
-        "inputSchema": {"type": "object", "properties": {}, "required": []},
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "default": 10,
+                    "description": "Maximum breaches to return, default 10",
+                }
+            },
+            "required": [],
+        },
         "annotations": _READ_ONLY,
     },
 ]
@@ -572,10 +584,40 @@ async def mcp_post_handler(fastapi_request: Request):
             )
 
         if tool_name == "get_recent_breaches":
+            try:
+                limit = int(tool_args.get("limit") or 10)
+            except (TypeError, ValueError):
+                return _mcp_error(
+                    req_id, -32602, "limit must be an integer between 1 and 50"
+                )
+            limit = max(1, min(limit, 50))
+
+            def _trim_recent(data):
+                rows = data.get("data") if isinstance(data, dict) else None
+                if not isinstance(rows, list):
+                    return data
+
+                def _when(row):
+                    try:
+                        return datetime.strptime(row.get("date", ""), "%Y-%b-%d")
+                    except (TypeError, ValueError):
+                        return datetime.min
+
+                rows = sorted(rows, key=_when, reverse=True)
+                total = len(rows)
+                data["data"] = rows[:limit]
+                if total > limit:
+                    data["message"] = (
+                        f"Showing the {limit} most recent of {total} breaches. "
+                        "Raise limit (max 50) to see more."
+                    )
+                return data
+
             return await _run_mcp_tool(
                 req_id,
                 analytics.get_news_feed(request=fastapi_request),
                 "Recent breaches",
+                transform=_trim_recent,
             )
 
         return _mcp_error(req_id, -32601, f"Unknown tool: {tool_name}")
