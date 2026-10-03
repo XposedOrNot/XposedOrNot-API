@@ -1,6 +1,7 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.xposedornot/xposedornot",
+  "title": "XposedOrNot Breach Intelligence",
   "description": "Real-time data-breach lookup and analytics for emails and domains from XposedOrNot.",
   "repository": {
     "url": "https://github.com/XposedOrNot/XposedOrNot-API",
