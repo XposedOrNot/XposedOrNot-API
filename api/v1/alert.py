@@ -433,7 +433,6 @@ async def unsubscribe(user_email: str, request: Request):
             base_url = str(request.base_url)
             unsub_url = f"{base_url}v1/verify_unsub/{unsubscribe_token}"
 
-            alert_task["unSubscribeOn"] = True
             alert_task["unsub_token"] = unsubscribe_token
             datastore_client.put(alert_task)
 
@@ -483,11 +482,7 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
         alert_key = datastore_client.key("xon_alert", user_email)
         alert_task = datastore_client.get(alert_key)
 
-        if (
-            alert_task
-            and alert_task.get("unSubscribeOn", False)
-            and alert_task.get("unsub_token") == unsubscribe_token
-        ):
+        if alert_task and alert_task.get("unsub_token") == unsubscribe_token:
             # Delete user record from datastore
             datastore_client.delete(alert_key)
 
