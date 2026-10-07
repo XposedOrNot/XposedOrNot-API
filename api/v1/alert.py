@@ -90,8 +90,7 @@ async def subscribe_to_alert_me(
 
         # Token generation
         verification_token = await generate_confirmation_token(user_email)
-        base_url = str(request.base_url)
-        confirmation_url = f"{base_url}v1/verifyme/{verification_token}"
+        confirmation_url = f"{BASE_URL}/v1/verifyme/{verification_token}"
 
         # Create/Update alert task
         if alert_task is None or not alert_task.get("verified", False):
@@ -430,8 +429,7 @@ async def unsubscribe(user_email: str, request: Request):
         if alert_task and alert_task.get("verified", False):
             # Generate unsubscribe token
             unsubscribe_token = await generate_confirmation_token(user_email)
-            base_url = str(request.base_url)
-            unsub_url = f"{base_url}v1/verify_unsub/{unsubscribe_token}"
+            unsub_url = f"{BASE_URL}/v1/verify_unsub/{unsubscribe_token}"
 
             alert_task["unsub_token"] = unsubscribe_token
             datastore_client.put(alert_task)

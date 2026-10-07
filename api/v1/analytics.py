@@ -18,6 +18,7 @@ from google.api_core import exceptions as google_exceptions
 from google.cloud import datastore
 
 from config.clients import ds_client, redis_client
+from config.settings import BASE_URL
 
 # Local imports
 from models.responses import (
@@ -303,7 +304,7 @@ async def domain_alert(
 
         # Generate verification token and URL
         verification_token = await generate_confirmation_token(user_email)
-        confirmation_url = f"{request.base_url}v1/domain-verify/{verification_token}"
+        confirmation_url = f"{BASE_URL}/v1/domain-verify/{verification_token}"
         if dashboard == "my":
             confirmation_url += "?d=my"
 
@@ -923,8 +924,7 @@ async def activate_shield(
         alert_task = datastore_client.get(alert_key)
 
         token_shield = await generate_confirmation_token(email)
-        base_url = str(request.base_url)
-        confirmation_url = f"{base_url}v1/verify-shield/{token_shield}"
+        confirmation_url = f"{BASE_URL}/v1/verify-shield/{token_shield}"
 
         if alert_task is None or not alert_task.get("shieldOn", False):
             # Create or update alert entity

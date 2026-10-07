@@ -261,9 +261,8 @@ async def _send_invite(
     request: Request, target_email: str, requester_email: str, token: str
 ) -> None:
     """Send the consent invite email for a pending monitor edge."""
-    base_url = str(request.base_url)
-    accept_url = f"{base_url}v1/monitor-accept/{token}"
-    decline_url = f"{base_url}v1/monitor-decline/{token}"
+    accept_url = f"{BASE_URL}/v1/monitor-accept/{token}"
+    decline_url = f"{BASE_URL}/v1/monitor-decline/{token}"
     preferred_ip, location = _client_context(request)
     await send_monitor_invite(
         target_email,
@@ -703,7 +702,7 @@ async def monitor_accept_page(monitor_token: str, request: Request):
     return _confirm_page(
         request,
         "accept",
-        f"{request.base_url}v1/monitor-accept/{monitor_token}",
+        f"{BASE_URL}/v1/monitor-accept/{monitor_token}",
         requester_email,
     )
 
@@ -750,7 +749,7 @@ async def monitor_accept_confirm(monitor_token: str, request: Request):
         await send_monitor_accepted(
             target_email,
             requester_email,
-            f"{request.base_url}v1/monitor-withdraw/{withdraw_token}",
+            f"{BASE_URL}/v1/monitor-withdraw/{withdraw_token}",
         )
         await send_monitor_requester_notice(
             requester_email, target_email, "accepted", DASHBOARD_URL
@@ -780,7 +779,7 @@ async def monitor_decline_page(monitor_token: str, request: Request):
     return _confirm_page(
         request,
         "decline",
-        f"{request.base_url}v1/monitor-decline/{monitor_token}",
+        f"{BASE_URL}/v1/monitor-decline/{monitor_token}",
         requester_email,
     )
 
@@ -844,7 +843,7 @@ async def monitor_withdraw_page(monitor_token: str, request: Request):
     return _confirm_page(
         request,
         "withdraw",
-        f"{request.base_url}v1/monitor-withdraw/{monitor_token}",
+        f"{BASE_URL}/v1/monitor-withdraw/{monitor_token}",
         requester_email,
     )
 
