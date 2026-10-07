@@ -443,6 +443,242 @@ def test_limits_fail_open_when_redis_unavailable(verification_environment, monke
     assert len(sent) == 2
 
 
+def issue_proof_challenge(domain, email):
+    """Issue a DNS/HTML proof challenge and return its code."""
+    response = asyncio.run(module.begin_proof_challenge(domain, email))
+    assert response.status == "success"
+    return response.domainVerification
+
+
+def test_dns_proof_replay_without_challenge_is_rejected(
+    verification_environment, monkeypatch
+):
+    """A publicly visible proof cannot create a record without a bound challenge."""
+    client, _, notifications, processing_starts, success_emails = (
+        verification_environment
+    )
+    monkeypatch.setattr(module.domcheck, "check", lambda *args, **kwargs: True)
+
+    response = asyncio.run(
+        module.verify_dns(
+            "example.com",
+            "attacker@evil.com",
+            "stolen-public-code",
+            "xon_verification",
+            make_request(),
+        )
+    )
+
+    assert response.status == "error"
+    assert not any(key[0] == "xon_domains" for key in client.entities)
+    assert notifications == []
+    assert not processing_starts
+    assert not success_emails
+
+
+def test_dns_challenge_bound_to_other_email_is_rejected(
+    verification_environment, monkeypatch
+):
+    """A challenge issued to one email cannot verify a different email."""
+    client, _, _, processing_starts, _ = verification_environment
+    monkeypatch.setattr(module.domcheck, "check", lambda *args, **kwargs: True)
+    code = issue_proof_challenge("example.com", "owner@example.com")
+
+    response = asyncio.run(
+        module.verify_dns(
+            "example.com", "attacker@evil.com", code, "xon_verification", make_request()
+        )
+    )
+
+    assert response.status == "error"
+    assert not any(key[0] == "xon_domains" for key in client.entities)
+    assert not processing_starts
+
+
+def test_dns_challenge_bound_to_other_domain_is_rejected(
+    verification_environment, monkeypatch
+):
+    """A challenge issued for one domain cannot verify a different domain."""
+    client, _, _, _, _ = verification_environment
+    monkeypatch.setattr(module.domcheck, "check", lambda *args, **kwargs: True)
+    code = issue_proof_challenge("example.com", "owner@example.com")
+
+    response = asyncio.run(
+        module.verify_dns(
+            "other.com", "owner@example.com", code, "xon_verification", make_request()
+        )
+    )
+
+    assert response.status == "error"
+    assert not any(key[0] == "xon_domains" for key in client.entities)
+
+
+def test_bound_dns_challenge_verifies_once(verification_environment, monkeypatch):
+    """A bound challenge verifies its own email once and cannot be reused."""
+    client, _, notifications, processing_starts, success_emails = (
+        verification_environment
+    )
+    monkeypatch.setattr(module.domcheck, "check", lambda *args, **kwargs: True)
+    code = issue_proof_challenge("example.com", "owner@example.com")
+
+    response = asyncio.run(
+        module.verify_dns(
+            "example.com", "owner@example.com", code, "xon_verification", make_request()
+        )
+    )
+
+    assert response.status == "success"
+    domain_key = "xon_domains", "example.com_owner@example.com"
+    assert client.entities[domain_key]["verified"] is True
+    assert client.entities[domain_key]["mode"] == "dns_txt"
+    assert notifications == ["example.com"]
+    assert processing_starts == ["example.com"]
+    assert len(success_emails) == 1
+
+    client.entities.pop(domain_key)
+    replay = asyncio.run(
+        module.verify_dns(
+            "example.com", "owner@example.com", code, "xon_verification", make_request()
+        )
+    )
+    assert replay.status == "error"
+    assert domain_key not in client.entities
+
+
+def test_expired_dns_challenge_is_rejected(verification_environment, monkeypatch):
+    """An expired challenge cannot create a verified record."""
+    client, _, _, _, _ = verification_environment
+    monkeypatch.setattr(module.domcheck, "check", lambda *args, **kwargs: True)
+    code = issue_proof_challenge("example.com", "owner@example.com")
+    challenge_key = (
+        "xon_domain_proof_challenges",
+        module.hash_domain_verification_token(code),
+    )
+    client.entities[challenge_key]["expires_at"] = datetime.now(
+        timezone.utc
+    ) - timedelta(seconds=1)
+
+    response = asyncio.run(
+        module.verify_dns(
+            "example.com", "owner@example.com", code, "xon_verification", make_request()
+        )
+    )
+
+    assert response.status == "error"
+    assert not any(key[0] == "xon_domains" for key in client.entities)
+
+
+def test_existing_domain_reverifies_without_challenge(
+    verification_environment, monkeypatch
+):
+    """Already-verified domains keep re-verifying with their original code."""
+    client, _, notifications, processing_starts, success_emails = (
+        verification_environment
+    )
+    monkeypatch.setattr(module.domcheck, "check", lambda *args, **kwargs: True)
+    domain_key = ("xon_domains", "example.com_owner@example.com")
+    existing = FakeEntity(domain_key)
+    existing.update(
+        {
+            "email": "owner@example.com",
+            "domain": "example.com",
+            "mode": "dns_txt",
+            "token": "legacy-client-code",
+            "verified": True,
+        }
+    )
+    client.put(existing)
+
+    response = asyncio.run(
+        module.verify_dns(
+            "example.com",
+            "owner@example.com",
+            "legacy-client-code",
+            "xon_verification",
+            make_request(),
+        )
+    )
+
+    assert response.status == "success"
+    assert client.entities[domain_key]["verified"] is True
+    assert "last_verified" in client.entities[domain_key]
+    assert notifications == ["example.com"]
+    assert processing_starts == ["example.com"]
+    assert len(success_emails) == 1
+
+
+def test_html_proof_replay_without_challenge_is_rejected(
+    verification_environment, monkeypatch
+):
+    """The HTML strategy also rejects unbound public proofs."""
+    client, _, _, processing_starts, _ = verification_environment
+
+    async def fake_check_file(domain, prefix, code):
+        return True
+
+    monkeypatch.setattr(module, "check_file", fake_check_file)
+
+    response = asyncio.run(
+        module.verify_html(
+            "example.com",
+            "attacker@evil.com",
+            "stolen-public-code",
+            "xon_verification",
+            make_request(),
+        )
+    )
+
+    assert response.status == "error"
+    assert not any(key[0] == "xon_domains" for key in client.entities)
+    assert not processing_starts
+
+
+def test_bound_html_challenge_verifies_owner(verification_environment, monkeypatch):
+    """A bound challenge lets the HTML strategy verify its own email."""
+    client, _, notifications, processing_starts, _ = verification_environment
+
+    async def fake_check_file(domain, prefix, code):
+        return True
+
+    monkeypatch.setattr(module, "check_file", fake_check_file)
+    code = issue_proof_challenge("example.com", "owner@example.com")
+
+    response = asyncio.run(
+        module.verify_html(
+            "example.com", "owner@example.com", code, "xon_verification", make_request()
+        )
+    )
+
+    assert response.status == "success"
+    domain_key = "xon_domains", "example.com_owner@example.com"
+    assert client.entities[domain_key]["verified"] is True
+    assert client.entities[domain_key]["mode"] == "html_file"
+    assert notifications == ["example.com"]
+    assert processing_starts == ["example.com"]
+
+
+def test_failed_proof_check_does_not_consume_challenge(
+    verification_environment, monkeypatch
+):
+    """A DNS lookup failure leaves the challenge pending for retry."""
+    client, _, _, _, _ = verification_environment
+    monkeypatch.setattr(module.domcheck, "check", lambda *args, **kwargs: False)
+    code = issue_proof_challenge("example.com", "owner@example.com")
+
+    response = asyncio.run(
+        module.verify_dns(
+            "example.com", "owner@example.com", code, "xon_verification", make_request()
+        )
+    )
+
+    assert response.status == "error"
+    challenge_key = (
+        "xon_domain_proof_challenges",
+        module.hash_domain_verification_token(code),
+    )
+    assert client.entities[challenge_key]["used"] is False
+
+
 def test_limits_disabled_skips_redis(verification_environment, monkeypatch):
     """Disabling the feature flag bypasses all Redis-backed limits."""
     _, sent, _, _, _ = verification_environment

@@ -53,6 +53,7 @@ templates = Jinja2Templates(directory="templates")
 
 DOMAIN_EMAIL_ROLES = ("security", "admin", "webmaster", "postmaster", "hostmaster")
 DOMAIN_EMAIL_CHALLENGE_TTL_MINUTES = 30
+DOMAIN_PROOF_CHALLENGE_TTL_HOURS = 72
 
 
 def validate_domain(domain: str) -> bool:
@@ -104,6 +105,65 @@ def create_new_record(
         }
     )
     datastore_client.put(new_domain_record)
+
+
+def _proof_challenge_key(code: str, datastore_client: datastore.Client):
+    """Return the datastore key for a DNS/HTML proof challenge code."""
+    return datastore_client.key(
+        "xon_domain_proof_challenges", hash_domain_verification_token(code)
+    )
+
+
+def _proof_challenge_matches(challenge, domain: str, email: str) -> bool:
+    """Return True when a proof challenge is pending, unexpired and bound to domain/email."""
+    if not challenge or challenge.get("used"):
+        return False
+    expires_at = challenge.get("expires_at")
+    if not isinstance(expires_at, datetime) or datetime.now(timezone.utc) > expires_at:
+        return False
+    return challenge.get("domain") == domain and challenge.get("email") == email
+
+
+def has_pending_proof_challenge(
+    domain: str, email: str, code: str, datastore_client: datastore.Client
+) -> bool:
+    """Return True when a pending proof challenge is bound to this domain and email."""
+    challenge = datastore_client.get(_proof_challenge_key(code, datastore_client))
+    return _proof_challenge_matches(challenge, domain, email)
+
+
+def consume_proof_challenge(
+    domain: str, email: str, code: str, datastore_client: datastore.Client
+) -> bool:
+    """Atomically mark a bound proof challenge as used; return False when invalid."""
+    challenge_key = _proof_challenge_key(code, datastore_client)
+    with datastore_client.transaction():
+        challenge = datastore_client.get(challenge_key)
+        if not _proof_challenge_matches(challenge, domain, email):
+            return False
+        challenge["used"] = True
+        challenge["used_at"] = datetime.now(timezone.utc)
+        datastore_client.put(challenge)
+    return True
+
+
+async def begin_proof_challenge(domain: str, email: str) -> DomainVerificationResponse:
+    """Issue a server-generated DNS/HTML verification code bound to domain and email."""
+    code = secrets.token_urlsafe(32)
+    datastore_client = ds_client
+    challenge = datastore.Entity(_proof_challenge_key(code, datastore_client))
+    now = datetime.now(timezone.utc)
+    challenge.update(
+        {
+            "domain": domain,
+            "email": email,
+            "created_at": now,
+            "expires_at": now + timedelta(hours=DOMAIN_PROOF_CHALLENGE_TTL_HOURS),
+            "used": False,
+        }
+    )
+    datastore_client.put(challenge)
+    return DomainVerificationResponse(status="success", domainVerification=code)
 
 
 async def send_domain_confirmation_email(
@@ -434,12 +494,20 @@ async def verify_dns(
     if not validate_email_with_tld(email) or not validate_variables([code]):
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
-    if domcheck.check(domain, prefix, code, strategies="dns_txt"):
-        datastore_client = ds_client
-        domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
-        domain_record = datastore_client.get(domain_key)
+    datastore_client = ds_client
+    domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
+    domain_record = datastore_client.get(domain_key)
+    if domain_record is None and not has_pending_proof_challenge(
+        domain, email, code, datastore_client
+    ):
+        return DomainVerificationResponse(status="error", domainVerification="Failure")
 
+    if domcheck.check(domain, prefix, code, strategies="dns_txt"):
         if domain_record is None:
+            if not consume_proof_challenge(domain, email, code, datastore_client):
+                return DomainVerificationResponse(
+                    status="error", domainVerification="Failure"
+                )
             create_new_record(domain, email, code, "dns_txt", datastore_client)
         else:
             domain_record["last_verified"] = datetime.now()
@@ -471,12 +539,20 @@ async def verify_html(
     if not validate_email_with_tld(email) or not validate_variables([code]):
         return DomainVerificationResponse(status="error", domainVerification="Failure")
 
-    if await check_file(domain, prefix, code):
-        datastore_client = ds_client
-        domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
-        domain_record = datastore_client.get(domain_key)
+    datastore_client = ds_client
+    domain_key = datastore_client.key("xon_domains", f"{domain}_{email}")
+    domain_record = datastore_client.get(domain_key)
+    if domain_record is None and not has_pending_proof_challenge(
+        domain, email, code, datastore_client
+    ):
+        return DomainVerificationResponse(status="error", domainVerification="Failure")
 
+    if await check_file(domain, prefix, code):
         if domain_record is None:
+            if not consume_proof_challenge(domain, email, code, datastore_client):
+                return DomainVerificationResponse(
+                    status="error", domainVerification="Failure"
+                )
             create_new_record(domain, email, code, "html_file", datastore_client)
         else:
             domain_record["last_verified"] = datetime.now()
@@ -670,6 +746,8 @@ async def domain_verification(
                 status="success",
                 domainVerification=get_domain_verification_emails(normalized_domain),
             )
+        if z == "b":
+            return await begin_proof_challenge(normalized_domain, normalized_email)
         if z == "d":
             return await verify_email(
                 normalized_domain, normalized_email, str(r).strip().lower(), request
