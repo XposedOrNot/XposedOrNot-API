@@ -153,6 +153,30 @@ class FakeResponse:
                 response=httpx.Response(self.status_code),
             )
 
+    async def aread(self):
+        raise AssertionError("webhook delivery must never read the response body")
+
+    def aiter_bytes(self, *args, **kwargs):
+        raise AssertionError("webhook delivery must never read the response body")
+
+
+class FakeStreamContext:
+    """Async context manager mimicking httpx.AsyncClient.stream."""
+
+    def __init__(self, outcome, enter_delay=0.0):
+        self._outcome = outcome
+        self._enter_delay = enter_delay
+
+    async def __aenter__(self):
+        if self._enter_delay:
+            await asyncio.sleep(self._enter_delay)
+        if isinstance(self._outcome, Exception):
+            raise self._outcome
+        return self._outcome
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
 
 class FakeAsyncClient:
     """Records outbound posts; per-URL scripted responses."""
@@ -160,7 +184,18 @@ class FakeAsyncClient:
     def __init__(self):
         self.posts = []
         self.responses = {}
+        self.stream_headers = {}
+        self.stream_delay = 0.0
         self.is_closed = False
+
+    def _scripted_outcome(self, url):
+        scripted = self.responses.get(url)
+        if scripted is None:
+            return FakeResponse(200, headers=self.stream_headers.get(url))
+        if isinstance(scripted, Exception):
+            return scripted
+        code = scripted.pop(0) if len(scripted) > 1 else scripted[0]
+        return FakeResponse(code, headers=self.stream_headers.get(url))
 
     async def post(self, url, json=None, content=None, headers=None, timeout=None):
         self.posts.append(
@@ -172,13 +207,25 @@ class FakeAsyncClient:
                 "timeout": timeout,
             }
         )
-        scripted = self.responses.get(url)
-        if scripted is None:
-            return FakeResponse(200)
-        if isinstance(scripted, Exception):
-            raise scripted
-        code = scripted.pop(0) if len(scripted) > 1 else scripted[0]
-        return FakeResponse(code)
+        outcome = self._scripted_outcome(url)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    def stream(self, method, url, content=None, headers=None, timeout=None):
+        self.posts.append(
+            {
+                "method": method,
+                "url": url,
+                "json": None,
+                "content": content,
+                "headers": headers or {},
+                "timeout": timeout,
+            }
+        )
+        return FakeStreamContext(
+            self._scripted_outcome(url), enter_delay=self.stream_delay
+        )
 
 
 def _public_getaddrinfo(host, port, proto=None):  # noqa: ARG001
@@ -599,6 +646,36 @@ def test_webhook_permanent_4xx_is_not_retried(env):
     with pytest.raises(HTTPException):
         run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
     assert len(env.http.posts) == 1
+
+
+def test_webhook_delivery_never_reads_response_body(env):
+    """Delivery succeeds using only status/headers; body reads are trapped."""
+    ok, _ = run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
+    assert ok
+    assert env.http.posts[0]["method"] == "POST"
+
+
+def test_webhook_slow_response_hits_wall_clock_deadline(env, monkeypatch):
+    """An endpoint that never finishes responding is cut off per attempt."""
+    monkeypatch.setattr(messaging, "WEBHOOK_ATTEMPT_DEADLINE", 0.05)
+    env.http.stream_delay = 30
+    start = time.monotonic()
+    with pytest.raises(HTTPException) as exc:
+        run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
+    elapsed = time.monotonic() - start
+    assert exc.value.status_code == 400
+    assert "deadline" in str(exc.value.detail)
+    assert len(env.http.posts) == messaging.WEBHOOK_MAX_ATTEMPTS
+    assert elapsed < 5
+
+
+def test_webhook_429_respects_capped_retry_after_then_succeeds(env):
+    """A 429 with Retry-After is retried through the streaming path."""
+    env.http.responses[HOOK_URL] = [429, 200]
+    env.http.stream_headers[HOOK_URL] = {"Retry-After": "0"}
+    ok, _ = run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
+    assert ok
+    assert len(env.http.posts) == 2
 
 
 def test_webhook_verify_update_in_place_url_change_and_rotate(env):

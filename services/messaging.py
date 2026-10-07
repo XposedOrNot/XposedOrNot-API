@@ -430,11 +430,26 @@ WEBHOOK_CONNECT_TIMEOUT = 5.0
 WEBHOOK_TOTAL_TIMEOUT = 10.0
 WEBHOOK_BACKOFF_BASE = 0.5
 WEBHOOK_MAX_RETRY_AFTER = 5.0
+WEBHOOK_ATTEMPT_DEADLINE = 15.0
 
 
 def generate_signing_secret() -> str:
     """Generate a random per-webhook HMAC signing secret (hex)."""
     return secrets.token_hex(32)
+
+
+async def _post_webhook_once(
+    webhook_url: str,
+    body_bytes: bytes,
+    headers: Dict[str, str],
+    timeout: httpx.Timeout,
+) -> Tuple[int, Optional[str]]:
+    """POST the payload and return (status, Retry-After) without reading the body."""
+    async with shared_http_client() as client:
+        async with client.stream(
+            "POST", webhook_url, content=body_bytes, headers=headers, timeout=timeout
+        ) as response:
+            return response.status_code, response.headers.get("Retry-After")
 
 
 def compute_webhook_signature(secret: str, timestamp: str, body: bytes) -> str:
@@ -465,7 +480,10 @@ async def deliver_signed_webhook(
     - Redirects disabled (a 30x to an internal address is an SSRF bypass).
     - Retries only connection errors / timeouts / 5xx / 429 (respecting a capped
       Retry-After); never retries other 4xx (permanent client errors).
-    - Bounded response read; small total time budget.
+    - The response body is never read (only status and Retry-After are used)
+      and every attempt runs under a hard wall-clock deadline, so an
+      oversized or endlessly streaming reply cannot exhaust worker memory
+      or hold the connection open.
 
     Raises:
         HTTPException(400): if delivery ultimately fails (so onboarding does not
@@ -496,27 +514,30 @@ async def deliver_signed_webhook(
 
         retry_after: Optional[float] = None
         try:
-            async with shared_http_client() as client:
-                response = await client.post(
-                    webhook_url, content=body_bytes, headers=headers, timeout=timeout
-                )
+            status_code, retry_after_header = await asyncio.wait_for(
+                _post_webhook_once(webhook_url, body_bytes, headers, timeout),
+                timeout=WEBHOOK_ATTEMPT_DEADLINE,
+            )
 
-            if response.status_code < 400:
-                logger.info(
-                    f"Delivered webhook '{event}' ping (status={response.status_code})"
-                )
+            if status_code < 400:
+                logger.info(f"Delivered webhook '{event}' ping (status={status_code})")
                 return True
 
-            last_error = f"endpoint returned HTTP {response.status_code}"
-            if 400 <= response.status_code < 500 and response.status_code != 429:
+            last_error = f"endpoint returned HTTP {status_code}"
+            if 400 <= status_code < 500 and status_code != 429:
                 break
 
-            header_value = response.headers.get("Retry-After")
-            if header_value:
+            if retry_after_header:
                 try:
-                    retry_after = min(float(header_value), WEBHOOK_MAX_RETRY_AFTER)
+                    retry_after = min(
+                        float(retry_after_header), WEBHOOK_MAX_RETRY_AFTER
+                    )
                 except ValueError:
                     retry_after = None
+        except asyncio.TimeoutError:
+            last_error = (
+                f"delivery exceeded the {WEBHOOK_ATTEMPT_DEADLINE}s attempt deadline"
+            )
         except httpx.HTTPError as exc:
             last_error = str(exc) or "connection error"
 
