@@ -1,9 +1,13 @@
-"""Regression tests for dashboard sign-out magic-link revocation."""
+"""Regression tests for dashboard login challenge / session bearer separation.
+
+Covers Codex finding #2 and its four confirmed bypasses: a signed-out or
+replayed login link must never recreate a dashboard session.
+"""
 
 import asyncio
+import datetime
 import hashlib
 import os
-import time
 
 import pytest
 from fastapi import HTTPException
@@ -23,11 +27,11 @@ os.environ.setdefault("SECURITY_SALT", "test-security-salt")
 os.environ.setdefault("WTF_CSRF_SECRET_KEY", "test-csrf-key")
 
 from api.v1 import analytics as module
-from utils.token import generate_confirmation_token
+from utils import token as token_module
 
 
 class FakeEntity(dict):
-    """Minimal datastore entity used by the sign-out tests."""
+    """Minimal datastore entity used by the session tests."""
 
     def __init__(self, key):
         super().__init__()
@@ -35,7 +39,7 @@ class FakeEntity(dict):
 
 
 class FakeDatastoreClient:
-    """In-memory datastore client used by the sign-out tests."""
+    """In-memory datastore client with a no-op transaction context."""
 
     def __init__(self):
         self.entities = {}
@@ -56,6 +60,12 @@ class FakeDatastoreClient:
         """Delete an entity by key."""
         self.entities.pop(key, None)
 
+    def transaction(self):
+        """Return a transaction-compatible context manager."""
+        from contextlib import nullcontext
+
+        return nullcontext()
+
 
 def make_request(path="/v1/domain-verify"):
     """Create a minimal request with stable client metadata."""
@@ -75,7 +85,7 @@ def make_request(path="/v1/domain-verify"):
 
 @pytest.fixture
 def env(monkeypatch):
-    """Install an in-memory datastore and silence the exception mailer."""
+    """Install an in-memory datastore shared by the route module and validator."""
     client = FakeDatastoreClient()
     monkeypatch.setattr(module, "ds_client", client)
     monkeypatch.setattr(module.datastore, "Entity", FakeEntity)
@@ -87,14 +97,16 @@ def env(monkeypatch):
     return client
 
 
-def make_token(email):
-    """Generate a real signed magic-link token for the email."""
-    return asyncio.run(generate_confirmation_token(email))
+def issue_challenge(email, dashboard=""):
+    """Issue a login challenge as /v1/domain-alert would."""
+    return module.create_login_challenge(email, dashboard)
 
 
-def login(client, email, token):
-    """Redeem a magic link through the real domain_verify handler."""
-    return asyncio.run(module.domain_verify.__wrapped__(make_request(), token, None))
+def redeem(challenge):
+    """Redeem a login challenge through the real domain_verify handler."""
+    return asyncio.run(
+        module.domain_verify.__wrapped__(make_request(), challenge, None)
+    )
 
 
 def sign_out(email, token):
@@ -110,84 +122,132 @@ def session_key(email):
     return "xon_domains_session", email
 
 
-def revocation_key(token):
-    return "xon_revoked_magic_tokens", hashlib.sha256(token.encode("utf-8")).hexdigest()
+def bearer_from_link(response):
+    """Extract the token (session bearer) from the success page link."""
+    import re
+
+    body = response.body.decode()
+    match = re.search(r"token=([A-Za-z0-9_\-=]+)", body)
+    return match.group(1) if match else None
 
 
-def test_login_and_repeat_click_still_work(env):
-    """Redeeming a magic link twice without sign-out keeps working."""
-    token = make_token("owner@example.com")
+def test_login_challenge_mints_distinct_random_bearer(env):
+    """Redeeming a challenge creates a session whose bearer is not the challenge."""
+    challenge = issue_challenge("owner@example.com")
+    response = redeem(challenge)
 
-    first = login(env, "owner@example.com", token)
+    assert response.status_code == 200
+    bearer = bearer_from_link(response)
+    assert bearer and bearer != challenge
+    session = env.entities[session_key("owner@example.com")]
+    assert session["domain_magic"] == bearer
+    assert token_module.validate_dashboard_session(env, "owner@example.com", bearer)
+    assert not token_module.validate_dashboard_session(
+        env, "owner@example.com", challenge
+    )
+
+
+def test_challenge_is_single_use(env):
+    """A login challenge cannot be redeemed twice (superseded-link replay)."""
+    challenge = issue_challenge("owner@example.com")
+    first = redeem(challenge)
     assert first.status_code == 200
-    assert session_key("owner@example.com") in env.entities
+    env.delete(session_key("owner@example.com"))
 
-    second = login(env, "owner@example.com", token)
-    assert second.status_code == 200
-    assert env.entities[session_key("owner@example.com")]["domain_magic"] == token
+    second = redeem(challenge)
+    assert second.status_code == 404
+    assert session_key("owner@example.com") not in env.entities
 
 
-def test_signout_deletes_session_and_revokes_token(env):
-    """Sign-out removes the session and records the token as revoked."""
-    token = make_token("owner@example.com")
-    login(env, "owner@example.com", token)
+def test_signout_deletes_session_and_bearer_cannot_be_reused(env):
+    """After sign-out the random bearer is dead and nothing can revive it."""
+    challenge = issue_challenge("owner@example.com")
+    bearer = bearer_from_link(redeem(challenge))
 
-    response = sign_out("owner@example.com", token)
-
+    response = sign_out("owner@example.com", bearer)
     assert response.status == "success"
     assert session_key("owner@example.com") not in env.entities
-    revoked = env.entities[revocation_key(token)]
-    assert revoked["email"] == "owner@example.com"
-    assert revoked["expires_at"] > revoked["revoked_at"]
-
-
-def test_replayed_token_cannot_recreate_session_after_signout(env):
-    """A signed-out magic link must not restore dashboard access."""
-    token = make_token("owner@example.com")
-    login(env, "owner@example.com", token)
-    sign_out("owner@example.com", token)
-
-    replay = login(env, "owner@example.com", token)
-
+    assert not token_module.validate_dashboard_session(env, "owner@example.com", bearer)
+    replay = redeem(challenge)
     assert replay.status_code == 404
     assert session_key("owner@example.com") not in env.entities
 
 
-def test_new_login_after_signout_works(env):
-    """A freshly issued magic link still signs the user in after sign-out."""
-    old_token = make_token("owner@example.com")
-    login(env, "owner@example.com", old_token)
-    sign_out("owner@example.com", old_token)
+def test_same_second_reissue_does_not_reproduce_a_known_bearer(env):
+    """Two challenges issued in the same second yield different bearers."""
+    c1 = issue_challenge("owner@example.com")
+    c2 = issue_challenge("owner@example.com")
+    assert c1 != c2
 
-    time.sleep(1.1)
-    new_token = make_token("owner@example.com")
-    assert new_token != old_token
-
-    response = login(env, "owner@example.com", new_token)
-
-    assert response.status_code == 200
-    assert env.entities[session_key("owner@example.com")]["domain_magic"] == new_token
+    b1 = bearer_from_link(redeem(c1))
+    env.delete(session_key("owner@example.com"))
+    b2 = bearer_from_link(redeem(c2))
+    assert b1 != b2
 
 
-def test_signout_with_wrong_token_revokes_nothing(env):
-    """A mismatched token is rejected and leaves the session intact."""
-    token = make_token("owner@example.com")
-    login(env, "owner@example.com", token)
-    intruder_token = make_token("intruder@example.com")
+def test_expiry_cannot_be_reset_by_replay(env):
+    """An absolute created_at cap is enforced and never rewritten on redemption."""
+    challenge = issue_challenge("owner@example.com")
+    bearer = bearer_from_link(redeem(challenge))
+    session = env.entities[session_key("owner@example.com")]
+
+    old = datetime.datetime.utcnow() - datetime.timedelta(hours=13)
+    session["magic_timestamp"] = old
+    session["created_at"] = old
+    assert not token_module.validate_dashboard_session(env, "owner@example.com", bearer)
+
+    replay = redeem(challenge)
+    assert replay.status_code == 404
+    assert env.entities[session_key("owner@example.com")]["created_at"] == old
+
+
+def test_expired_challenge_is_rejected(env):
+    """A login challenge past its TTL cannot create a session."""
+    challenge = issue_challenge("owner@example.com")
+    challenge_key = (
+        "xon_dashboard_login_challenges",
+        hashlib.sha256(challenge.encode("utf-8")).hexdigest(),
+    )
+    env.entities[challenge_key]["expires_at"] = datetime.datetime.now(
+        datetime.timezone.utc
+    ) - datetime.timedelta(seconds=1)
+
+    response = redeem(challenge)
+    assert response.status_code == 404
+    assert session_key("owner@example.com") not in env.entities
+
+
+def test_unknown_challenge_is_rejected(env):
+    """A forged/unknown challenge value cannot create a session."""
+    response = redeem("totally-made-up-challenge-value")
+    assert response.status_code == 404
+    assert env.entities == {}
+
+
+def test_signout_wrong_bearer_is_rejected(env):
+    """A mismatched bearer cannot sign out another session."""
+    challenge = issue_challenge("owner@example.com")
+    bearer = bearer_from_link(redeem(challenge))
 
     with pytest.raises(HTTPException) as denied:
-        sign_out("owner@example.com", intruder_token)
+        sign_out("owner@example.com", "someone-elses-bearer")
 
     assert denied.value.status_code == 401
     assert session_key("owner@example.com") in env.entities
-    assert revocation_key(intruder_token) not in env.entities
+    assert env.entities[session_key("owner@example.com")]["domain_magic"] == bearer
 
 
 def test_signout_without_session_is_idempotent(env):
-    """Signing out with no active session succeeds without revoking."""
-    token = make_token("owner@example.com")
-
-    response = sign_out("owner@example.com", token)
-
+    """Signing out with no active session succeeds without error."""
+    response = sign_out("owner@example.com", "any-bearer")
     assert response.status == "success"
-    assert revocation_key(token) not in env.entities
+    assert env.entities == {}
+
+
+def test_dashboard_preference_is_carried_through_challenge(env):
+    """The dashboard preference stored on the challenge reaches the session."""
+    challenge = issue_challenge("owner@example.com", dashboard="my")
+    response = redeem(challenge)
+    assert response.status_code == 200
+    assert "my-dashboard.html" in response.body.decode()
+    assert env.entities[session_key("owner@example.com")]["dashboard"] == "my"

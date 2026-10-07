@@ -14,15 +14,18 @@ from utils.redaction import mask_email
 logger = logging.getLogger(__name__)
 
 DASHBOARD_SESSION_MAX_AGE_HOURS = 12
+DASHBOARD_SESSION_ABSOLUTE_MAX_AGE_HOURS = 12
 
 
 def validate_dashboard_session(datastore_client, email: str, token: str) -> bool:
     """
-    Validate a dashboard magic-link session token for an email.
+    Validate a dashboard session bearer for an email.
 
     Accepts the session created by the domain-alert/domain-verify flow
-    (xon_domains_session) and enforces the same 12-hour expiry as the
-    dashboard data routes.
+    (xon_domains_session) and enforces the 12-hour session expiry. An
+    immutable ``created_at`` absolute cap, set once at session creation and
+    never rewritten, is enforced when present so no replay can extend a
+    session past its original lifetime.
     """
     if not email or not token:
         return False
@@ -34,8 +37,18 @@ def validate_dashboard_session(datastore_client, email: str, token: str) -> bool
         magic_timestamp = session_record.get("magic_timestamp")
         if magic_timestamp is None:
             return False
-        age = datetime.datetime.utcnow() - magic_timestamp.replace(tzinfo=None)
-        return age <= datetime.timedelta(hours=DASHBOARD_SESSION_MAX_AGE_HOURS)
+        now = datetime.datetime.utcnow()
+        age = now - magic_timestamp.replace(tzinfo=None)
+        if age > datetime.timedelta(hours=DASHBOARD_SESSION_MAX_AGE_HOURS):
+            return False
+        created_at = session_record.get("created_at")
+        if created_at is not None:
+            absolute_age = now - created_at.replace(tzinfo=None)
+            if absolute_age > datetime.timedelta(
+                hours=DASHBOARD_SESSION_ABSOLUTE_MAX_AGE_HOURS
+            ):
+                return False
+        return True
     except Exception:  # pylint: disable=broad-except
         return False
 

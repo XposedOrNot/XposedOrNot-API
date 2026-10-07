@@ -1,6 +1,7 @@
 """Regression tests: security links must come from configured BASE_URL, not Host."""
 
 import asyncio
+import hashlib
 import os
 from pathlib import Path
 
@@ -168,5 +169,11 @@ def test_dashboard_login_email_link_ignores_hostile_host(monkeypatch):
     assert len(captured) == 1
     assert captured[0].startswith(f"{BASE_URL}/v1/domain-verify/")
     assert "evil.example" not in captured[0]
-    session = client.entities[("xon_domains_session", "victim@example.com")]
-    assert captured[0].endswith(session["domain_magic"])
+    assert ("xon_domains_session", "victim@example.com") not in client.entities
+    challenge = captured[0].rsplit("/", 1)[-1]
+    challenge_key = (
+        "xon_dashboard_login_challenges",
+        hashlib.sha256(challenge.encode("utf-8")).hexdigest(),
+    )
+    assert client.entities[challenge_key]["email"] == "victim@example.com"
+    assert client.entities[challenge_key]["used"] is False

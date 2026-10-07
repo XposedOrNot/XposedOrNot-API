@@ -568,8 +568,6 @@ def test_webhook_setup_new_channel_signs_ping_and_returns_secret_once(env):
 
     assert len(env.http.posts) == 1
     post = env.http.posts[0]
-    # Delivery is pinned to the validated public IP, with the original host
-    # kept for TLS/SNI and the Host header (anti DNS-rebinding).
     assert post["url"] == "https://93.184.216.34:443/xon"
     assert post["headers"]["Host"] == "hooks.example.org"
     assert post["extensions"]["sni_hostname"] == "hooks.example.org"

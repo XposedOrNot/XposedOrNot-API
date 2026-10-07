@@ -6,6 +6,7 @@ import hashlib
 import html
 import json
 import logging
+import secrets
 from collections import defaultdict
 from datetime import timedelta
 from typing import Any, Dict, Optional, Union
@@ -105,14 +106,64 @@ def hash_email(email: str) -> str:
     return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 
-MAGIC_TOKEN_REVOCATION_TTL_HOURS = 24
+DASHBOARD_LOGIN_CHALLENGE_TTL_HOURS = 24
 
 
-def revoked_magic_token_key(token: str, datastore_client):
-    """Return the datastore key for a revoked dashboard magic-link token."""
+def _login_challenge_key(challenge: str, datastore_client):
+    """Return the datastore key for a single-use dashboard login challenge."""
     return datastore_client.key(
-        "xon_revoked_magic_tokens", hashlib.sha256(token.encode("utf-8")).hexdigest()
+        "xon_dashboard_login_challenges",
+        hashlib.sha256(challenge.encode("utf-8")).hexdigest(),
     )
+
+
+def create_login_challenge(email: str, dashboard: str) -> str:
+    """Issue a random single-use dashboard login challenge bound to the email.
+
+    The emailed link carries this challenge, not a session credential; the
+    session bearer is minted only when the challenge is redeemed.
+    """
+    challenge = secrets.token_urlsafe(32)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    entity = datastore.Entity(_login_challenge_key(challenge, ds_client))
+    entity.update(
+        {
+            "email": email,
+            "dashboard": dashboard or "",
+            "created_at": now,
+            "expires_at": now + timedelta(hours=DASHBOARD_LOGIN_CHALLENGE_TTL_HOURS),
+            "used": False,
+        }
+    )
+    ds_client.put(entity)
+    return challenge
+
+
+def consume_login_challenge(challenge: str):
+    """Atomically redeem a login challenge.
+
+    Returns (email, dashboard) when the challenge is pending and unexpired,
+    marking it used in the same transaction so it cannot be replayed; returns
+    None otherwise.
+    """
+    client = ds_client
+    challenge_key = _login_challenge_key(challenge, client)
+    with client.transaction():
+        entity = client.get(challenge_key)
+        if not entity or entity.get("used"):
+            return None
+        expires_at = entity.get("expires_at")
+        if (
+            not isinstance(expires_at, datetime.datetime)
+            or datetime.datetime.now(datetime.timezone.utc) > expires_at
+        ):
+            return None
+        email = entity.get("email", "")
+        dashboard = entity.get("dashboard", "")
+        entity["used"] = True
+        entity["used_at"] = datetime.datetime.now(datetime.timezone.utc)
+        client.put(entity)
+    return email, dashboard
 
 
 class ShieldOnException(Exception):
@@ -302,27 +353,10 @@ async def domain_alert(
                 # Still return success to avoid email enumeration
                 return DomainAlertResponse()
 
-        # Generate verification token and URL
-        verification_token = await generate_confirmation_token(user_email)
-        confirmation_url = f"{BASE_URL}/v1/domain-verify/{verification_token}"
+        login_challenge = create_login_challenge(user_email, dashboard or "")
+        confirmation_url = f"{BASE_URL}/v1/domain-verify/{login_challenge}"
         if dashboard == "my":
             confirmation_url += "?d=my"
-
-        # Store session data
-        try:
-            alert_task_data = datastore.Entity(
-                datastore_client.key("xon_domains_session", user_email)
-            )
-            alert_task_data.update(
-                {
-                    "magic_timestamp": datetime.datetime.now(),
-                    "domain_magic": verification_token,
-                    "dashboard": dashboard or "",
-                }
-            )
-            datastore_client.put(alert_task_data)
-        except Exception as e:
-            raise
 
         # Get client information
         client_ip = get_client_ip(request)
@@ -385,8 +419,15 @@ async def domain_verify(
                 status_code=404,
             )
 
-        user_email = await confirm_token(verification_token)
-        # Re-validate email from token for defense-in-depth
+        redeemed = consume_login_challenge(verification_token)
+        if redeemed is None:
+            return HTMLResponse(
+                content=templates.TemplateResponse(
+                    request, "domain_dashboard_error.html"
+                ).body.decode(),
+                status_code=404,
+            )
+        user_email, stored_dashboard = redeemed
         if not user_email or not validate_email_with_tld(user_email):
             return HTMLResponse(
                 content=templates.TemplateResponse(
@@ -395,35 +436,22 @@ async def domain_verify(
                 status_code=404,
             )
 
-        if ds_client.get(revoked_magic_token_key(verification_token, ds_client)):
-            return HTMLResponse(
-                content=templates.TemplateResponse(
-                    request, "domain_dashboard_error.html"
-                ).body.decode(),
-                status_code=404,
-            )
+        effective_dashboard = d or stored_dashboard
 
-        # Create session data
-        effective_dashboard = d
-        try:
-            client = ds_client
-            session_key = client.key("xon_domains_session", user_email)
-            existing_session = client.get(session_key)
-            stored_dashboard = (
-                existing_session.get("dashboard") if existing_session else None
-            )
-            effective_dashboard = d or stored_dashboard
-            alert_task_data = datastore.Entity(session_key)
-            alert_task_data.update(
-                {
-                    "magic_timestamp": datetime.datetime.now(),
-                    "domain_magic": verification_token,
-                    "dashboard": effective_dashboard or "",
-                }
-            )
-            client.put(alert_task_data)
-        except Exception as e:
-            raise
+        session_bearer = secrets.token_urlsafe(32)
+        now = datetime.datetime.now()
+        client = ds_client
+        session_key = client.key("xon_domains_session", user_email)
+        alert_task_data = datastore.Entity(session_key)
+        alert_task_data.update(
+            {
+                "magic_timestamp": now,
+                "created_at": now,
+                "domain_magic": session_bearer,
+                "dashboard": effective_dashboard or "",
+            }
+        )
+        client.put(alert_task_data)
 
         # Generate dashboard link with properly encoded parameters
         dashboard_page = (
@@ -433,7 +461,7 @@ async def domain_verify(
         )
         dashboard_link = build_safe_url(
             dashboard_page,
-            {"email": user_email, "token": verification_token},
+            {"email": user_email, "token": session_bearer},
         )
 
         return HTMLResponse(
@@ -1491,11 +1519,11 @@ async def dashboard_sign_out(
     Sign out of the dashboard by revoking the active session.
 
     Deletes the xon_domains_session entity for the email after the provided
-    token matches the stored session, invalidating the session across all
-    dashboard routes. The magic-link token is also recorded as revoked so
-    replaying it at /v1/domain-verify cannot recreate the session. Signing
-    out when no session exists returns the same success response so the
-    call stays idempotent.
+    bearer matches the stored session, invalidating the session across all
+    dashboard routes. The session bearer is a random per-login value distinct
+    from the single-use login challenge, so deleting it fully revokes access
+    and no replay can recreate it. Signing out when no session exists returns
+    the same success response so the call stays idempotent.
 
     Args:
         request: FastAPI request object
@@ -1547,17 +1575,6 @@ async def dashboard_sign_out(
                 status_code=401,
                 detail=DashboardSignOutErrorResponse(Error="Invalid session").dict(),
             )
-
-        revoked = datastore.Entity(revoked_magic_token_key(token, client))
-        now = datetime.datetime.now(datetime.timezone.utc)
-        revoked.update(
-            {
-                "email": email,
-                "revoked_at": now,
-                "expires_at": now + timedelta(hours=MAGIC_TOKEN_REVOCATION_TTL_HOURS),
-            }
-        )
-        client.put(revoked)
 
         client.delete(session_key)
 
