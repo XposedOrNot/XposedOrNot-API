@@ -104,6 +104,16 @@ def hash_email(email: str) -> str:
     return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 
+MAGIC_TOKEN_REVOCATION_TTL_HOURS = 24
+
+
+def revoked_magic_token_key(token: str, datastore_client):
+    """Return the datastore key for a revoked dashboard magic-link token."""
+    return datastore_client.key(
+        "xon_revoked_magic_tokens", hashlib.sha256(token.encode("utf-8")).hexdigest()
+    )
+
+
 class ShieldOnException(Exception):
     """Exception raised when shield is on."""
 
@@ -377,6 +387,14 @@ async def domain_verify(
         user_email = await confirm_token(verification_token)
         # Re-validate email from token for defense-in-depth
         if not user_email or not validate_email_with_tld(user_email):
+            return HTMLResponse(
+                content=templates.TemplateResponse(
+                    request, "domain_dashboard_error.html"
+                ).body.decode(),
+                status_code=404,
+            )
+
+        if ds_client.get(revoked_magic_token_key(verification_token, ds_client)):
             return HTMLResponse(
                 content=templates.TemplateResponse(
                     request, "domain_dashboard_error.html"
@@ -1474,8 +1492,10 @@ async def dashboard_sign_out(
 
     Deletes the xon_domains_session entity for the email after the provided
     token matches the stored session, invalidating the session across all
-    dashboard routes. Signing out when no session exists returns the same
-    success response so the call stays idempotent.
+    dashboard routes. The magic-link token is also recorded as revoked so
+    replaying it at /v1/domain-verify cannot recreate the session. Signing
+    out when no session exists returns the same success response so the
+    call stays idempotent.
 
     Args:
         request: FastAPI request object
@@ -1527,6 +1547,17 @@ async def dashboard_sign_out(
                 status_code=401,
                 detail=DashboardSignOutErrorResponse(Error="Invalid session").dict(),
             )
+
+        revoked = datastore.Entity(revoked_magic_token_key(token, client))
+        now = datetime.datetime.now(datetime.timezone.utc)
+        revoked.update(
+            {
+                "email": email,
+                "revoked_at": now,
+                "expires_at": now + timedelta(hours=MAGIC_TOKEN_REVOCATION_TTL_HOURS),
+            }
+        )
+        client.put(revoked)
 
         client.delete(session_key)
 
