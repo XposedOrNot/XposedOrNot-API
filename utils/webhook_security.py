@@ -174,45 +174,51 @@ RESERVED_HEADER_PREFIX = "x-xon-"
 _HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 
 
-def is_safe_public_url(url: str) -> Tuple[bool, str]:
+def resolve_safe_public_url(url: str) -> Tuple[bool, str, Optional[Dict[str, object]]]:
     """
-    SSRF guard: ensure a URL is HTTPS and resolves only to public addresses.
+    SSRF guard that also returns a connection-bound target to pin to.
 
-    Resolves the host and rejects loopback / private / link-local / reserved /
-    multicast / unspecified addresses (incl. the cloud metadata IP). Re-run this
-    on every outbound attempt to mitigate DNS-rebinding.
+    Resolves the host and rejects the whole URL if ANY resolved address is
+    loopback / private / link-local / reserved / multicast / unspecified
+    (incl. the cloud metadata IP). On success it returns the exact public IP
+    the caller must connect to, so the address that was validated is the same
+    address the connection uses — closing the DNS-rebinding window between
+    validation and connect. Re-run on every outbound attempt.
 
     Returns:
-        Tuple[bool, str]: (is_safe, reason_if_not_safe)
+        Tuple[bool, str, Optional[Dict]]: (is_safe, reason_if_not_safe, target).
+        target, when safe, is {"ip": str, "host": str, "port": int}.
     """
     try:
         parsed = urlparse(url)
     except Exception:
-        return False, "Malformed webhook URL"
+        return False, "Malformed webhook URL", None
 
     if parsed.scheme != "https":
-        return False, "Webhook URL must use HTTPS"
+        return False, "Webhook URL must use HTTPS", None
 
     host = parsed.hostname
     if not host:
-        return False, "Webhook URL must include a valid host"
+        return False, "Webhook URL must include a valid host", None
+
+    port = parsed.port or 443
 
     try:
-        addrinfos = socket.getaddrinfo(
-            host, parsed.port or 443, proto=socket.IPPROTO_TCP
-        )
+        addrinfos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
     except Exception:
-        return False, "Webhook host could not be resolved"
+        return False, "Webhook host could not be resolved", None
 
     if not addrinfos:
-        return False, "Webhook host could not be resolved"
+        return False, "Webhook host could not be resolved", None
 
+    ipv4_safe = []
+    ipv6_safe = []
     for info in addrinfos:
         ip_str = info[4][0]
         try:
-            ip = ipaddress.ip_address(ip_str)
+            ip = ipaddress.ip_address(ip_str.split("%")[0])
         except ValueError:
-            return False, "Webhook host resolved to an invalid address"
+            return False, "Webhook host resolved to an invalid address", None
 
         if (
             ip.is_private
@@ -222,9 +228,33 @@ def is_safe_public_url(url: str) -> Tuple[bool, str]:
             or ip.is_reserved
             or ip.is_unspecified
         ):
-            return False, "Webhook URL resolves to a disallowed (internal) address"
+            return (
+                False,
+                "Webhook URL resolves to a disallowed (internal) address",
+                None,
+            )
 
-    return True, ""
+        if ip.version == 4:
+            ipv4_safe.append(str(ip))
+        else:
+            ipv6_safe.append(str(ip))
+
+    pinned_ip = (ipv4_safe or ipv6_safe)[0]
+    return True, "", {"ip": pinned_ip, "host": host, "port": port}
+
+
+def is_safe_public_url(url: str) -> Tuple[bool, str]:
+    """
+    SSRF guard: ensure a URL is HTTPS and resolves only to public addresses.
+
+    Thin wrapper over :func:`resolve_safe_public_url` for callers that only
+    need the pass/fail verdict and not the connection-bound target.
+
+    Returns:
+        Tuple[bool, str]: (is_safe, reason_if_not_safe)
+    """
+    safe, reason, _ = resolve_safe_public_url(url)
+    return safe, reason
 
 
 def validate_generic_webhook_url(webhook_url: str) -> Tuple[bool, str]:

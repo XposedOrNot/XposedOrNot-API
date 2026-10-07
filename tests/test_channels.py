@@ -16,6 +16,7 @@ import time
 import types
 from collections import namedtuple
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -212,19 +213,25 @@ class FakeAsyncClient:
             raise outcome
         return outcome
 
-    def stream(self, method, url, content=None, headers=None, timeout=None):
+    def stream(
+        self, method, url, content=None, headers=None, timeout=None, extensions=None
+    ):
+        hdrs = headers or {}
         self.posts.append(
             {
                 "method": method,
                 "url": url,
                 "json": None,
                 "content": content,
-                "headers": headers or {},
+                "headers": hdrs,
                 "timeout": timeout,
+                "extensions": extensions or {},
             }
         )
+        host = hdrs.get("Host")
+        lookup = f"https://{host}{urlparse(url).path}" if host else url
         return FakeStreamContext(
-            self._scripted_outcome(url), enter_delay=self.stream_delay
+            self._scripted_outcome(lookup), enter_delay=self.stream_delay
         )
 
 
@@ -561,7 +568,11 @@ def test_webhook_setup_new_channel_signs_ping_and_returns_secret_once(env):
 
     assert len(env.http.posts) == 1
     post = env.http.posts[0]
-    assert post["url"] == HOOK_URL
+    # Delivery is pinned to the validated public IP, with the original host
+    # kept for TLS/SNI and the Host header (anti DNS-rebinding).
+    assert post["url"] == "https://93.184.216.34:443/xon"
+    assert post["headers"]["Host"] == "hooks.example.org"
+    assert post["extensions"]["sni_hostname"] == "hooks.example.org"
     body = json.loads(post["content"])
     assert body["event"] == "verification" and body["service"] == "XposedOrNot"
     assert post["headers"]["Authorization"] == "Bearer abc"
@@ -678,6 +689,35 @@ def test_webhook_429_respects_capped_retry_after_then_succeeds(env):
     assert len(env.http.posts) == 2
 
 
+def test_webhook_connection_is_pinned_to_validated_ip(env):
+    """Delivery connects to the vetted IP literal with host kept for TLS/SNI."""
+    run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
+    post = env.http.posts[0]
+    assert post["url"] == "https://93.184.216.34:443/xon"
+    assert post["headers"]["Host"] == "hooks.example.org"
+    assert post["extensions"]["sni_hostname"] == "hooks.example.org"
+
+
+def test_webhook_dns_rebinding_between_check_and_connect_is_blocked(env, monkeypatch):
+    """A host that resolves public at validation but private at connect is refused.
+
+    The pinned-IP design means validation returns the public IP and the
+    connection uses that same IP, so a later private answer never reaches a
+    socket. Here the host resolves to a private address at validation time,
+    which must reject delivery outright.
+    """
+
+    def private_now(host, port, proto=None):  # noqa: ARG001
+        return [(2, 1, 6, "", ("10.0.0.5", port))]
+
+    monkeypatch.setattr(webhook_security.socket, "getaddrinfo", private_now)
+    with pytest.raises(HTTPException) as exc:
+        run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
+    assert exc.value.status_code == 400
+    assert "disallowed" in str(exc.value.detail)
+    assert env.http.posts == []
+
+
 def test_webhook_verify_update_in_place_url_change_and_rotate(env):
     _, secret = run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
     code = code_from_webhook_post(env.http.posts[0])
@@ -731,7 +771,8 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
     assert entity["verified"] is False and entity["active"] is False
     assert webhook_security.decrypt_webhook(entity["signing_secret"]) == secret
     assert webhook_security.decrypt_webhook(entity["webhook"]) == new_url
-    assert env.http.posts[-1]["url"] == new_url
+    assert env.http.posts[-1]["url"] == "https://93.184.216.34:443/xon"
+    assert env.http.posts[-1]["headers"]["Host"] == "hooks2.example.org"
     # headers omitted on this call => preserved
     assert json.loads(webhook_security.decrypt_webhook(entity["custom_headers"])) == {
         "X-Team": "blue"
@@ -847,7 +888,8 @@ def test_alerts_for_multiple_domains_share_one_channel(env):
         payload = {"event": "breach_alert", "domain": domain}
         assert run(webhook.send_webhook_alert(domain, OWNER, payload)) is True
     assert len(env.http.posts) == 2
-    assert {p["url"] for p in env.http.posts} == {HOOK_URL}
+    assert {p["url"] for p in env.http.posts} == {"https://93.184.216.34:443/xon"}
+    assert {p["headers"]["Host"] for p in env.http.posts} == {"hooks.example.org"}
     for post in env.http.posts:
         _assert_signed(post, secret, "breach_alert")
     assert [json.loads(p["content"])["domain"] for p in env.http.posts] == [

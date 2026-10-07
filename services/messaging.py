@@ -16,6 +16,7 @@ import string
 import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from fastapi import HTTPException
@@ -27,7 +28,7 @@ from utils.http_client import shared_http_client
 from utils.webhook_security import (
     decrypt_webhook,
     encrypt_webhook,
-    is_safe_public_url,
+    resolve_safe_public_url,
     validate_custom_headers,
     validate_generic_webhook_url,
     validate_slack_webhook_url,
@@ -438,16 +439,47 @@ def generate_signing_secret() -> str:
     return secrets.token_hex(32)
 
 
+def _pin_url_to_ip(webhook_url: str, target: Dict[str, object]) -> Tuple[str, str]:
+    """
+    Rewrite a webhook URL to connect to the validated IP while preserving the
+    original hostname for TLS/SNI and virtual-host routing.
+
+    Returns:
+        Tuple[str, str]: (connection_url_with_ip_literal, host_header_value).
+    """
+    ip = str(target["ip"])
+    host = str(target["host"])
+    port = int(target["port"])
+    literal = f"[{ip}]" if ":" in ip else ip
+    parsed = urlparse(webhook_url)
+    connection_url = urlunparse(parsed._replace(netloc=f"{literal}:{port}"))
+    host_header = host if port == 443 else f"{host}:{port}"
+    return connection_url, host_header
+
+
 async def _post_webhook_once(
     webhook_url: str,
+    target: Dict[str, object],
     body_bytes: bytes,
     headers: Dict[str, str],
     timeout: httpx.Timeout,
 ) -> Tuple[int, Optional[str]]:
-    """POST the payload and return (status, Retry-After) without reading the body."""
+    """POST the payload to the pinned IP and return (status, Retry-After).
+
+    Connects to the pre-validated IP literal with the original hostname kept
+    for SNI/Host, and never reads the response body.
+    """
+    connection_url, host_header = _pin_url_to_ip(webhook_url, target)
+    request_headers = dict(headers)
+    request_headers["Host"] = host_header
     async with shared_http_client() as client:
         async with client.stream(
-            "POST", webhook_url, content=body_bytes, headers=headers, timeout=timeout
+            "POST",
+            connection_url,
+            content=body_bytes,
+            headers=request_headers,
+            timeout=timeout,
+            extensions={"sni_hostname": str(target["host"])},
         ) as response:
             return response.status_code, response.headers.get("Retry-After")
 
@@ -476,7 +508,9 @@ async def deliver_signed_webhook(
     Deliver a signed JSON payload to an owner webhook with a bounded,
     transient-only retry policy.
 
-    - HTTPS + SSRF re-check on every attempt (anti DNS-rebinding).
+    - HTTPS + SSRF re-check on every attempt, pinning the connection to the
+      validated public IP (original hostname kept for TLS/SNI) so the address
+      checked is the address connected to (anti DNS-rebinding).
     - Redirects disabled (a 30x to an internal address is an SSRF bypass).
     - Retries only connection errors / timeouts / 5xx / 429 (respecting a capped
       Retry-After); never retries other 4xx (permanent client errors).
@@ -494,8 +528,10 @@ async def deliver_signed_webhook(
     last_error = "unknown error"
 
     for attempt in range(1, WEBHOOK_MAX_ATTEMPTS + 1):
-        safe, reason = await asyncio.to_thread(is_safe_public_url, webhook_url)
-        if not safe:
+        safe, reason, target = await asyncio.to_thread(
+            resolve_safe_public_url, webhook_url
+        )
+        if not safe or target is None:
             raise HTTPException(
                 status_code=400, detail=f"Webhook URL rejected: {reason}"
             )
@@ -515,7 +551,7 @@ async def deliver_signed_webhook(
         retry_after: Optional[float] = None
         try:
             status_code, retry_after_header = await asyncio.wait_for(
-                _post_webhook_once(webhook_url, body_bytes, headers, timeout),
+                _post_webhook_once(webhook_url, target, body_bytes, headers, timeout),
                 timeout=WEBHOOK_ATTEMPT_DEADLINE,
             )
 
