@@ -1,4 +1,4 @@
-cryptography>=50.0.1
+cryptography>=50.0.2
 dnspython>=2.8.0
 dnstwist
 domcheck
