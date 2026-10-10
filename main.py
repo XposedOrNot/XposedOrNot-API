@@ -259,7 +259,7 @@ _MCP_TOOLS = [
 # Light rate limit for cheap MCP envelope methods (initialize / tools/list),
 # keyed on the real caller IP. tools/call is throttled by the underlying
 # route's own @custom_rate_limiter when called in-process.
-_MCP_ENVELOPE_LIMIT = parse_rate_limit("2 per second;25 per hour;100 per day")
+_MCP_ENVELOPE_LIMIT = parse_rate_limit("5 per second;150 per hour;500 per day")
 
 
 def _validate_mcp_email(request_id, email):
