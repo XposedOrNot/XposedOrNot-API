@@ -140,7 +140,7 @@ async def _create_access_rule(
             response = await client.post(url, headers=headers, json=payload, timeout=20)
 
             if response.status_code in [200, 201]:
-                await update_cf_trans(response.content, block_seconds)
+                await update_cf_trans(response.text, block_seconds)
                 return CloudflareResponse(
                     status="success",
                     message=success_message,
