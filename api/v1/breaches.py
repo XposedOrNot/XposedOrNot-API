@@ -176,7 +176,11 @@ async def get_xposed_breaches(
         for entity in entities:
 
             exposed_data = (
-                entity.get("xposed_data", "").split(";")
+                [
+                    part.strip()
+                    for part in entity.get("xposed_data", "").split(";")
+                    if part.strip()
+                ]
                 if entity.get("xposed_data")
                 else []
             )
@@ -571,7 +575,11 @@ async def search_email(
                                 ),
                             },
                             "exposed_data": (
-                                breach["xposed_data"].split(";")
+                                [
+                                    part.strip()
+                                    for part in breach["xposed_data"].split(";")
+                                    if part.strip()
+                                ]
                                 if breach["xposed_data"]
                                 else []
                             ),

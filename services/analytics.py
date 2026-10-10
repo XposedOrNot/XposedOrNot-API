@@ -89,6 +89,7 @@ data_categories = {
         "category": "🎓 Employment and Education",
         "group": "E",
     },
+    "Academic records": {"category": "🎓 Employment and Education", "group": "E"},
     "Email addresses": {
         "category": "📞 Communication and Social Interactions",
         "group": "F",
@@ -167,7 +168,7 @@ data_categories = {
     "Smoking Habits": {"category": "🩺 Health Information", "group": "H"},
     "Sexual Fetishes": {"category": "🩺 Health Information", "group": "H"},
     "Sleep Patterns": {"category": "🩺 Health Information", "group": "H"},
-    "Ages": {"category": "Demographics", "group": "I"},
+    "Ages": {"category": "👥 Demographics", "group": "I"},
     "Dates of birth": {"category": "👥 Demographics", "group": "I"},
     "Physical addresses": {"category": "👥 Demographics", "group": "I"},
     "Geographic locations": {"category": "👥 Demographics", "group": "I"},
@@ -241,6 +242,10 @@ DATA_TYPE_ALIASES = {
     "Financial transactions": "Financial Transactions",
     "AI prompts": "AI Prompts",
     "Partial government issued IDs": "Partial Government Issued IDs",
+    "Nationality": "Nationalities",
+    "Browser user agents": "Browser user agent details",
+    "Vehicle registration numbers": "Licence Plates",
+    "Titles": "Job titles",
 }
 
 # Known compound entries that need special splitting
@@ -327,6 +332,7 @@ _MEDIUM_TYPES = {
     "Purchases",
     "Support Tickets",
     "AI Prompts",
+    "Academic records",
 }
 
 # Points per tier
