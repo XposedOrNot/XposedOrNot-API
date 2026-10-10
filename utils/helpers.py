@@ -124,4 +124,4 @@ def get_client_info(request: Request) -> Dict[str, str]:
 
 def string_to_boolean(value: str) -> bool:
     """Convert a string to a boolean value."""
-    return value.lower() in ("true", "t", "yes", "y", "1")
+    return value.strip().lower() in ("true", "t", "yes", "y", "1")

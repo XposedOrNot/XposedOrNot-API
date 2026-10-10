@@ -699,7 +699,8 @@ async def send_domain_breaches(
                     elif isinstance(searchable, str):
                         searchable = (
                             "Yes"
-                            if searchable.lower() in ("true", "t", "yes", "y", "1")
+                            if searchable.strip().lower()
+                            in ("true", "t", "yes", "y", "1")
                             else "No"
                         )
 

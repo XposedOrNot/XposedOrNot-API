@@ -461,7 +461,7 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                 elif isinstance(searchable, str):
                     searchable = (
                         "Yes"
-                        if searchable.lower() in ("true", "t", "yes", "y", "1")
+                        if searchable.strip().lower() in ("true", "t", "yes", "y", "1")
                         else "No"
                     )
 
@@ -472,7 +472,7 @@ def get_breaches(breaches: str) -> Dict[str, List[Dict[str, Any]]]:
                 elif isinstance(verified, str):
                     verified = (
                         "Yes"
-                        if verified.lower() in ("true", "t", "yes", "y", "1")
+                        if verified.strip().lower() in ("true", "t", "yes", "y", "1")
                         else "No"
                     )
 

@@ -563,8 +563,12 @@ async def search_email(
                             },
                             "security": {
                                 "password_risk": breach["password_risk"],
-                                "is_searchable": breach["searchable"] == "Yes",
-                                "is_verified": breach["verified"] == "Yes",
+                                "is_searchable": string_to_boolean(
+                                    str(breach["searchable"])
+                                ),
+                                "is_verified": string_to_boolean(
+                                    str(breach["verified"])
+                                ),
                             },
                             "exposed_data": (
                                 breach["xposed_data"].split(";")
