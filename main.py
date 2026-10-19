@@ -3,9 +3,11 @@
 # Third-party imports
 import asyncio
 import json
+import logging
 import os
 import time
 from datetime import datetime
+from functools import lru_cache
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
@@ -63,9 +65,11 @@ from models.responses import AlertResponse
 
 # Local imports - Utils
 from utils.custom_limiter import (
+    MCP_LIMIT_SCOPE_KEY,
     custom_rate_limiter,
     get_healthy_redis_connection,
     is_rate_limited,
+    mcp_limit_scope,
     parse_rate_limit,
     redis_pool,
 )
@@ -257,9 +261,66 @@ _MCP_TOOLS = [
 ]
 
 # Light rate limit for cheap MCP envelope methods (initialize / tools/list),
-# keyed on the real caller IP. tools/call is throttled by the underlying
-# route's own @custom_rate_limiter when called in-process.
-_MCP_ENVELOPE_LIMIT = parse_rate_limit("5 per second;150 per hour;500 per day")
+# keyed on the real caller IP. These serve static JSON, so the limit exists
+# only as flood protection.
+_MCP_ENVELOPE_LIMIT = parse_rate_limit("20 per second;2000 per hour;20000 per day")
+
+# Per-tool MCP limits. Hosted MCP clients reach us from a shared provider
+# egress IP, so these per-IP budgets are pooled across many end users; agents
+# also fan tool calls out in parallel, which is why the per-second allowance is
+# well above the REST equivalent. The cached tools are served from Redis and
+# cost effectively nothing; domain_breach_summary stays tightest because a
+# cache miss scans up to 10k Datastore rows.
+#
+# None means "keep the underlying REST route's own limits and counter": the
+# two email-keyed tools are deliberately not raised, so MCP cannot become a
+# cheaper bulk-enumeration path for email lookups than the REST API.
+_MCP_TOOL_LIMITS = {
+    "check_email_breaches": None,
+    "get_breach_analytics": None,
+    "list_breaches": "20 per second;1200 per hour;10000 per day",
+    "domain_breach_summary": "10 per second;100 per hour;300 per day",
+    "get_breach_metrics": "20 per second;1200 per hour;10000 per day",
+    "get_recent_breaches": "20 per second;1200 per hour;10000 per day",
+}
+
+# Route endpoint backing each tool that shares a REST counter.
+_MCP_SHARED_REST_ROUTE = {
+    "check_email_breaches": "search_email",
+    "get_breach_analytics": "search_data_breaches",
+}
+
+
+@lru_cache(maxsize=1)
+def _mcp_tool_scopes():
+    """Build the per-tool limiter scope markers, resolving shared REST paths.
+
+    Resolved lazily because the routers are mounted after this module body
+    runs. A tool that shares a REST counter falls back to its own MCP counter
+    if the route cannot be found, so a renamed endpoint degrades loudly
+    instead of silently lifting the limit.
+    """
+    paths = {}
+    for route in app.routes:
+        endpoint = getattr(route, "endpoint", None)
+        if endpoint is not None:
+            paths[endpoint.__name__] = getattr(route, "path", None)
+
+    scopes = {}
+    for tool, limit_str in _MCP_TOOL_LIMITS.items():
+        route_path = None
+        if limit_str is None:
+            endpoint_name = _MCP_SHARED_REST_ROUTE[tool]
+            route_path = paths.get(endpoint_name)
+            if route_path is None:
+                logging.getLogger(__name__).error(
+                    "MCP tool %s cannot resolve REST route %s; falling back to "
+                    "a tool-local counter",
+                    tool,
+                    endpoint_name,
+                )
+        scopes[tool] = mcp_limit_scope(tool, limit_str, route_path)
+    return scopes
 
 
 def _validate_mcp_email(request_id, email):
@@ -334,9 +395,11 @@ async def _run_mcp_tool(request_id, coro, label, transform=None):
     Run an in-process route coroutine and wrap it as a JSON-RPC response.
 
     The route's own @custom_rate_limiter executes here, keyed on the real
-    caller's IP (from the original /mcp request), so MCP traffic is throttled
-    per-client using each route's configured limits. "Not found" (404) is
-    returned as a normal result; 429 and other failures become JSON-RPC errors.
+    caller's IP (from the original /mcp request). The scope marker stamped by
+    the handler gives each tool its own counter and applies the MCP limits
+    from _MCP_TOOL_LIMITS, except for the email-keyed tools, which keep the
+    underlying route's REST limits and counter. "Not found" (404) is returned
+    as a normal result; 429 and other failures become JSON-RPC errors.
     """
     try:
         data = _normalize_route_result(await coro)
@@ -458,6 +521,11 @@ async def mcp_post_handler(fastapi_request: Request):
         params = request_body.get("params", {}) or {}
         tool_name = params.get("name")
         tool_args = params.get("arguments", {}) or {}
+
+        if isinstance(tool_name, str):
+            tool_scope = _mcp_tool_scopes().get(tool_name)
+            if tool_scope is not None:
+                fastapi_request.scope[MCP_LIMIT_SCOPE_KEY] = tool_scope
 
         if tool_name == "check_email_breaches":
             email = tool_args.get("email")

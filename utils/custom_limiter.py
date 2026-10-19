@@ -256,6 +256,26 @@ async def increment_violation(client_ip: str, redis_conn: redis.Redis = None):
         _log_redis_failure("increment_violation", e)
 
 
+async def record_mcp_violation(client_ip: str, redis_conn: redis.Redis = None):
+    """Record an MCP rate-limit rejection without triggering the IP penalty.
+
+    MCP throttling is deliberately kept out of ``violations:{ip}`` so it
+    cannot degrade unrelated REST traffic, but the rejections are still
+    counted here so MCP abuse stays observable.
+    """
+    if redis_conn is None:
+        redis_conn = await get_healthy_redis_connection()
+
+    now = time.time()
+    try:
+        async with redis_conn.pipeline(transaction=True) as pipe:
+            pipe.zadd(f"mcp-violations:{client_ip}", {str(now): now})
+            pipe.expire(f"mcp-violations:{client_ip}", 7200)
+            await pipe.execute()
+    except Exception as e:
+        _log_redis_failure("record_mcp_violation", e)
+
+
 def get_drop_percentage(violation_count: int) -> float:
     """
     Determine the percentage of requests to drop based on violation count.
@@ -302,6 +322,32 @@ async def _discard_window_member(
 
 
 _BOT_FP_LIMITS = parse_rate_limit("5 per minute;100 per day")
+
+# MCP tool calls reach the REST routes in-process, carrying the original /mcp
+# Request. The handler stamps this scope key so the limiter can tell MCP
+# traffic apart: MCP gets its own per-tool counter and is kept out of the
+# per-IP violation/drop penalty and the Cloudflare day-block escalation, both
+# of which are keyed on IP alone and would otherwise let MCP throttling
+# degrade unrelated REST traffic from the same address.
+MCP_LIMIT_SCOPE_KEY = "xon_mcp_limit"
+
+
+def mcp_limit_scope(
+    tool_name: str, rate_limit_str: Optional[str], route_path: Optional[str] = None
+) -> dict:
+    """Build the scope marker for an in-process MCP tool call.
+
+    ``rate_limit_str`` of None keeps the underlying route's own limits and
+    makes the call share that route's REST counter at ``route_path``, used for
+    the email-keyed tools so MCP cannot become a cheaper bulk-enumeration path
+    than the REST API.
+    """
+    return {
+        "tool": tool_name,
+        "limits": parse_rate_limit(rate_limit_str) if rate_limit_str else None,
+        "route_path": route_path,
+    }
+
 
 CF_ESCALATION_ENDPOINTS = {
     "/v1/check-email/{email}",
@@ -422,6 +468,15 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                 if request.scope.get("route")
                 else request.url.path
             )
+
+            mcp_scope = request.scope.get(MCP_LIMIT_SCOPE_KEY)
+            effective_limits = rate_limits
+            if mcp_scope:
+                if mcp_scope["limits"] is not None:
+                    effective_limits = mcp_scope["limits"]
+                    endpoint = f"/mcp:{mcp_scope['tool']}"
+                else:
+                    endpoint = mcp_scope["route_path"] or f"/mcp:{mcp_scope['tool']}"
             key = f"rate-limit:{endpoint}:{client_ip}"
 
             redis_conn = await get_healthy_redis_connection()
@@ -438,7 +493,9 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
             member = str(now)
             violation_key = f"violations:{client_ip}"
             max_period = (
-                max(limit[1] for limit in rate_limits) if rate_limits else 86400
+                max(limit[1] for limit in effective_limits)
+                if effective_limits
+                else 86400
             )
 
             violation_count = 0
@@ -461,7 +518,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         pipe.zcard(violation_key)
                         pipe.zadd(key, {member: now})
                         pipe.zremrangebyscore(key, 0, now - max_period)
-                        for _, period in rate_limits:
+                        for _, period in effective_limits:
                             pipe.zcount(key, now - period, now)
                         pipe.expire(key, int(max_period))
                         results = await pipe.execute()
@@ -472,7 +529,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         bot_counts = list(results[2 : 2 + len(_BOT_FP_LIMITS)])
                     violation_count = results[base + 1]
                     request_counts = list(
-                        results[base + 4 : base + 4 + len(rate_limits)]
+                        results[base + 4 : base + 4 + len(effective_limits)]
                     )
                 except Exception as e:
                     if LIMITER_DEGRADED_ENABLED:
@@ -482,7 +539,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         _log_redis_failure("custom_rate_limiter", e)
 
             if degraded:
-                limited, retry_after = _fallback_is_limited(key, rate_limits, now)
+                limited, retry_after = _fallback_is_limited(key, effective_limits, now)
                 if limited:
                     reset_time = datetime.now() + timedelta(seconds=retry_after)
                     error_detail = {
@@ -532,8 +589,11 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                 )
                 if bot_limited:
                     await _discard_window_member(redis_conn, key, member)
-                    await increment_violation(client_ip, redis_conn)
-                    if endpoint in CF_ESCALATION_ENDPOINTS:
+                    if mcp_scope:
+                        await record_mcp_violation(client_ip, redis_conn)
+                    else:
+                        await increment_violation(client_ip, redis_conn)
+                    if not mcp_scope and endpoint in CF_ESCALATION_ENDPOINTS:
                         escalated = await escalate_day_limit_abuse(
                             client_ip, endpoint, redis_conn
                         )
@@ -562,7 +622,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         headers={"Retry-After": str(bot_retry)},
                     )
 
-            drop_percentage = get_drop_percentage(violation_count)
+            drop_percentage = 0.0 if mcp_scope else get_drop_percentage(violation_count)
 
             if random.random() < drop_percentage:
                 await _discard_window_member(redis_conn, key, member)
@@ -586,7 +646,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                 )
 
             limited, retry_after = False, 0
-            for i, (limit, period) in enumerate(rate_limits):
+            for i, (limit, period) in enumerate(effective_limits):
                 if request_counts and request_counts[i] > limit:
                     retry = await _oldest_retry_after(
                         redis_conn, key, request_counts[i], period, now
@@ -595,9 +655,12 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         limited, retry_after = True, retry
                     break
             if limited:
-                await increment_violation(client_ip, redis_conn)
+                if mcp_scope:
+                    await record_mcp_violation(client_ip, redis_conn)
+                else:
+                    await increment_violation(client_ip, redis_conn)
 
-                if endpoint in CF_ESCALATION_ENDPOINTS:
+                if not mcp_scope and endpoint in CF_ESCALATION_ENDPOINTS:
                     escalated = await escalate_day_limit_abuse(
                         client_ip, endpoint, redis_conn
                     )
