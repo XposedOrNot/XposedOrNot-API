@@ -3,7 +3,7 @@ dnspython>=2.9.0
 dnstwist
 domcheck
 email-validator
-fastapi>=0.143.3
+fastapi>=0.146.0
 feedgen>=1.0.0
 google-cloud-datastore
 google-cloud-pubsub
