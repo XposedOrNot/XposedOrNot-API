@@ -135,7 +135,10 @@ def extract_live_domains(results: List[Dict[str, Any]]) -> List[str]:
 def get_cached_result(domain: str) -> Optional[Dict]:
     """Retrieve cached phishing check results from Redis."""
     cache_key = f"phishing_check:{domain}"
-    cached_data = redis_client.get(cache_key)
+    try:
+        cached_data = redis_client.get(cache_key)
+    except Exception:
+        return None
     if cached_data:
         try:
             return json.loads(cached_data)
@@ -149,7 +152,10 @@ def cache_result(domain: str, result: Dict, expiry_hours: int = 24) -> None:
     cache_key = f"phishing_check:{domain}"
     if isinstance(result.get("last_checked"), datetime):
         result["last_checked"] = result["last_checked"].isoformat()
-    redis_client.setex(cache_key, timedelta(hours=expiry_hours), json.dumps(result))
+    try:
+        redis_client.setex(cache_key, timedelta(hours=expiry_hours), json.dumps(result))
+    except Exception:
+        pass
 
 
 async def verify_user_access(email: str, token: str) -> bool:
