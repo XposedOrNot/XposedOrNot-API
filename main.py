@@ -371,6 +371,17 @@ def _mcp_error(request_id, code, message, data=None):
     return {"jsonrpc": "2.0", "id": request_id, "error": err}
 
 
+def _mcp_object_param(value):
+    """Coerce an absent/null params or arguments container to an empty object.
+
+    Returns the object when valid (or absent/null), or None to signal a
+    malformed non-object container the caller must reject.
+    """
+    if value is None:
+        return {}
+    return value if isinstance(value, dict) else None
+
+
 def _normalize_route_result(result):
     """Convert an in-process route return value into a JSON-serializable object."""
     if isinstance(result, BaseModel):
@@ -515,7 +526,9 @@ async def mcp_post_handler(fastapi_request: Request):
 
     if method in ("initialize", "tools/list"):
         if method == "initialize":
-            init_params = request_body.get("params", {}) or {}
+            init_params = _mcp_object_param(request_body.get("params"))
+            if init_params is None:
+                return _mcp_error(req_id, -32602, "Invalid params: expected an object")
             requested_version = init_params.get("protocolVersion")
             protocol_version = (
                 requested_version
@@ -542,9 +555,13 @@ async def mcp_post_handler(fastapi_request: Request):
         }
 
     if method == "tools/call":
-        params = request_body.get("params", {}) or {}
+        params = _mcp_object_param(request_body.get("params"))
+        if params is None:
+            return _mcp_error(req_id, -32602, "Invalid params: expected an object")
         tool_name = params.get("name")
-        tool_args = params.get("arguments", {}) or {}
+        tool_args = _mcp_object_param(params.get("arguments"))
+        if tool_args is None:
+            return _mcp_error(req_id, -32602, "Invalid arguments: expected an object")
 
         if isinstance(tool_name, str):
             tool_scope = _mcp_tool_scopes().get(tool_name)
