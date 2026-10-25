@@ -102,7 +102,7 @@ async def get_pulse_data(request: Request):
             request_params="None",
         )
         return PulseNewsResponse(
-            status="error", message="Failed to fetch news feed", status_code=404
+            status="error", message="Failed to fetch news feed", data=[]
         )
 
 
