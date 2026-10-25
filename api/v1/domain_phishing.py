@@ -9,12 +9,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import EmailStr
 
 from config.clients import ds_client, redis_client
 from models.responses import BaseResponse
 from services.send_email import send_exception_email
 from utils.custom_limiter import custom_rate_limiter
+from utils.helpers import validate_domain
 from utils.token import confirm_token
 
 router = APIRouter()
@@ -56,23 +57,6 @@ try:
     validate_file_content(TLD_FILE, min_lines=5)
 except Exception as e:
     raise
-
-
-class DomainPhishingRequest(BaseModel):
-    """Request model for domain phishing check."""
-
-    domain: str = Field(..., description="Domain to check for phishing variants")
-
-    @validator("domain")
-    def validate_domain(cls, v: str) -> str:
-        """Validate the domain format and length."""
-        if not v or not isinstance(v, str):
-            raise ValueError("Domain must be a non-empty string")
-        if len(v) > 255:
-            raise ValueError("Domain length exceeds maximum allowed length")
-        if "." not in v:
-            raise ValueError("Invalid domain format")
-        return v.lower().strip()
 
 
 class DomainPhishingSummaryResponse(BaseResponse):
@@ -228,8 +212,9 @@ async def check_domain_phishing(
     Returns summary for unauthenticated users, detailed results for authenticated users.
     """
     try:
-        domain_request = DomainPhishingRequest(domain=domain)
-        domain = domain_request.domain
+        domain = domain.lower().strip()
+        if len(domain) > 255 or not validate_domain(domain):
+            raise HTTPException(status_code=400, detail="Invalid domain")
         is_authenticated = False
         if email and token:
             is_authenticated = await verify_user_access(email, token)
