@@ -145,6 +145,10 @@ class DomainBreachDetail(BaseModel):
     breach_last_seen: Optional[str] = Field(
         None, description="Date when the breach was last seen"
     )
+    truncated: bool = Field(
+        False,
+        description="True when the counts were capped at the scan limit and are a lower bound",
+    )
 
 
 class DomainBreachSummaryResponse(BaseModel):

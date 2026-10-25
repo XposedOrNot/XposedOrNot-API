@@ -45,6 +45,9 @@ router = APIRouter()
 # Cache TTL: 24 hours
 BREACH_CACHE_TTL_HOURS = 24
 
+DOMAIN_SUMMARY_EMAIL_LIMIT = 25000
+DOMAIN_SUMMARY_PASTE_LIMIT = 50
+
 
 def get_breach_cache_key(breach_id: Optional[str], domain: Optional[str]) -> str:
     """Generate cache key based on query parameters."""
@@ -649,17 +652,18 @@ async def get_domain_breach_summary(
         # Query xon records for domain
         xon_rec = ds_xon.query(kind="xon")
         xon_rec.add_filter("domain", "=", domain)
-        query_xon = xon_rec.fetch(limit=10000)
+        xon_entities = list(xon_rec.fetch(limit=DOMAIN_SUMMARY_EMAIL_LIMIT + 1))
+        emails_truncated = len(xon_entities) > DOMAIN_SUMMARY_EMAIL_LIMIT
+        xon_entities = xon_entities[:DOMAIN_SUMMARY_EMAIL_LIMIT]
 
         unique_emails = set()
         unique_sites = set()
         total_records = 0
 
         # Process xon records
-        for entity_xon in query_xon:
+        for entity_xon in xon_entities:
             email = entity_xon.key.name
-            if len(unique_emails) <= 10000:
-                unique_emails.add(email)
+            unique_emails.add(email)
             if "site" in entity_xon:
                 sites = entity_xon["site"].split(";")
                 unique_sites.update(sites)
@@ -674,9 +678,9 @@ async def get_domain_breach_summary(
         ds_paste = ds_client
         paste_rec = ds_paste.query(kind="xon_paste")
         paste_rec.add_filter("domain", "=", domain)
-        query_paste = paste_rec.fetch(limit=50)
-
-        pastes_count = sum(1 for _ in query_paste)
+        paste_entities = list(paste_rec.fetch(limit=DOMAIN_SUMMARY_PASTE_LIMIT + 1))
+        pastes_truncated = len(paste_entities) > DOMAIN_SUMMARY_PASTE_LIMIT
+        pastes_count = min(len(paste_entities), DOMAIN_SUMMARY_PASTE_LIMIT)
 
         # Get latest breach date
         breach_last_seen = None
@@ -701,6 +705,7 @@ async def get_domain_breach_summary(
                     "breach_total": total_records,
                     "breach_count": breach_count,
                     "breach_last_seen": breach_last_seen,
+                    "truncated": emails_truncated or pastes_truncated,
                 }
             ]
         }
