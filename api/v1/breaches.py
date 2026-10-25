@@ -190,9 +190,9 @@ async def get_xposed_breaches(
             )
 
             # Convert string boolean values to actual booleans
-            searchable = string_to_boolean(entity.get("searchable", "false"))
-            sensitive = string_to_boolean(entity.get("sensitive", "false"))
-            verified = string_to_boolean(entity.get("verified", "false"))
+            searchable = string_to_boolean(str(entity.get("searchable", "false")))
+            sensitive = string_to_boolean(str(entity.get("sensitive", "false")))
+            verified = string_to_boolean(str(entity.get("verified", "false")))
 
             # Format breach date
             breach_date = entity.get("breached_date")
