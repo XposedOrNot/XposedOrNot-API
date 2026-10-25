@@ -142,6 +142,7 @@ async def get_xposed_breaches(
                     domain = extracted
                 else:
                     raise HTTPException(status_code=400, detail="Invalid Domain")
+            domain = domain.lower().strip()
 
         # Check cache first
         cache_key = get_breach_cache_key(breach_id, domain)
