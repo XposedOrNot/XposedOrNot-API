@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from starlette.responses import Response
+from starlette.routing import NoMatchFound
 
 # Local imports - Config
 from config.middleware import (
@@ -72,6 +73,7 @@ from utils.custom_limiter import (
     mcp_limit_scope,
     parse_rate_limit,
     redis_pool,
+    render_path_template,
 )
 from utils.helpers import get_client_ip, validate_domain
 from utils.http_client import aclose_http_client
@@ -291,6 +293,34 @@ _MCP_SHARED_REST_ROUTE = {
 }
 
 
+def _shared_rest_route_path(endpoint_name):
+    """Resolve a breaches endpoint's app-level path template, prefix included.
+
+    The template comes from the router's own route list and the mount prefix
+    from ``app.url_path_for``, both stable public surfaces across FastAPI
+    versions; ``app.routes`` is not scanned because FastAPI 0.150+ represents
+    included routers there as opaque wrappers without endpoint or path.
+    """
+    for route in breaches.router.routes:
+        endpoint = getattr(route, "endpoint", None)
+        if endpoint is None or endpoint.__name__ != endpoint_name:
+            continue
+        template = getattr(route, "path", None)
+        name = getattr(route, "name", None)
+        if not template or not name:
+            return None
+        params = {p: "x" for p in getattr(route, "param_convertors", {})}
+        try:
+            concrete = str(app.url_path_for(name, **params))
+        except (NoMatchFound, ValueError):
+            return None
+        rendered = render_path_template(template, params)
+        if concrete.endswith(rendered):
+            return concrete[: len(concrete) - len(rendered)] + template
+        return None
+    return None
+
+
 @lru_cache(maxsize=1)
 def _mcp_tool_scopes():
     """Build the per-tool limiter scope markers, resolving shared REST paths.
@@ -300,18 +330,12 @@ def _mcp_tool_scopes():
     if the route cannot be found, so a renamed endpoint degrades loudly
     instead of silently lifting the limit.
     """
-    paths = {}
-    for route in app.routes:
-        endpoint = getattr(route, "endpoint", None)
-        if endpoint is not None:
-            paths[endpoint.__name__] = getattr(route, "path", None)
-
     scopes = {}
     for tool, limit_str in _MCP_TOOL_LIMITS.items():
         route_path = None
         if limit_str is None:
             endpoint_name = _MCP_SHARED_REST_ROUTE[tool]
-            route_path = paths.get(endpoint_name)
+            route_path = _shared_rest_route_path(endpoint_name)
             if route_path is None:
                 logging.getLogger(__name__).error(
                     "MCP tool %s cannot resolve REST route %s; falling back to "

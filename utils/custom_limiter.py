@@ -2,6 +2,7 @@ import asyncio
 import ipaddress
 import logging
 import random
+import re
 import time
 from datetime import datetime, timedelta
 from functools import wraps
@@ -438,6 +439,40 @@ async def escalate_day_limit_abuse(
         return False
 
 
+_PATH_PARAM_RE = re.compile(r"\{([^}:]+)(?::[^}]*)?\}")
+
+
+def render_path_template(template: str, params: Dict) -> str:
+    """Substitute path parameter values into a route path template."""
+    return _PATH_PARAM_RE.sub(
+        lambda match: str(params.get(match.group(1), match.group(0))), template
+    )
+
+
+def _route_endpoint(request: Request) -> str:
+    """Return the app-level route template identity for a request.
+
+    FastAPI 0.150+ exposes the matched route in the scope without its
+    router mount prefix, which would split rate-limit counters and stop
+    CF_ESCALATION_ENDPOINTS from matching. The prefix is recovered by
+    rendering the template with the request's path parameters and
+    stripping that suffix from the raw request path; the bare template
+    is the fallback when the reconstruction does not line up.
+    """
+    route = request.scope.get("route")
+    if route is None:
+        return request.url.path
+    template = getattr(route, "path", None) or request.url.path
+    raw_path = request.scope.get("path") or request.url.path
+    root_path = request.scope.get("root_path") or ""
+    if root_path and raw_path.startswith(root_path):
+        raw_path = raw_path[len(root_path) :]
+    rendered = render_path_template(template, request.scope.get("path_params") or {})
+    if raw_path.endswith(rendered):
+        return raw_path[: len(raw_path) - len(rendered)] + template
+    return template
+
+
 def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
     """
     A decorator for FastAPI routes to enforce custom rate limiting with request dropping.
@@ -463,11 +498,7 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                     raise ValueError("Request object not found in function arguments")
 
             client_ip = get_client_ip(request)
-            endpoint = (
-                request.scope.get("route").path
-                if request.scope.get("route")
-                else request.url.path
-            )
+            endpoint = _route_endpoint(request)
 
             mcp_scope = request.scope.get(MCP_LIMIT_SCOPE_KEY)
             effective_limits = rate_limits
