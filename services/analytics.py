@@ -731,9 +731,10 @@ async def get_summary_and_metrics(
                 breach_metrics = get_breaches_data(site_name)
 
         # Process sensitive sites if token is provided (indicated by sensitive_record being present)
-        if sensitive_record is not None and breach_record:
+        if sensitive_record is not None:
             # Get sensitive sites from breach record
-            sensitive_sites = str(breach_record.get("sensitive_site", ""))
+            field = "sensitive_site" if breach_record else "site"
+            sensitive_sites = str((breach_record or sensitive_record).get(field, ""))
 
             if sensitive_sites:
                 sensitive_breaches = get_breaches(sensitive_sites)
