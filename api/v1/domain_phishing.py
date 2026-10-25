@@ -28,6 +28,11 @@ TLD_FILE = STATIC_DIR / "tld.txt"
 # Timeout for dnstwist operations (in seconds)
 DNSTWIST_TIMEOUT_SECONDS = 60
 
+PHISHING_MAX_WORKERS = 4
+_PHISHING_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=PHISHING_MAX_WORKERS, thread_name_prefix="phishing-scan"
+)
+
 if not DICTIONARY_FILE.exists():
     raise FileNotFoundError(f"Dictionary file not found at {DICTIONARY_FILE}")
 if not TLD_FILE.exists():
@@ -276,17 +281,17 @@ async def check_domain_phishing(
             twist_results = []
             loop = asyncio.get_event_loop()
 
+            future = loop.run_in_executor(
+                _PHISHING_EXECUTOR,
+                partial(run_dnstwist_sync, domain, options),
+            )
             try:
-                with concurrent.futures.ThreadPoolExecutor() as executor:
-                    future = loop.run_in_executor(
-                        executor,
-                        partial(run_dnstwist_sync, domain, options),
-                    )
-                    twist_results = await asyncio.wait_for(
-                        future, timeout=DNSTWIST_TIMEOUT_SECONDS
-                    )
+                twist_results = await asyncio.wait_for(
+                    future, timeout=DNSTWIST_TIMEOUT_SECONDS
+                )
             except asyncio.TimeoutError:
                 timed_out = True
+                future.cancel()
                 # Results will be empty or partial - dnstwist doesn't support
                 # partial results, so we return what we have (empty list)
 
