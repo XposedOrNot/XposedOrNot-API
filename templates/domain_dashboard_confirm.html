@@ -1,0 +1,40 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: Confirm Your Sign-In{% endblock %}
+
+{% block extra_styles %}
+.verify-card .countdown {
+  font-size: 13px;
+  color: #718096;
+  margin-top: 20px;
+}
+
+.verify-card .countdown span {
+  display: inline-block;
+  background: rgba(63, 113, 243, 0.1);
+  color: #3f71f3;
+  font-weight: 700;
+  width: 28px;
+  height: 28px;
+  line-height: 28px;
+  border-radius: 50%;
+  text-align: center;
+  margin: 0 2px;
+}
+{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle success" aria-hidden="true">
+    <i class="fas fa-user-shield"></i>
+  </div>
+  <h1>Confirm Your Sign-In</h1>
+  <p>Click below to continue to your XposedOrNot dashboard.</p>
+  <p class="expiry-note"><i class="fas fa-clock"></i> This sign-in link is valid for 3 hours and can be used only once</p>
+  <form id="confirm-form" method="post" action="{{ action_url }}">
+    <button type="submit" class="cta-button"><i class="fas fa-tachometer-alt"></i> Continue to Dashboard</button>
+  </form>
+  <p class="countdown">Continuing automatically in <span id="countdown">5</span> seconds</p>
+</div>
+<script src="/static/js/confirm-login.js" defer></script>
+{% endblock %}

@@ -103,9 +103,16 @@ def issue_challenge(email, dashboard=""):
 
 
 def redeem(challenge):
-    """Redeem a login challenge through the real domain_verify handler."""
+    """Redeem a login challenge through the real POST domain_verify handler."""
     return asyncio.run(
-        module.domain_verify.__wrapped__(make_request(), challenge, None)
+        module.domain_verify_confirm.__wrapped__(make_request(), challenge, None)
+    )
+
+
+def view_confirm_page(challenge, dashboard=None):
+    """Load the confirmation interstitial through the real GET handler."""
+    return asyncio.run(
+        module.domain_verify.__wrapped__(make_request(), challenge, dashboard)
     )
 
 
@@ -242,6 +249,51 @@ def test_signout_without_session_is_idempotent(env):
     response = sign_out("owner@example.com", "any-bearer")
     assert response.status == "success"
     assert env.entities == {}
+
+
+def test_get_renders_confirm_page_without_consuming_challenge(env):
+    """Scanner-style GET prefetches never burn the single-use challenge."""
+    challenge = issue_challenge("owner@example.com")
+
+    for _ in range(3):
+        page = view_confirm_page(challenge)
+        assert page.status_code == 200
+        body = page.body.decode()
+        assert f"/v1/domain-verify/{challenge}" in body
+        assert 'method="post"' in body
+        assert session_key("owner@example.com") not in env.entities
+
+    response = redeem(challenge)
+    assert response.status_code == 200
+    assert bearer_from_link(response)
+
+
+def test_get_confirm_page_carries_dashboard_parameter(env):
+    """The ?d=my hint survives into the POST form action."""
+    challenge = issue_challenge("owner@example.com", dashboard="my")
+    page = view_confirm_page(challenge, "my")
+    assert page.status_code == 200
+    assert f"/v1/domain-verify/{challenge}?d=my" in page.body.decode()
+    assert session_key("owner@example.com") not in env.entities
+
+
+def test_get_rejects_unknown_used_and_expired_challenges(env):
+    """The confirmation page never renders for a non-redeemable challenge."""
+    assert view_confirm_page("totally-made-up-challenge-value").status_code == 404
+
+    used = issue_challenge("owner@example.com")
+    assert redeem(used).status_code == 200
+    assert view_confirm_page(used).status_code == 404
+
+    expired = issue_challenge("owner@example.com")
+    expired_key = (
+        "xon_dashboard_login_challenges",
+        hashlib.sha256(expired.encode("utf-8")).hexdigest(),
+    )
+    env.entities[expired_key]["expires_at"] = datetime.datetime.now(
+        datetime.timezone.utc
+    ) - datetime.timedelta(seconds=1)
+    assert view_confirm_page(expired).status_code == 404
 
 
 def test_dashboard_preference_is_carried_through_challenge(env):

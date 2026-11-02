@@ -106,7 +106,7 @@ def hash_email(email: str) -> str:
     return hashlib.sha256(email.lower().encode()).hexdigest()[:16]
 
 
-DASHBOARD_LOGIN_CHALLENGE_TTL_HOURS = 24
+DASHBOARD_LOGIN_CHALLENGE_TTL_HOURS = 3
 
 
 def _login_challenge_key(challenge: str, datastore_client):
@@ -164,6 +164,24 @@ def consume_login_challenge(challenge: str):
         entity["used_at"] = datetime.datetime.now(datetime.timezone.utc)
         client.put(entity)
     return email, dashboard
+
+
+def peek_login_challenge(challenge: str) -> bool:
+    """Return True when a login challenge is pending and unexpired.
+
+    Read-only check used by the confirmation interstitial; it never
+    consumes the challenge, so link-scanner prefetches change no state.
+    """
+    entity = ds_client.get(_login_challenge_key(challenge, ds_client))
+    if not entity or entity.get("used"):
+        return False
+    expires_at = entity.get("expires_at")
+    if (
+        not isinstance(expires_at, datetime.datetime)
+        or datetime.datetime.now(datetime.timezone.utc) > expires_at
+    ):
+        return False
+    return True
 
 
 class ShieldOnException(Exception):
@@ -403,6 +421,76 @@ async def domain_verify(
     request: Request, verification_token: str, d: Optional[str] = Query(None)
 ) -> HTMLResponse:
     """
+    Render the sign-in confirmation page for a pending login challenge.
+
+    State-changing redemption happens only on the POST submitted from this
+    page, so email link scanners that prefetch the GET cannot burn the
+    single-use challenge.
+    """
+    try:
+        # Validate inputs
+        if (
+            not verification_token
+            or not validate_variables([verification_token])
+            or not validate_url(request)
+        ):
+            return HTMLResponse(
+                content=templates.TemplateResponse(
+                    request, "domain_dashboard_error.html"
+                ).body.decode(),
+                status_code=404,
+            )
+
+        if not peek_login_challenge(verification_token):
+            return HTMLResponse(
+                content=templates.TemplateResponse(
+                    request, "domain_dashboard_error.html"
+                ).body.decode(),
+                status_code=404,
+            )
+
+        action_url = f"{BASE_URL}/v1/domain-verify/{verification_token}"
+        if d == "my":
+            action_url += "?d=my"
+
+        return HTMLResponse(
+            content=templates.TemplateResponse(
+                request,
+                "domain_dashboard_confirm.html",
+                context={"action_url": action_url},
+            ).body.decode(),
+            status_code=200,
+        )
+
+    except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
+        await send_exception_email(
+            api_route="GET /v1/domain-verify/{token}",
+            error_message=str(e),
+            exception_type=type(e).__name__,
+            user_agent=request.headers.get("User-Agent"),
+            request_params=f"token={'provided' if verification_token else 'missing'}",
+        )
+        return HTMLResponse(
+            content=templates.TemplateResponse(
+                request, "domain_dashboard_error.html"
+            ).body.decode(),
+            status_code=404,
+        )
+
+
+@router.post(
+    "/domain-verify/{verification_token}",
+    response_class=HTMLResponse,
+    responses={
+        200: {"content": {"text/html": {}}},
+        404: {"content": {"text/html": {}}},
+    },
+)
+@custom_rate_limiter("2 per second;25 per hour;50 per day")
+async def domain_verify_confirm(
+    request: Request, verification_token: str, d: Optional[str] = Query(None)
+) -> HTMLResponse:
+    """
     Verify domain alerts using token and return dashboard access.
     """
     try:
@@ -475,7 +563,7 @@ async def domain_verify(
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
         await send_exception_email(
-            api_route="GET /v1/domain-verify/{token}",
+            api_route="POST /v1/domain-verify/{token}",
             error_message=str(e),
             exception_type=type(e).__name__,
             user_agent=request.headers.get("User-Agent"),
