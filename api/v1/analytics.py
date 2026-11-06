@@ -144,25 +144,29 @@ def consume_login_challenge(challenge: str):
 
     Returns (email, dashboard) when the challenge is pending and unexpired,
     marking it used in the same transaction so it cannot be replayed; returns
-    None otherwise.
+    None otherwise, including when a concurrent redemption of the same
+    challenge wins the transaction race.
     """
     client = ds_client
     challenge_key = _login_challenge_key(challenge, client)
-    with client.transaction():
-        entity = client.get(challenge_key)
-        if not entity or entity.get("used"):
-            return None
-        expires_at = entity.get("expires_at")
-        if (
-            not isinstance(expires_at, datetime.datetime)
-            or datetime.datetime.now(datetime.timezone.utc) > expires_at
-        ):
-            return None
-        email = entity.get("email", "")
-        dashboard = entity.get("dashboard", "")
-        entity["used"] = True
-        entity["used_at"] = datetime.datetime.now(datetime.timezone.utc)
-        client.put(entity)
+    try:
+        with client.transaction():
+            entity = client.get(challenge_key)
+            if not entity or entity.get("used"):
+                return None
+            expires_at = entity.get("expires_at")
+            if (
+                not isinstance(expires_at, datetime.datetime)
+                or datetime.datetime.now(datetime.timezone.utc) > expires_at
+            ):
+                return None
+            email = entity.get("email", "")
+            dashboard = entity.get("dashboard", "")
+            entity["used"] = True
+            entity["used_at"] = datetime.datetime.now(datetime.timezone.utc)
+            client.put(entity)
+    except google_exceptions.Aborted:
+        return None
     return email, dashboard
 
 
