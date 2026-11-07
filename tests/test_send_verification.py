@@ -93,7 +93,7 @@ def env(monkeypatch):
 def call():
     """Invoke the real send_verification handler."""
     return asyncio.run(
-        module.send_verification(
+        module.send_verification.__wrapped__(
             token="stored-token", email="victim@example.com", request=make_request()
         )
     )
@@ -124,3 +124,26 @@ def test_valid_token_still_succeeds(env, monkeypatch):
     monkeypatch.setattr(module, "get_breaches_analytics", no_breaches)
 
     assert call().status == "Success"
+
+
+def test_exposure_without_sensitive_breaches_still_succeeds(env, monkeypatch):
+    """A subscriber with only public exposures gets Success and a null sensitive block."""
+    env.entities[("xon", "victim@example.com")]["sensitive_site"] = ""
+    calls = []
+
+    async def valid(_token):
+        return "victim@example.com"
+
+    async def metrics(arg):
+        calls.append(arg)
+        return {"yearwise_details": []}
+
+    monkeypatch.setattr(module, "confirm_token", valid)
+    monkeypatch.setattr(module, "get_breaches_analytics", metrics)
+
+    response = call()
+
+    assert response.status == "Success"
+    assert response.sensitive_breach_details is None
+    assert response.BreachMetrics == {"yearwise_details": []}
+    assert calls == ["LinkedIn"]

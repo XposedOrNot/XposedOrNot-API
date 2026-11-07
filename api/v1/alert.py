@@ -368,7 +368,7 @@ async def send_verification(
                 ds_xon = ds_client
                 xon_key = ds_xon.key("xon", user_email)
                 xon_record = ds_xon.get(xon_key)
-                sensitive_site_breaches = ""
+                sensitive_site_breaches = None
                 breach_metrics = {}
 
                 if xon_record is not None:
@@ -377,7 +377,7 @@ async def send_verification(
 
                     if site or sensitive_site:
                         sensitive_site_breaches = (
-                            get_breaches(sensitive_site) if sensitive_site else ""
+                            get_breaches(sensitive_site) if sensitive_site else None
                         )
                         all_breaches = ";".join(filter(None, [site, sensitive_site]))
                         breach_metrics = (
