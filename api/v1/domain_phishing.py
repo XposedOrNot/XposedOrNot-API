@@ -116,9 +116,9 @@ def extract_live_domains(results: List[Dict[str, Any]]) -> List[str]:
     return live_domains
 
 
-def get_cached_result(domain: str) -> Optional[Dict]:
-    """Retrieve cached phishing check results from Redis."""
-    cache_key = f"phishing_check:{domain}"
+def get_cached_result(domain: str, detailed: bool) -> Optional[Dict]:
+    """Retrieve cached phishing check results from Redis for one privilege tier."""
+    cache_key = f"phishing_check:{'whois' if detailed else 'basic'}:{domain}"
     try:
         cached_data = redis_client.get(cache_key)
     except Exception:
@@ -131,9 +131,11 @@ def get_cached_result(domain: str) -> Optional[Dict]:
     return None
 
 
-def cache_result(domain: str, result: Dict, expiry_hours: int = 24) -> None:
-    """Cache phishing check results in Redis."""
-    cache_key = f"phishing_check:{domain}"
+def cache_result(
+    domain: str, result: Dict, detailed: bool, expiry_hours: int = 24
+) -> None:
+    """Cache phishing check results in Redis for one privilege tier."""
+    cache_key = f"phishing_check:{'whois' if detailed else 'basic'}:{domain}"
     if isinstance(result.get("last_checked"), datetime):
         result["last_checked"] = result["last_checked"].isoformat()
     try:
@@ -230,7 +232,7 @@ async def check_domain_phishing(
                         ),
                     )
 
-        cached_result = get_cached_result(domain)
+        cached_result = get_cached_result(domain, is_authenticated)
         if cached_result:
 
             if (not cached_result.get("unique_fuzzers")) and cached_result.get(
@@ -316,7 +318,7 @@ async def check_domain_phishing(
 
             # Only cache complete results
             if not timed_out:
-                cache_result(domain, response_data)
+                cache_result(domain, response_data, is_authenticated)
 
             if is_authenticated:
                 response = DomainPhishingResponse(**response_data)
