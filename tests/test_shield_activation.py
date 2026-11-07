@@ -181,3 +181,20 @@ def test_already_enabled_shield_is_not_re_sent(shield_environment):
 
     assert body_of(response) == {"Success": "AlreadyOn"}
     assert sent == []
+
+
+def test_recipient_cap_blocks_repeat_shield_email(shield_environment, monkeypatch):
+    """A limited request sends no mail and writes no record."""
+    client, sent = shield_environment
+
+    async def always_limited(key, limits, conn):
+        assert key == "shield-confirm:owner@example.com"
+        return True, 0, 0
+
+    monkeypatch.setattr(module, "is_rate_limited", always_limited)
+
+    response = activate("owner@example.com")
+
+    assert body_of(response) == {"Success": "ShieldAdded"}
+    assert sent == []
+    assert ("xon_alert", "owner@example.com") not in client.entities

@@ -54,6 +54,7 @@ REMINDER_SCHEDULE_DAYS = {0: 2, 1: 6}
 MAX_REMINDERS = 2
 
 CONFIRMATION_EMAIL_LIMIT = parse_rate_limit("1 per hour;2 per day")
+UNSUB_EMAIL_LIMIT = parse_rate_limit("1 per hour;2 per day")
 
 
 @router.get("/alertme/{user_email}", response_model=AlertResponse)
@@ -427,15 +428,20 @@ async def unsubscribe(user_email: str, request: Request):
         alert_task = datastore_client.get(alert_key)
 
         if alert_task and alert_task.get("verified", False):
-            # Generate unsubscribe token
-            unsubscribe_token = await generate_confirmation_token(user_email)
-            unsub_url = f"{BASE_URL}/v1/verify_unsub/{unsubscribe_token}"
+            redis_conn = await get_healthy_redis_connection()
+            recipient_limited, _, _ = await is_rate_limited(
+                f"unsub-confirm:{user_email}", UNSUB_EMAIL_LIMIT, redis_conn
+            )
+            if not recipient_limited:
+                # Generate unsubscribe token
+                unsubscribe_token = await generate_confirmation_token(user_email)
+                unsub_url = f"{BASE_URL}/v1/verify_unsub/{unsubscribe_token}"
 
-            alert_task["unsub_token"] = unsubscribe_token
-            datastore_client.put(alert_task)
+                alert_task["unsub_token"] = unsubscribe_token
+                datastore_client.put(alert_task)
 
-            # Send unsubscribe email
-            await send_unsub_email(user_email, unsub_url)
+                # Send unsubscribe email
+                await send_unsub_email(user_email, unsub_url)
 
         return UnsubscribeResponse(status="Success", message="UnSubscribed")
 

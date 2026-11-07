@@ -177,3 +177,40 @@ def test_dashboard_login_email_link_ignores_hostile_host(monkeypatch):
     )
     assert client.entities[challenge_key]["email"] == "victim@example.com"
     assert client.entities[challenge_key]["used"] is False
+
+
+def test_dashboard_login_email_capped_per_recipient(monkeypatch):
+    """A limited login request mints no challenge and sends no mail."""
+    client = FakeDatastoreClient()
+    domain_row = FakeEntity(("xon_domains", "example.com_victim@example.com"))
+    domain_row.update({"email": "victim@example.com", "verified": True})
+    client.query_results = [domain_row]
+    captured = []
+
+    async def fake_dashboard_email(email, url, ip_loc, browser, platform):
+        captured.append(url)
+
+    async def always_limited(key, limits, conn):
+        assert key == "dashboard-login:victim@example.com"
+        return True, 0, 0
+
+    monkeypatch.setattr(analytics_module, "ds_client", client)
+    monkeypatch.setattr(
+        analytics_module, "send_dashboard_email_confirmation", fake_dashboard_email
+    )
+    monkeypatch.setattr(
+        analytics_module,
+        "validate_email_deliverable",
+        lambda email: (True, "victim@example.com"),
+    )
+    monkeypatch.setattr(analytics_module, "is_rate_limited", always_limited)
+
+    response = asyncio.run(
+        analytics_module.domain_alert.__wrapped__(
+            hostile_request("/v1/domain-alert"), "victim@example.com", None
+        )
+    )
+
+    assert response.Success == "Domain Alert Successful"
+    assert captured == []
+    assert not any(k[0] == "xon_dashboard_login_challenges" for k in client.entities)

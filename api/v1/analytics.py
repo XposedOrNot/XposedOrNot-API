@@ -54,7 +54,12 @@ from services.send_email import (
     send_exception_email,
     send_shield_email,
 )
-from utils.custom_limiter import custom_rate_limiter
+from utils.custom_limiter import (
+    custom_rate_limiter,
+    get_healthy_redis_connection,
+    is_rate_limited,
+    parse_rate_limit,
+)
 from utils.helpers import get_location_from_headers
 from utils.request import get_client_ip, get_user_agent_info
 from utils.token import confirm_token, generate_confirmation_token
@@ -78,6 +83,9 @@ logger = logging.getLogger(__name__)
 
 # Cache TTL: 24 hours
 ANALYTICS_CACHE_TTL_HOURS = 24
+
+SHIELD_EMAIL_LIMIT = parse_rate_limit("1 per hour;2 per day")
+DASHBOARD_EMAIL_LIMIT = parse_rate_limit("1 per 10 minutes;6 per day")
 
 
 def get_cached_analytics(cache_key: str) -> Optional[Dict]:
@@ -374,6 +382,13 @@ async def domain_alert(
             if not alert_verified:
                 # Still return success to avoid email enumeration
                 return DomainAlertResponse()
+
+        redis_conn = await get_healthy_redis_connection()
+        recipient_limited, _, _ = await is_rate_limited(
+            f"dashboard-login:{user_email}", DASHBOARD_EMAIL_LIMIT, redis_conn
+        )
+        if recipient_limited:
+            return DomainAlertResponse()
 
         login_challenge = create_login_challenge(user_email, dashboard or "")
         confirmation_url = f"{BASE_URL}/v1/domain-verify/{login_challenge}"
@@ -1048,6 +1063,13 @@ async def activate_shield(
         confirmation_url = f"{BASE_URL}/v1/verify-shield/{token_shield}"
 
         if alert_task is None or not alert_task.get("shieldOn", False):
+            redis_conn = await get_healthy_redis_connection()
+            recipient_limited, _, _ = await is_rate_limited(
+                f"shield-confirm:{email}", SHIELD_EMAIL_LIMIT, redis_conn
+            )
+            if recipient_limited:
+                return ShieldActivationResponse(Success="ShieldAdded")
+
             # Create or update alert entity
             alert_entity = datastore.Entity(
                 datastore_client.key("xon_alert", email),

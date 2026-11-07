@@ -250,3 +250,25 @@ def test_confirmed_unsubscribe_preserves_privacy_shield(env, monkeypatch):
     assert dashboard_eligible(record) is False
     assert revoked == ["victim@example.com"]
     assert invalidated == ["victim@example.com"]
+
+
+def test_recipient_cap_blocks_repeat_unsub_email(env, monkeypatch):
+    """A limited repeat sends no mail and keeps the pending token intact."""
+    client, unsub_emails, _ = env
+    calls = []
+
+    async def limited_after_first(key, limits, conn):
+        calls.append(key)
+        return len(calls) > 1, 0, 0
+
+    monkeypatch.setattr(module, "is_rate_limited", limited_after_first)
+    key = subscriber(client, "victim@example.com")
+    initiate("victim@example.com")
+    first_token = client.entities[key]["unsub_token"]
+
+    response = initiate("victim@example.com")
+
+    assert response.status == "Success"
+    assert len(unsub_emails) == 1
+    assert client.entities[key]["unsub_token"] == first_token
+    assert calls == ["unsub-confirm:victim@example.com"] * 2
