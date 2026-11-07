@@ -481,8 +481,20 @@ async def verify_unsubscribe(unsubscribe_token: str, request: Request):
         alert_task = datastore_client.get(alert_key)
 
         if alert_task and alert_task.get("unsub_token") == unsubscribe_token:
-            # Delete user record from datastore
-            datastore_client.delete(alert_key)
+            if alert_task.get("shieldOn", False):
+                alert_task.update(
+                    {
+                        "verified": False,
+                        "unSubscribeOn": True,
+                        "reminder_eligible": False,
+                    }
+                )
+                alert_task.pop("token", None)
+                alert_task.pop("unsub_token", None)
+                datastore_client.put(alert_task)
+            else:
+                datastore_client.delete(alert_key)
+            invalidate_cached_shield(user_email)
 
             from api.v1.monitor import revoke_monitors_for_target
 

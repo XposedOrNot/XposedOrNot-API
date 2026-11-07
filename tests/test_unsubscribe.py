@@ -225,3 +225,28 @@ def test_repeated_initiations_keep_victim_eligible(env):
     response = confirm(latest_token)
     assert response.status_code == 200
     assert key not in client.entities
+
+
+def test_confirmed_unsubscribe_preserves_privacy_shield(env, monkeypatch):
+    """A shield-on subscriber keeps shieldOn after a confirmed unsubscribe."""
+    client, _, revoked = env
+    invalidated = []
+    monkeypatch.setattr(module, "invalidate_cached_shield", invalidated.append)
+    key = subscriber(client, "victim@example.com")
+    client.entities[key]["shieldOn"] = True
+    initiate("victim@example.com")
+    token = client.entities[key]["unsub_token"]
+
+    response = confirm(token)
+
+    assert response.status_code == 200
+    record = client.entities[key]
+    assert record["shieldOn"] is True
+    assert record["verified"] is False
+    assert record["unSubscribeOn"] is True
+    assert "unsub_token" not in record
+    assert "token" not in record
+    assert record["reminder_eligible"] is False
+    assert dashboard_eligible(record) is False
+    assert revoked == ["victim@example.com"]
+    assert invalidated == ["victim@example.com"]
