@@ -289,3 +289,21 @@ def test_hostile_tool_names_do_not_crash(client):
 def test_envelope_limit_raised():
     """initialize / tools/list serve static JSON and only need flood cover."""
     assert main._MCP_ENVELOPE_LIMIT == [(20, 1), (2000, 3600), (20000, 86400)]
+
+
+def test_hostile_tool_arguments_do_not_alert(client, monkeypatch):
+    """Non-string list_breaches args return -32602 with no operator alert."""
+    alerts = []
+
+    async def _spy(**_kwargs):
+        alerts.append(_kwargs)
+
+    monkeypatch.setattr("api.v1.breaches.send_exception_email", _spy, raising=False)
+
+    for bad in ({"x": 1}, ["x"], 7, True):
+        for field in ("domain", "breach_id"):
+            response = _call_tool(client, "list_breaches", {field: bad})
+            body = response.json()
+            assert body.get("error", {}).get("code") == -32602, (field, bad, body)
+
+    assert alerts == []

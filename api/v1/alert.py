@@ -354,6 +354,9 @@ async def send_verification(
             return VerificationResponse(status="Failed")
 
         if alert_task.get("verified") and alert_task.get("token") == token:
+            decoded_email = await confirm_token(token)
+            if not decoded_email or decoded_email.lower() != user_email:
+                return VerificationResponse(status="Failed")
             now = datetime.now(timezone.utc)
             verification_timestamp = alert_task.get(
                 "recent_timestamp", alert_task["verify_timestamp"]

@@ -599,7 +599,14 @@ async def mcp_post_handler(fastapi_request: Request):
             )
 
         if tool_name == "list_breaches":
+            domain_arg = tool_args.get("domain") or None
             breach_id = tool_args.get("breach_id") or None
+            for field_name, value in (
+                ("domain", domain_arg),
+                ("breach_id", breach_id),
+            ):
+                if value is not None and not isinstance(value, str):
+                    return _mcp_error(req_id, -32602, f"{field_name} must be a string")
             try:
                 limit = int(tool_args.get("limit") or 25)
             except (TypeError, ValueError):
@@ -638,7 +645,7 @@ async def mcp_post_handler(fastapi_request: Request):
                 breaches.get_xposed_breaches(
                     request=fastapi_request,
                     response=Response(),
-                    domain=tool_args.get("domain") or None,
+                    domain=domain_arg,
                     breach_id=breach_id,
                     if_modified_since=None,
                 ),
