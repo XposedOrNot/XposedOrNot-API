@@ -1368,7 +1368,7 @@ async def get_analytics(
         return JSONResponse(content=None)
 
     except ShieldOnException:
-        return JSONResponse(content={"Error": "Not found"}, status_code=404)
+        return JSONResponse(content=None)
 
     except (ValueError, HTTPException, google_exceptions.GoogleAPIError) as e:
         await send_exception_email(

@@ -264,6 +264,18 @@ async def get_xposed_breaches(
         ) from e
 
 
+def _empty_breach_analytics() -> Dict:
+    """Return the canonical empty analytics payload for no-result responses."""
+    return {
+        "BreachesSummary": {"domain": "", "site": "", "tmpstmp": ""},
+        "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
+        "ExposedBreaches": None,
+        "ExposedPastes": None,
+        "BreachMetrics": None,
+        "PasteMetrics": None,
+    }
+
+
 def build_breach_analytics_response(
     data: Dict, token: Optional[str], shield_on: bool
 ) -> Union[BreachAnalyticsAuthResponse, BreachAnalyticsResponse]:
@@ -329,7 +341,9 @@ async def search_data_breaches(
                 shield_on = bool(alert_record and alert_record.get("shieldOn", False))
                 set_cached_shield(email, shield_on)
             if shield_on:
-                raise HTTPException(status_code=404, detail="Not found")
+                return build_breach_analytics_response(
+                    _empty_breach_analytics(), None, False
+                )
 
         # Validate token if provided
         if token:
@@ -356,16 +370,7 @@ async def search_data_breaches(
 
         if not breach_data and not sensitive_data:
             return build_breach_analytics_response(
-                {
-                    "BreachesSummary": {"domain": "", "site": "", "tmpstmp": ""},
-                    "PastesSummary": {"cnt": 0, "domain": "", "tmpstmp": ""},
-                    "ExposedBreaches": None,
-                    "ExposedPastes": None,
-                    "BreachMetrics": None,
-                    "PasteMetrics": None,
-                },
-                token,
-                shield_on_status,
+                _empty_breach_analytics(), token, shield_on_status
             )
 
         if breach_data and sensitive_data and token:
@@ -512,14 +517,7 @@ async def search_email(
             set_cached_shield(email, shield_on)
 
         if shield_on:
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "Error": "No breaches found",
-                    "email": email,
-                    "status": "failed",
-                },
-            )
+            return EmailBreachErrorResponse(Error="Not found")
 
         # Check cache (after shieldOn check passes)
         cache_key = f"check-email:{hash_email(email)}:{details}"
@@ -599,10 +597,7 @@ async def search_email(
 
                 return JSONResponse(status_code=200, content=response_content)
 
-        return JSONResponse(
-            status_code=404,
-            content={"Error": "No breaches found", "email": email, "status": "failed"},
-        )
+        return EmailBreachErrorResponse(Error="Not found")
 
     except Exception as exc:
         await send_exception_email(
