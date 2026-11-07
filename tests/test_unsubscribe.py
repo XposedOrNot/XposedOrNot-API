@@ -83,7 +83,11 @@ def env(monkeypatch):
     async def fake_exception_email(**kwargs):
         return None
 
+    async def never_limited(key, limits, conn):
+        return False, 0, 0
+
     monkeypatch.setattr(module, "ds_client", client)
+    monkeypatch.setattr(module, "is_rate_limited", never_limited)
     monkeypatch.setattr(module, "send_unsub_email", fake_unsub_email)
     monkeypatch.setattr(module, "send_exception_email", fake_exception_email)
     monkeypatch.setattr(monitor_module, "revoke_monitors_for_target", revoked.append)

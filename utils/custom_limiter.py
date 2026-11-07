@@ -149,8 +149,18 @@ def parse_rate_limit(rate_limit_str: str) -> List[Tuple[int, int]]:
             continue
 
         try:
-            count, _, unit = limit_str.split()
+            parts = limit_str.split()
+            if len(parts) == 3:
+                count, _, unit = parts
+                multiplier = 1
+            elif len(parts) == 4:
+                count, _, multiplier, unit = parts
+                multiplier = int(multiplier)
+            else:
+                continue
             count = int(count)
+            if multiplier < 1:
+                continue
 
             if unit.startswith("sec"):
                 period = 1
@@ -163,7 +173,7 @@ def parse_rate_limit(rate_limit_str: str) -> List[Tuple[int, int]]:
             else:
                 continue
 
-            limits.append((count, period))
+            limits.append((count, period * multiplier))
         except ValueError:
             continue
 

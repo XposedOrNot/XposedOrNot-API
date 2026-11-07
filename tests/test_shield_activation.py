@@ -92,7 +92,11 @@ def shield_environment(monkeypatch):
     async def fake_token(email):
         return "shield-token"
 
+    async def never_limited(key, limits, conn):
+        return False, 0, 0
+
     monkeypatch.setattr(module, "ds_client", client)
+    monkeypatch.setattr(module, "is_rate_limited", never_limited)
     monkeypatch.setattr(module.datastore, "Entity", FakeEntity)
     monkeypatch.setattr(module, "send_shield_email", fake_send)
     monkeypatch.setattr(module, "generate_confirmation_token", fake_token)

@@ -24,6 +24,7 @@ os.environ.setdefault("WTF_CSRF_SECRET_KEY", "test-csrf-key")
 from api.v1 import alert as alert_module
 from api.v1 import analytics as analytics_module
 from config.settings import BASE_URL
+from utils.custom_limiter import parse_rate_limit
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -75,6 +76,11 @@ class FakeDatastoreClient:
         return FakeQuery(self.query_results)
 
 
+async def never_limited(key, limits, conn):
+    """Recipient-cap stub that never limits, keeping tests independent of Redis."""
+    return False, 0, 0
+
+
 def hostile_request(path):
     """Create a request whose Host header points at an attacker origin."""
     return Request(
@@ -114,6 +120,7 @@ def test_unsubscribe_email_link_ignores_hostile_host(monkeypatch):
     client.put(record)
 
     monkeypatch.setattr(alert_module, "ds_client", client)
+    monkeypatch.setattr(alert_module, "is_rate_limited", never_limited)
     monkeypatch.setattr(alert_module, "send_unsub_email", fake_unsub_email)
 
     response = asyncio.run(
@@ -140,6 +147,7 @@ def test_dashboard_login_email_link_ignores_hostile_host(monkeypatch):
         captured.append(url)
 
     monkeypatch.setattr(analytics_module, "ds_client", client)
+    monkeypatch.setattr(analytics_module, "is_rate_limited", never_limited)
     monkeypatch.setattr(analytics_module.datastore, "Entity", FakeEntity)
     monkeypatch.setattr(
         analytics_module, "send_dashboard_email_confirmation", fake_dashboard_email
@@ -214,3 +222,14 @@ def test_dashboard_login_email_capped_per_recipient(monkeypatch):
     assert response.Success == "Domain Alert Successful"
     assert captured == []
     assert not any(k[0] == "xon_dashboard_login_challenges" for k in client.entities)
+
+
+def test_dashboard_login_limit_keeps_ten_minute_window():
+    """The multi-word window in the dashboard cap must parse, not be dropped."""
+    assert analytics_module.DASHBOARD_EMAIL_LIMIT == [(1, 600), (6, 86400)]
+    assert parse_rate_limit("1 per 10 minutes;3 per hour;5 per day") == [
+        (1, 600),
+        (3, 3600),
+        (5, 86400),
+    ]
+    assert parse_rate_limit("2 per 0 minutes;1 per x hours;1 per hour") == [(1, 3600)]
