@@ -135,8 +135,8 @@ def test_initiation_does_not_change_subscription_state(env):
     assert len(unsub_emails) == 1
 
 
-def test_confirmed_unsubscribe_deletes_record_and_revokes_monitors(env):
-    """The emailed token still completes the unsubscribe end to end."""
+def test_confirmed_unsubscribe_tombstones_record_and_revokes_monitors(env):
+    """The emailed token completes the unsubscribe and retains an opt-out record."""
     client, unsub_emails, revoked = env
     key = subscriber(client, "victim@example.com")
     initiate("victim@example.com")
@@ -146,7 +146,10 @@ def test_confirmed_unsubscribe_deletes_record_and_revokes_monitors(env):
     response = confirm(token)
 
     assert response.status_code == 200
-    assert key not in client.entities
+    record = client.entities[key]
+    assert record["unSubscribeOn"] is True
+    assert record["verified"] is False
+    assert "unsub_token" not in record
     assert revoked == ["victim@example.com"]
 
 
@@ -224,7 +227,7 @@ def test_repeated_initiations_keep_victim_eligible(env):
     latest_token = record["unsub_token"]
     response = confirm(latest_token)
     assert response.status_code == 200
-    assert key not in client.entities
+    assert client.entities[key]["unSubscribeOn"] is True
 
 
 def test_confirmed_unsubscribe_preserves_privacy_shield(env, monkeypatch):

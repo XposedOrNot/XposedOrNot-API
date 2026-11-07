@@ -200,7 +200,9 @@ def _existing_edge_blocks_invite(edge: datastore.Entity, now: datetime) -> bool:
     status = edge.get("status")
     if status == STATUS_ACCEPTED:
         return True
-    if status == STATUS_REJECTED:
+    if status == STATUS_REJECTED or (
+        status == STATUS_REVOKED and edge.get("revoked_by") == "target"
+    ):
         responded_at = edge.get("responded_at")
         if responded_at is not None:
             if responded_at.tzinfo is None:
@@ -606,6 +608,7 @@ def revoke_monitors_for_target(target_email: str) -> int:
             record["responded_at"] = now
             record["token"] = ""
             record["unsub_token"] = ""
+            record["revoked_by"] = "target"
             ds_client.put(record)
             revoked += 1
     return revoked
