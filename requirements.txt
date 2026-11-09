@@ -1,5 +1,5 @@
 cryptography>=50.0.2
-dnspython>=2.9.1
+dnspython>=2.9.2
 dnstwist
 domcheck
 email-validator
