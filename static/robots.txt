@@ -1,2 +1,6 @@
 User-agent: *
+Allow: /$
+Allow: /docs
+Allow: /v1/help/
+Allow: /static/
 Disallow: /

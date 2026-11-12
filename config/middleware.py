@@ -26,6 +26,8 @@ PUBLIC_CACHEABLE_PATHS = frozenset(
     }
 )
 PUBLIC_CACHE_CONTROL = "public, max-age=3600"
+ROBOTS_EXEMPT_PATHS = frozenset({"/", "/docs", "/v1/help/"})
+ROBOTS_TAG = "noindex, nofollow"
 
 
 def setup_middleware(app: FastAPI) -> None:
@@ -90,6 +92,8 @@ def setup_security_headers(app: FastAPI) -> None:
         else:
             response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["X-Content-Type-Options"] = "nosniff"
+        if request.url.path not in ROBOTS_EXEMPT_PATHS:
+            response.headers["X-Robots-Tag"] = ROBOTS_TAG
 
         if cacheable and response.status_code == 200:
             body = b""
