@@ -312,7 +312,13 @@ async def authorize_analytics_token(
     "/breach-analytics",
     response_model=Union[BreachAnalyticsAuthResponse, BreachAnalyticsResponse],
 )
-@custom_rate_limiter("2 per second;25 per hour;100 per day")
+@custom_rate_limiter(
+    "2 per second;25 per hour;100 per day",
+    message=(
+        "You've hit the free limit for breach analytics (2/second, 25/hour, "
+        "100/day). The free API is for personal, low-volume use."
+    ),
+)
 async def search_data_breaches(
     request: Request, email: Optional[str] = None, token: Optional[str] = None
 ) -> Union[BreachAnalyticsAuthResponse, BreachAnalyticsResponse]:
@@ -469,8 +475,8 @@ async def search_data_breaches(
 @custom_rate_limiter(
     "2 per second;25 per hour;100 per day",
     message=(
-        "For faster checks, please consider upgrading to our paid plans. "
-        "Visit https://plus.xposedornot.com/products/api for more details."
+        "You've hit the free limit for email checks (2/second, 25/hour, "
+        "100/day). The free API is for personal, low-volume use."
     ),
 )
 async def search_email(

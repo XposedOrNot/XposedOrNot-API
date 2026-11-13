@@ -446,18 +446,19 @@ async def _run_mcp_tool(request_id, coro, label, transform=None):
                 else {"detail": exc.detail}
             )
         elif exc.status_code == 429:
-            retry_after = (
-                exc.detail.get("retry_after") if isinstance(exc.detail, dict) else None
-            )
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            retry_after = detail.get("retry_after")
+            upgrade = detail.get("upgrade")
             message = f"Rate limit reached for {label}."
             if retry_after:
                 message += f" Retry after {retry_after} seconds."
-            return _mcp_error(
-                request_id,
-                -32000,
-                message,
-                data={"status": 429, "retry_after": retry_after},
-            )
+            data = {"status": 429, "retry_after": retry_after}
+            if upgrade:
+                message += (
+                    f" Or use {upgrade['plan']} for higher limits: {upgrade['url']}"
+                )
+                data["upgrade"] = upgrade
+            return _mcp_error(request_id, -32000, message, data=data)
         else:
             detail = (
                 exc.detail if isinstance(exc.detail, str) else json.dumps(exc.detail)
@@ -1021,6 +1022,75 @@ async def unblock_cloudflare(
         ) from e
 
 
+_RATE_LIMIT_429_RESPONSE = {
+    "description": (
+        "Too Many Requests - free-tier limit reached. The body carries "
+        "retry_after/reset_time plus an upgrade block pointing at xonAPI+; "
+        "Retry-After and Link headers are set."
+    ),
+    "headers": {
+        "Retry-After": {
+            "description": "Seconds until the limit resets",
+            "schema": {"type": "integer"},
+        },
+        "Link": {
+            "description": 'xonAPI+ plans page, rel="help"',
+            "schema": {"type": "string"},
+        },
+    },
+    "content": {
+        "application/json": {
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "detail": {
+                        "type": "object",
+                        "properties": {
+                            "error": {"type": "string"},
+                            "detail": {"type": "string"},
+                            "retry_after": {"type": "integer"},
+                            "reset_time": {"type": "string", "format": "date-time"},
+                            "message": {"type": "string"},
+                            "upgrade": {
+                                "type": "object",
+                                "properties": {
+                                    "plan": {"type": "string"},
+                                    "url": {"type": "string", "format": "uri"},
+                                    "note": {"type": "string"},
+                                },
+                            },
+                        },
+                    }
+                },
+            },
+            "example": {
+                "detail": {
+                    "error": "Rate limit exceeded",
+                    "detail": (
+                        "Rate limit exceeded for endpoint /v1/check-email/{email}. "
+                        "Please try again after 1794 seconds."
+                    ),
+                    "retry_after": 1794,
+                    "reset_time": "2026-11-14T13:02:11.123456",
+                    "message": (
+                        "You've hit the free limit for email checks (2/second, "
+                        "25/hour, 100/day). The free API is for personal, "
+                        "low-volume use. If you need more, xonAPI+ gives you "
+                        "higher limits and an API key from $9/month, with the "
+                        "same breach data: https://plus.xposedornot.com/products/api"
+                    ),
+                    "upgrade": {
+                        "plan": "xonAPI+",
+                        "url": "https://plus.xposedornot.com/products/api",
+                        "note": "Paid plans fund the free tier.",
+                    },
+                }
+            },
+        }
+    },
+}
+
+
 def custom_openapi():
     """
     Generate custom OpenAPI schema for the API documentation.
@@ -1321,6 +1391,7 @@ def custom_openapi():
                         }
                     },
                 },
+                "429": _RATE_LIMIT_429_RESPONSE,
             },
         }
     }
@@ -1397,6 +1468,7 @@ def custom_openapi():
                 "404": {
                     "description": ("Not Found - Email not found or invalid format")
                 },
+                "429": _RATE_LIMIT_429_RESPONSE,
             },
         }
     }

@@ -28,6 +28,44 @@ from utils.helpers import get_client_ip
 
 logger = logging.getLogger(__name__)
 
+UPGRADE_PLAN = "xonAPI+"
+UPGRADE_URL = "https://plus.xposedornot.com/products/api"
+UPGRADE_NOTE = "Paid plans fund the free tier."
+UPGRADE_TAIL = (
+    f"If you need more, {UPGRADE_PLAN} gives you higher limits and an API key "
+    f"from $9/month, with the same breach data: {UPGRADE_URL}"
+)
+UPGRADE_LINK_HEADER = (
+    f'<{UPGRADE_URL}>; rel="help"; title="{UPGRADE_PLAN} higher limits"'
+)
+DROP_UPGRADE_MESSAGE = (
+    "Your requests are being dropped because this IP keeps exceeding the free "
+    f"limit. Slow down, or move to {UPGRADE_PLAN} for limits built for "
+    f"automation: {UPGRADE_URL}"
+)
+BOT_UPGRADE_MESSAGE = (
+    "This looks like automated access. The free API is for people, not "
+    f"pipelines. {UPGRADE_PLAN} is the supported way to run this at volume: "
+    f"{UPGRADE_URL}"
+)
+
+
+def _with_upgrade_hint(
+    detail: Dict, headers: Dict[str, str], message: Optional[str]
+) -> Tuple[Dict, Dict[str, str]]:
+    """Attach the upgrade copy, structured block and Link header when opted in."""
+    if not message:
+        return detail, headers
+    detail["message"] = message
+    detail["upgrade"] = {
+        "plan": UPGRADE_PLAN,
+        "url": UPGRADE_URL,
+        "note": UPGRADE_NOTE,
+    }
+    headers["Link"] = UPGRADE_LINK_HEADER
+    return detail, headers
+
+
 # Redis health tracking — dedup alert logging
 _last_redis_alert_time = 0.0
 _REDIS_ALERT_INTERVAL = 300  # Log Redis failures at most once per 5 minutes
@@ -493,6 +531,9 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
         message: An optional custom message to include in the 429 response.
     """
     rate_limits = parse_rate_limit(rate_limit_str)
+    quota_message = f"{message} {UPGRADE_TAIL}" if message else None
+    drop_message = DROP_UPGRADE_MESSAGE if message else None
+    bot_message = BOT_UPGRADE_MESSAGE if message else None
 
     def decorator(func: Callable):
         @wraps(func)
@@ -592,12 +633,13 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                         "retry_after": retry_after,
                         "reset_time": reset_time.isoformat(),
                     }
-                    if message:
-                        error_detail["message"] = message
+                    error_detail, error_headers = _with_upgrade_hint(
+                        error_detail, {"Retry-After": str(retry_after)}, quota_message
+                    )
                     raise HTTPException(
                         status_code=HTTP_429_TOO_MANY_REQUESTS,
                         detail=error_detail,
-                        headers={"Retry-After": str(retry_after)},
+                        headers=error_headers,
                     )
                 return await func(*args, **kwargs)
 
@@ -649,9 +691,8 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                                     ),
                                 },
                             )
-                    raise HTTPException(
-                        status_code=HTTP_429_TOO_MANY_REQUESTS,
-                        detail={
+                    bot_detail, bot_headers = _with_upgrade_hint(
+                        {
                             "error": "Rate limit exceeded",
                             "detail": (
                                 "Automated access detected. Please slow down or "
@@ -660,7 +701,13 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                             ),
                             "retry_after": bot_retry,
                         },
-                        headers={"Retry-After": str(bot_retry)},
+                        {"Retry-After": str(bot_retry)},
+                        bot_message,
+                    )
+                    raise HTTPException(
+                        status_code=HTTP_429_TOO_MANY_REQUESTS,
+                        detail=bot_detail,
+                        headers=bot_headers,
                     )
 
             drop_percentage = 0.0 if mcp_scope else get_drop_percentage(violation_count)
@@ -668,9 +715,8 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
             if random.random() < drop_percentage:
                 await _discard_window_member(redis_conn, key, member)
 
-                raise HTTPException(
-                    status_code=HTTP_429_TOO_MANY_REQUESTS,
-                    detail={
+                drop_detail, drop_headers = _with_upgrade_hint(
+                    {
                         "error": "Request dropped due to violation history",
                         "violation_count": violation_count,
                         "drop_percentage": f"{drop_percentage * 100:.0f}%",
@@ -679,11 +725,17 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                             "Please reduce your request rate."
                         ),
                     },
-                    headers={
+                    {
                         "X-Dropped": "true",
                         "X-Violation-Count": str(violation_count),
                         "X-Drop-Percentage": f"{drop_percentage * 100:.0f}%",
                     },
+                    drop_message,
+                )
+                raise HTTPException(
+                    status_code=HTTP_429_TOO_MANY_REQUESTS,
+                    detail=drop_detail,
+                    headers=drop_headers,
                 )
 
             limited, retry_after = False, 0
@@ -729,13 +781,14 @@ def custom_rate_limiter(rate_limit_str: str, message: Optional[str] = None):
                     "reset_time": reset_time.isoformat(),
                 }
 
-                if message:
-                    error_detail["message"] = message
+                error_detail, error_headers = _with_upgrade_hint(
+                    error_detail, {"Retry-After": str(retry_after)}, quota_message
+                )
 
                 raise HTTPException(
                     status_code=HTTP_429_TOO_MANY_REQUESTS,
                     detail=error_detail,
-                    headers={"Retry-After": str(retry_after)},
+                    headers=error_headers,
                 )
 
             return await func(*args, **kwargs)

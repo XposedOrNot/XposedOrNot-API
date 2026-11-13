@@ -73,14 +73,17 @@ Rate limits are applied **per IP, per endpoint**:
 
 When a limit is exceeded the API returns `429 Too Many Requests` with a `Retry-After`
 header (seconds) and a JSON body carrying `retry_after` and `reset_time`, so clients
-can back off precisely.
+can back off precisely. On `/v1/check-email` and `/v1/breach-analytics` the body also
+carries a human-readable `message` and an `upgrade` block (`plan`, `url`, `note`)
+pointing at xonAPI+, and the response sets a `Link: <...>; rel="help"` header to the
+plans page.
 
 ### Commercial use & higher rate limits
 
 The free API above is for personal and low-volume use, and it stays free. If
 you're building a product on breach data or need more throughput,
 [xonAPI+](https://plus.xposedornot.com/products/api) offers paid plans from
-$5/month with rate limits up to 25,000 requests/minute, API-key access, and
+$9/month with rate limits up to 25,000 requests/minute, API-key access, and
 commercial support. It's the same breach data, and it's what keeps the free
 tier free.
 
