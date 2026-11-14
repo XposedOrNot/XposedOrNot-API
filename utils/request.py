@@ -35,7 +35,7 @@ def get_user_agent_info(request: Request) -> tuple[str, str]:
     """
     Extract browser and platform information from the request.
     """
-    user_agent_string = request.headers.get("User-Agent")
+    user_agent_string = request.headers.get("User-Agent") or ""
     user_agent = parse(user_agent_string)
     browser_type = f"{user_agent.browser.family} {user_agent.browser.version_string}"
     client_platform = user_agent.os.family

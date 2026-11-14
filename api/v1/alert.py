@@ -141,7 +141,7 @@ async def subscribe_to_alert_me(
         location = get_location_from_headers(request)
 
         # User agent parsing
-        user_agent_string = request.headers.get("User-Agent")
+        user_agent_string = request.headers.get("User-Agent") or ""
         user_agent = parse(user_agent_string)
         browser_type = (
             f"{user_agent.browser.family} {user_agent.browser.version_string}"
