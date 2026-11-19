@@ -1,3 +1,5 @@
+"""Custom Redis-backed rate limiter with in-memory fallback."""
+
 import asyncio
 import ipaddress
 import logging

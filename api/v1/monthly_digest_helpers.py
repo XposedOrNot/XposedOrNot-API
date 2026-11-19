@@ -335,9 +335,10 @@ async def generate_html_template(
         else "No verified domains"
     )
     summary_info = (
-        "Your summary: <strong>{} verified domains</strong> ({}) • "
-        "<strong>{} exposures</strong> • <strong>{} new breaches</strong> this month"
-    ).format(len(user_domains), domains_text, len(user_exposures), len(new_breaches))
+        f"Your summary: <strong>{len(user_domains)} verified domains</strong> "
+        f"({domains_text}) • <strong>{len(user_exposures)} exposures</strong> • "
+        f"<strong>{len(new_breaches)} new breaches</strong> this month"
+    )
 
     # Dashboard URL with properly encoded parameters
     dashboard_url = build_safe_url(

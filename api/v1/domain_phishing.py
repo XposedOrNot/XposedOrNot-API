@@ -44,7 +44,7 @@ def validate_file_content(file_path: Path, min_lines: int = 1) -> None:
     """Validate the content of a file to ensure it has sufficient lines."""
     if not file_path.exists():
         raise FileNotFoundError(f"File not found: {file_path}")
-    with open(file_path, "r") as f:
+    with open(file_path, "r", encoding="utf-8") as f:
         lines = [line.strip() for line in f if line.strip()]
         if len(lines) < min_lines:
             raise ValueError(

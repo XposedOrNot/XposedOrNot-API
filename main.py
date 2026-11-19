@@ -971,7 +971,7 @@ async def custom_swagger_ui_html(request: Request):
         "swagger-ui-bundle.min.js"
     )
     swagger_css_url = (
-        "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/" "swagger-ui.min.css"
+        "https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css"
     )
 
     return templates.TemplateResponse(
