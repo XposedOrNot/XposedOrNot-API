@@ -770,7 +770,8 @@ class SchedulerService:
                                 "to prevent race conditions"
                             )
                         )
-                        # self.executor.submit(self._call_monthly_digest_api)  # COMMENTED OUT - Legacy
+                        # self.executor.submit(self._call_monthly_digest_api)
+                        # COMMENTED OUT - Legacy
                     else:
                         logger.info(
                             f"🔍 STARTUP CHECK - Still within normal window, first Tuesday "

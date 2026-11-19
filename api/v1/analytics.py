@@ -755,7 +755,8 @@ async def send_domain_breaches(
                         if breach_timestamp < time_threshold:
                             continue  # Skip this breach if it's outside the time filter
 
-                    # Track this breach as passing the time filter (for filtering breach_details and seniority)
+                    # Track this breach as passing the time filter
+                    # (for filtering breach_details and seniority)
                     time_filtered_breaches.add(entity["breach"])
 
                     default_breach_info = {
