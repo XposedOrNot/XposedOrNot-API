@@ -1,0 +1,18 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: Unsubscribe From Monthly Digest{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle success" aria-hidden="true">
+    <i class="fas fa-envelope-open-text"></i>
+  </div>
+  <h1>Stop the Monthly Digest?</h1>
+  <p>You are about to stop the monthly breach digest for <strong>{{ email }}</strong>.</p>
+  <p class="expiry-note">Your verified domains and your dashboard stay exactly as they are. Only the monthly email stops.</p>
+  <form id="confirm-form" method="post" action="{{ action_url }}">
+    <button type="submit" class="cta-button"><i class="fas fa-bell-slash"></i> Unsubscribe</button>
+  </form>
+</div>
+<script src="/static/js/confirm-login.js" defer></script>
+{% endblock %}

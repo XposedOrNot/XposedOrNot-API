@@ -7,7 +7,9 @@ from datetime import datetime, timedelta, timezone
 from google.cloud import datastore
 
 from config.clients import ds_client
+from config.settings import BASE_URL
 from utils.safe_encoding import escape_html, build_safe_url
+from utils.token import generate_digest_unsub_token
 
 logger = logging.getLogger(__name__)
 
@@ -564,6 +566,7 @@ def render_digest_html(context: dict) -> str:
         '<p style="margin: 0 0 8px 0;">You are receiving this because '
         f"<strong>{escape_html(context['email'])}</strong> verified "
         f"{domains_text} on XposedOrNot.</p>"
+        f"{render_unsubscribe_html(context.get('unsubscribe_url', ''))}"
         f'<p style="margin: 0;">&copy; {context["year"]} XposedOrNot | '
         f'<a href="{DASHBOARD_HOME_URL}" style="color: #6c757d;">'
         "Open your dashboard</a></p>"
@@ -642,7 +645,22 @@ def render_digest_text(context: dict) -> str:
         f"You are receiving this because {context['email']} verified "
         f"{domains_label(context['user_domains'])} on XposedOrNot.",
     ]
+    if context.get("unsubscribe_url"):
+        lines.append(
+            f"Unsubscribe from the monthly digest: {context['unsubscribe_url']}"
+        )
     return "\n".join(lines)
+
+
+def render_unsubscribe_html(unsubscribe_url: str) -> str:
+    """Render the footer line that lets a recipient stop the digest."""
+    if not unsubscribe_url:
+        return ""
+    return (
+        '<p style="margin: 0 0 8px 0;">'
+        f'<a href="{escape_html(unsubscribe_url)}" style="color: #6c757d;">'
+        "Unsubscribe from the monthly digest</a></p>"
+    )
 
 
 async def build_monthly_digest_content(
@@ -651,6 +669,7 @@ async def build_monthly_digest_content(
     user_domains: list,
     all_breach_data: dict,
     client=None,
+    unsubscribe_url: str = "",
 ) -> dict:
     """Build the subject, HTML body and text body of one user's digest."""
     try:
@@ -681,6 +700,7 @@ async def build_monthly_digest_content(
             "new_breaches": all_breach_data.get("new_breaches", []),
             "dashboard_url": escape_html(dashboard_url),
             "dashboard_url_text": dashboard_url,
+            "unsubscribe_url": unsubscribe_url,
         }
 
         return {
@@ -696,3 +716,42 @@ async def build_monthly_digest_content(
             str(e),
         )
         raise
+
+
+DIGEST_OPTOUT_KIND = "xon_digest_optout"
+DIGEST_OPTOUT_LOOKUP_CHUNK = 500
+
+
+def build_digest_unsubscribe_url(email: str) -> str:
+    """Build the signed unsubscribe link for one digest recipient."""
+    return f"{BASE_URL}/v1/digest-unsubscribe/{generate_digest_unsub_token(email)}"
+
+
+def record_digest_optout(client, email: str, source: str) -> bool:
+    """Record that an email opted out of the digest. True when newly recorded."""
+    key = client.key(DIGEST_OPTOUT_KIND, email)
+    existing = client.get(key)
+    if existing and existing.get("unsubscribed"):
+        return False
+    entity = datastore.Entity(key)
+    entity.update(
+        {
+            "unsubscribed": True,
+            "unsubscribed_at": datetime.now(timezone.utc),
+            "source": source,
+        }
+    )
+    client.put(entity)
+    return True
+
+
+def fetch_digest_optouts(client, emails: list) -> set:
+    """Return the emails from the list that opted out of the digest."""
+    opted_out = set()
+    for start in range(0, len(emails), DIGEST_OPTOUT_LOOKUP_CHUNK):
+        chunk = emails[start : start + DIGEST_OPTOUT_LOOKUP_CHUNK]
+        keys = [client.key(DIGEST_OPTOUT_KIND, email) for email in chunk]
+        for entity in client.get_multi(keys):
+            if entity.get("unsubscribed"):
+                opted_out.add(entity.key.name)
+    return opted_out

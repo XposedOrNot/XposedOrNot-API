@@ -10,22 +10,31 @@ from typing import Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from google.api_core import exceptions as google_exceptions
 
 from config.clients import ds_client, redis_client
 from config.settings import (
+    BASE_URL,
     CF_UNBLOCK_MAGIC,
     ENVIRONMENT,
     DEBUG_EMAIL,
 )
 from models.responses import MonthlyDigestResponse
 from utils.custom_limiter import custom_rate_limiter
-from utils.token import generate_confirmation_token
+from utils.redaction import mask_email
+from utils.token import confirm_digest_unsub_token, generate_confirmation_token
+from utils.validation import validate_email_with_tld, validate_variables
 
 from .monthly_digest_helpers import (
     heartbeat_logger,
     prefetch_breach_data,
     batch_create_sessions,
+    build_digest_unsubscribe_url,
     build_monthly_digest_content,
+    fetch_digest_optouts,
+    record_digest_optout,
 )
 
 # Email constants from send_email service
@@ -37,6 +46,95 @@ API_SECRET = os.environ.get("MJ_API_SECRET")
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+templates = Jinja2Templates(directory="templates")
+
+ONE_CLICK_MARKER = b"List-Unsubscribe=One-Click"
+
+
+def _digest_unsub_page(request: Request, template: str, status_code: int, **context):
+    """Render one of the digest unsubscribe pages."""
+    return HTMLResponse(
+        content=templates.TemplateResponse(
+            request, template, context=context
+        ).body.decode(),
+        status_code=status_code,
+    )
+
+
+def _digest_unsub_email(unsub_token: str) -> Optional[str]:
+    """Return the email a digest unsubscribe token was issued for, or None."""
+    if not unsub_token or not validate_variables([unsub_token]):
+        return None
+    email = confirm_digest_unsub_token(unsub_token)
+    if not email or not validate_email_with_tld(email):
+        return None
+    return email
+
+
+@router.get(
+    "/digest-unsubscribe/{unsub_token}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+@custom_rate_limiter("2 per second;50 per hour;100 per day")
+async def digest_unsubscribe_confirm(request: Request, unsub_token: str):
+    """
+    Render the confirmation page for stopping the monthly digest.
+
+    Nothing is recorded here. The opt-out is recorded only by the POST sent
+    from this page, so email link scanners that open the link cannot
+    unsubscribe a recipient.
+    """
+    email = _digest_unsub_email(unsub_token)
+    if not email:
+        return _digest_unsub_page(request, "digest_unsub_error.html", 404)
+    return _digest_unsub_page(
+        request,
+        "digest_unsub_confirm.html",
+        200,
+        email=email,
+        action_url=f"{BASE_URL}/v1/digest-unsubscribe/{unsub_token}",
+    )
+
+
+@router.post(
+    "/digest-unsubscribe/{unsub_token}",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+@custom_rate_limiter("5 per second;200 per hour;1000 per day")
+async def digest_unsubscribe_record(request: Request, unsub_token: str):
+    """
+    Record a monthly digest opt-out.
+
+    Serves both the button on the confirmation page and the one-click
+    unsubscribe POST that mailbox providers send for the List-Unsubscribe
+    header. Recording is idempotent.
+    """
+    email = _digest_unsub_email(unsub_token)
+    if not email:
+        return _digest_unsub_page(request, "digest_unsub_error.html", 404)
+
+    body = await request.body()
+    source = "one_click" if ONE_CLICK_MARKER in body[:256] else "email_link"
+
+    try:
+        newly_recorded = record_digest_optout(ds_client, email, source)
+    except google_exceptions.GoogleAPIError as e:
+        logger.error(
+            "[MONTHLY-DIGEST] ❌ Failed to record opt-out for %s: %s",
+            mask_email(email),
+            str(e),
+        )
+        return _digest_unsub_page(request, "digest_unsub_error.html", 500)
+
+    logger.info(
+        "[MONTHLY-DIGEST] 🔕 Opt-out %s for %s via %s",
+        "recorded" if newly_recorded else "already on file",
+        mask_email(email),
+        source,
+    )
+    return _digest_unsub_page(request, "digest_unsub_done.html", 200)
 
 
 async def process_single_email_optimized(
@@ -52,8 +150,14 @@ async def process_single_email_optimized(
     """Optimized single email processing with pre-fetched data."""
     try:
         # Generate HTML content with pre-fetched data (much faster)
+        unsubscribe_url = build_digest_unsubscribe_url(email)
         content = await build_monthly_digest_content(
-            email, dashboard_token, user_domains, all_breach_data, client
+            email,
+            dashboard_token,
+            user_domains,
+            all_breach_data,
+            client,
+            unsubscribe_url,
         )
 
         # Environment-specific email logic
@@ -72,6 +176,10 @@ async def process_single_email_optimized(
                     "Subject": content["subject"],
                     "HTMLPart": content["html"],
                     "TextPart": content["text"],
+                    "Headers": {
+                        "List-Unsubscribe": f"<{unsubscribe_url}>",
+                        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                    },
                 }
             ]
         }
@@ -202,6 +310,18 @@ async def process_monthly_digest_for_all_users():
                 "total_verified_domains": len(verified_domains),
             }
 
+        opted_out = fetch_digest_optouts(client, unique_emails_list)
+        skipped_unsubscribed = len(opted_out)
+        unique_emails_list = [
+            email for email in unique_emails_list if email not in opted_out
+        ]
+        logger.info(
+            "[MONTHLY-DIGEST] 🔕 UNSUBSCRIBED: Skipping %s opted-out recipients, "
+            "%s remaining",
+            skipped_unsubscribed,
+            len(unique_emails_list),
+        )
+
         perf_start = time.time()
         all_breach_data = await prefetch_breach_data(client)
         logger.info(
@@ -313,6 +433,7 @@ async def process_monthly_digest_for_all_users():
             ),
             "detailed_errors": detailed_errors[:10] if detailed_errors else [],
             "skipped_custid_domains": skipped_custid_domains,
+            "skipped_unsubscribed": skipped_unsubscribed,
             "total_verified_domains": len(verified_domains),
         }
 

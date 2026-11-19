@@ -15,6 +15,9 @@ PROJECT_ID: Optional[str] = os.environ.get("PROJECT_ID")
 SECRET_APIKEY: str = os.environ["SECRET_APIKEY"]
 SECURITY_SALT: str = os.environ["SECURITY_SALT"]
 MONITOR_TOKEN_SALT: str = os.environ.get("MONITOR_TOKEN_SALT", "xon-monitor-consent")
+DIGEST_UNSUB_TOKEN_SALT: str = os.environ.get(
+    "DIGEST_UNSUB_TOKEN_SALT", "xon-digest-unsubscribe"
+)
 TOPIC_ID: Optional[str] = os.environ.get("TOPIC_ID")
 WTF_CSRF_SECRET_KEY: str = os.environ["WTF_CSRF_SECRET_KEY"]
 BASE_URL: str = os.environ.get("BASE_URL", "https://api.xposedornot.com")

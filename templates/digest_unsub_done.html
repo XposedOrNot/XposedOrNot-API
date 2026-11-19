@@ -1,0 +1,17 @@
+{% extends "base_verify.html" %}
+
+{% block title %}XposedOrNot: You're Unsubscribed{% endblock %}
+
+{% block content %}
+<div class="verify-card">
+  <div class="icon-circle success" aria-hidden="true">
+    <i class="fas fa-check-circle"></i>
+  </div>
+  <h1>You've Been Unsubscribed</h1>
+  <p>You will no longer receive the monthly breach digest from XposedOrNot.</p>
+  <p class="expiry-note">Your verified domains and your dashboard are not affected.</p>
+  <a href="https://xposedornot.com/dashboard" class="cta-button">
+    <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+  </a>
+</div>
+{% endblock %}

@@ -5,9 +5,19 @@ import logging
 from typing import Optional
 
 from fastapi import HTTPException
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+from itsdangerous import (
+    BadSignature,
+    SignatureExpired,
+    URLSafeSerializer,
+    URLSafeTimedSerializer,
+)
 
-from config.settings import MONITOR_TOKEN_SALT, SECRET_APIKEY, SECURITY_SALT
+from config.settings import (
+    DIGEST_UNSUB_TOKEN_SALT,
+    MONITOR_TOKEN_SALT,
+    SECRET_APIKEY,
+    SECURITY_SALT,
+)
 from utils.redaction import mask_email
 
 # Configure logging
@@ -146,3 +156,28 @@ async def confirm_monitor_token(token: str, expiration: int = 86400) -> Optional
     except Exception as e:
         logger.error("[TOKEN] Error verifying monitor token: %s", str(e), exc_info=True)
         return None
+
+
+def generate_digest_unsub_token(email: str) -> str:
+    """
+    Generate a signed token that identifies an email for digest unsubscribe.
+
+    A distinct salt namespaces these tokens so they cannot be replayed into
+    the alert, monitor or dashboard flows. The token does not expire so the
+    unsubscribe link in an old digest keeps working.
+    """
+    serializer = URLSafeSerializer(SECRET_APIKEY)
+    return serializer.dumps(email, salt=DIGEST_UNSUB_TOKEN_SALT)
+
+
+def confirm_digest_unsub_token(token: str) -> Optional[str]:
+    """Verify a digest unsubscribe token and return its email, or None."""
+    try:
+        serializer = URLSafeSerializer(SECRET_APIKEY)
+        email = serializer.loads(token, salt=DIGEST_UNSUB_TOKEN_SALT)
+    except BadSignature:
+        logger.warning("[TOKEN] Invalid digest unsubscribe token")
+        return None
+    if not isinstance(email, str) or not email:
+        return None
+    return email
