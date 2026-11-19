@@ -146,6 +146,23 @@ def validate_teams_webhook_url(webhook_url: str) -> bool:
     return False
 
 
+def is_powerplatform_webhook_url(webhook_url: str) -> bool:
+    """
+    Check whether a Teams webhook URL is hosted on Power Platform.
+
+    Args:
+        webhook_url: The webhook URL to check
+
+    Returns:
+        bool: True if the URL host is a Power Platform host
+    """
+    try:
+        host = (urlparse(webhook_url).hostname or "").lower()
+    except (ValueError, AttributeError, TypeError):
+        return False
+    return host.endswith(".api.powerplatform.com")
+
+
 MAX_WEBHOOK_URL_LENGTH = 2048
 
 MAX_CUSTOM_HEADERS = 10

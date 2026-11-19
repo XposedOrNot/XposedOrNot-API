@@ -28,6 +28,7 @@ from utils.http_client import shared_http_client
 from utils.webhook_security import (
     decrypt_webhook,
     encrypt_webhook,
+    is_powerplatform_webhook_url,
     resolve_safe_public_url,
     validate_custom_headers,
     validate_generic_webhook_url,
@@ -212,7 +213,7 @@ async def send_teams_verification_message(
         HTTPException: If webhook delivery fails
     """
     try:
-        if "api.powerplatform.com" in webhook_url:
+        if is_powerplatform_webhook_url(webhook_url):
             message = {
                 "type": "message",
                 "attachments": [
@@ -323,7 +324,7 @@ async def send_teams_success_message(webhook_url: str) -> bool:
         bool: True if message was sent successfully
     """
     try:
-        if "api.powerplatform.com" in webhook_url:
+        if is_powerplatform_webhook_url(webhook_url):
             message = {
                 "type": "message",
                 "attachments": [
