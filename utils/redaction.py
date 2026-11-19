@@ -9,7 +9,7 @@ import re
 
 # Matches an email; group(1) is the first local-part char, group(2) is "@domain".
 _EMAIL_RE = re.compile(
-    r"([a-zA-Z0-9._%+\-])[a-zA-Z0-9._%+\-]*(@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})"
+    r"(?<![a-zA-Z0-9._%+\-])([a-zA-Z0-9._%+\-])[a-zA-Z0-9._%+\-]*(@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})"
 )
 
 # Matches "token=<value>" (and *_token=) but leaves already-redacted markers alone.
