@@ -25,7 +25,7 @@ from .monthly_digest_helpers import (
     heartbeat_logger,
     prefetch_breach_data,
     batch_create_sessions,
-    generate_monthly_digest_html_optimized,
+    build_monthly_digest_content,
 )
 
 # Email constants from send_email service
@@ -52,11 +52,9 @@ async def process_single_email_optimized(
     """Optimized single email processing with pre-fetched data."""
     try:
         # Generate HTML content with pre-fetched data (much faster)
-        html_content = await generate_monthly_digest_html_optimized(
+        content = await build_monthly_digest_content(
             email, dashboard_token, user_domains, all_breach_data, client
         )
-
-        current_month = datetime.now(timezone.utc).strftime("%B")
 
         # Environment-specific email logic
         if ENVIRONMENT in ["dev", "test"]:
@@ -70,16 +68,10 @@ async def process_single_email_optimized(
             "Messages": [
                 {
                     "From": {"Email": FROM_EMAIL, "Name": FROM_NAME},
-                    "To": [{"Email": send_to_email, "Name": "User"}],
-                    "Subject": (
-                        f"🚨 New breaches detected — check your exposure "
-                        f"({current_month} update)"
-                    ),
-                    "HTMLPart": html_content,
-                    "TextPart": (
-                        f"XposedOrNot Monthly Digest - Visit https://xposedornot.com "
-                        f"to view your breach report for {email}"
-                    ),
+                    "To": [{"Email": send_to_email}],
+                    "Subject": content["subject"],
+                    "HTMLPart": content["html"],
+                    "TextPart": content["text"],
                 }
             ]
         }
