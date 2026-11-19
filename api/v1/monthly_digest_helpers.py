@@ -8,7 +8,7 @@ from google.cloud import datastore
 
 from config.clients import ds_client
 from config.settings import BASE_URL
-from utils.safe_encoding import escape_html, build_safe_url
+from utils.safe_encoding import escape_html
 from utils.token import generate_digest_unsub_token
 
 logger = logging.getLogger(__name__)
@@ -122,50 +122,6 @@ async def prefetch_breach_data(client) -> dict:
     }
 
 
-async def batch_create_sessions(client, email_tokens: dict):
-    """Create all dashboard sessions in batches for better performance."""
-    start_time = time.time()
-    session_entities = []
-
-    for email, token in email_tokens.items():
-        entity = datastore.Entity(client.key("xon_domains_session", email))
-        entity.update(
-            {
-                "magic_timestamp": datetime.now(),
-                "domain_magic": token,
-            }
-        )
-        session_entities.append(entity)
-
-    # Batch create sessions in chunks of 25 (datastore limit)
-    batch_size = 25
-    total_batches = (len(session_entities) + batch_size - 1) // batch_size
-
-    for i in range(0, len(session_entities), batch_size):
-        batch = session_entities[i : i + batch_size]
-        batch_num = (i // batch_size) + 1
-        try:
-            client.put_multi(batch)
-            logger.info(
-                (
-                    f"[MONTHLY-DIGEST] 📝 SESSION BATCH {batch_num}/{total_batches}: "
-                    f"Created {len(batch)} sessions"
-                )
-            )
-        except Exception as e:
-            logger.error(
-                f"[MONTHLY-DIGEST] ❌ Failed to create session batch {batch_num}: {str(e)}"
-            )
-
-    duration = time.time() - start_time
-    logger.info(
-        (
-            f"[MONTHLY-DIGEST] ✅ SESSION CREATION: Created {len(session_entities)} "
-            f"sessions in {duration:.2f}s"
-        )
-    )
-
-
 def generate_mobile_exposure_cards(user_exposures: list) -> str:
     """Generate mobile-friendly card layout for user exposures."""
     if not user_exposures:
@@ -230,6 +186,7 @@ def generate_mobile_breach_cards(new_breaches: list) -> str:
 
 
 DASHBOARD_HOME_URL = "https://xposedornot.com/dashboard"
+BREACH_DASHBOARD_URL = "https://xposedornot.com/breach-dashboard"
 BREACH_LIST_URL = "https://xposedornot.com/xposed"
 MAX_EXPOSURE_CARDS = 10
 MAX_EARLIER_ROWS = 5
@@ -665,7 +622,6 @@ def render_unsubscribe_html(unsubscribe_url: str) -> str:
 
 async def build_monthly_digest_content(
     email: str,
-    dashboard_token: str,
     user_domains: list,
     all_breach_data: dict,
     client=None,
@@ -685,10 +641,7 @@ async def build_monthly_digest_content(
         new_exposures = [item for item in exposures if item["is_new"]]
         earlier_exposures = [item for item in exposures if not item["is_new"]]
 
-        dashboard_url = build_safe_url(
-            "https://xposedornot.com/breach-dashboard",
-            {"email": email, "token": dashboard_token},
-        )
+        dashboard_url = BREACH_DASHBOARD_URL
 
         context = {
             "email": email,

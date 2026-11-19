@@ -80,7 +80,6 @@ def build(rows, details, domains, new_breaches=None):
     return asyncio.run(
         module.build_monthly_digest_content(
             "admin@acme.com",
-            "tok&en",
             domains,
             breach_data(details, new_breaches),
             FakeClient(rows),
@@ -109,10 +108,13 @@ def test_new_exposure_shows_email_count_domain_and_subject():
     assert "Data exposed: Email addresses, Passwords" in content["html"]
     assert "See affected emails in your dashboard" in content["html"]
     assert "What to do now" in content["html"]
-    assert "token=tok%26en" in content["html"]
-    assert "email=admin%40acme.com&amp;token=" in content["html"]
+    assert 'href="https://xposedornot.com/breach-dashboard"' in content["html"]
+    assert "token=" not in content["html"] + content["text"]
+    assert "See affected emails: https://xposedornot.com/breach-dashboard\n" in (
+        content["text"]
+    )
     assert "42 emails from your domain (acme.com)" in content["text"]
-    assert "email=admin%40acme.com&token=" in content["text"]
+    assert "email=" not in content["html"] + content["text"]
 
 
 def test_clean_month_has_calm_subject_and_no_alarm_button():

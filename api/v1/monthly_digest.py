@@ -24,13 +24,12 @@ from config.settings import (
 from models.responses import MonthlyDigestResponse
 from utils.custom_limiter import custom_rate_limiter
 from utils.redaction import mask_email
-from utils.token import confirm_digest_unsub_token, generate_confirmation_token
+from utils.token import confirm_digest_unsub_token
 from utils.validation import validate_email_with_tld, validate_variables
 
 from .monthly_digest_helpers import (
     heartbeat_logger,
     prefetch_breach_data,
-    batch_create_sessions,
     build_digest_unsubscribe_url,
     build_monthly_digest_content,
     fetch_digest_optouts,
@@ -143,7 +142,6 @@ async def process_single_email_optimized(
     total_emails: int,
     batch_num: int,
     user_domains: list,
-    dashboard_token: str,
     all_breach_data: dict,
     client,
 ) -> dict:
@@ -153,7 +151,6 @@ async def process_single_email_optimized(
         unsubscribe_url = build_digest_unsubscribe_url(email)
         content = await build_monthly_digest_content(
             email,
-            dashboard_token,
             user_domains,
             all_breach_data,
             client,
@@ -228,7 +225,7 @@ async def process_single_email_optimized(
         }
 
 
-async def process_monthly_digest_for_all_users():
+async def process_monthly_digest_for_all_users(target_email: Optional[str] = None):
     """
     Internal function to process monthly digest for all verified domain users.
     Optimized with batch datastore operations and performance monitoring.
@@ -287,6 +284,30 @@ async def process_monthly_digest_for_all_users():
                 email_to_domains[email].append(domain["domain"])
 
         unique_emails_list = list(unique_emails)
+
+        if target_email is not None:
+            wanted = target_email.lower().strip()
+            unique_emails_list = [
+                email for email in unique_emails_list if email == wanted
+            ]
+            if not unique_emails_list:
+                logger.info(
+                    "[MONTHLY-DIGEST] 🎯 TARGET: %s has no eligible verified "
+                    "domains - nothing sent",
+                    mask_email(wanted),
+                )
+                return {
+                    "status": "success",
+                    "message": "Target email has no eligible verified domains",
+                    "emails_sent": 0,
+                    "skipped_custid_domains": skipped_custid_domains,
+                    "total_verified_domains": len(verified_domains),
+                }
+            logger.info(
+                "[MONTHLY-DIGEST] 🎯 TARGET: Run restricted to %s",
+                mask_email(wanted),
+            )
+
         processed_domains = len(verified_domains) - skipped_custid_domains
         logger.info(
             f"[MONTHLY-DIGEST] 📊 DATA PREP: {len(unique_emails_list)} unique emails, "
@@ -329,16 +350,6 @@ async def process_monthly_digest_for_all_users():
             f"{time.time() - perf_start:.2f}s - {len(all_breach_data)} breaches"
         )
 
-        perf_start = time.time()
-        email_tokens = {}
-        for email in unique_emails_list:
-            email_tokens[email] = await generate_confirmation_token(email)
-        logger.info(
-            f"[MONTHLY-DIGEST] 📊 PERF: Token generation took {time.time() - perf_start:.2f}s"
-        )
-
-        await batch_create_sessions(client, email_tokens)
-
         # Process emails with optimized batching
         emails_sent = 0
         html_generation_errors = 0
@@ -368,14 +379,12 @@ async def process_monthly_digest_for_all_users():
             batch_tasks = []
             for i, email in enumerate(batch_emails, start_idx + 1):
                 user_domains = email_to_domains.get(email, [])
-                dashboard_token = email_tokens[email]
                 task = process_single_email_optimized(
                     email,
                     i,
                     len(unique_emails_list),
                     batch_num + 1,
                     user_domains,
-                    dashboard_token,
                     all_breach_data,
                     client,
                 )
@@ -597,10 +606,15 @@ async def trigger_manual_monthly_digest(
             f"Manual monthly digest trigger requested - target: {target_email or 'all users'}"
         )
 
-        result = await process_monthly_digest_for_all_users()
+        result = await process_monthly_digest_for_all_users(target_email)
 
         # Update Redis state after successful execution
-        if result and result.get("status") == "success" and redis_client:
+        if (
+            target_email is None
+            and result
+            and result.get("status") == "success"
+            and redis_client
+        ):
             try:
 
                 now = datetime.now(timezone.utc)
@@ -645,11 +659,14 @@ async def trigger_manual_monthly_digest(
 
         return MonthlyDigestResponse(
             status="success",
-            message="Manual monthly digest triggered successfully",
+            message=(
+                f"{result.get('message', 'Manual monthly digest triggered')} "
+                f"(emails sent: {result.get('emails_sent', 0)})"
+            ),
             task_id=task_id,
             trigger_type="manual",
             target_email=target_email,
-            testing_mode=True,  # Always testing mode for manual triggers
+            testing_mode=target_email is not None,
         )
 
     except Exception as e:

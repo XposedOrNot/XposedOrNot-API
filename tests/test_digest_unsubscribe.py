@@ -316,7 +316,7 @@ def test_full_run_sends_only_to_recipients_who_did_not_unsubscribe(monkeypatch):
     assert result["emails_sent"] == 1
     assert result["skipped_unsubscribed"] == 1
     assert result["total_unique_emails"] == 1
-    assert fake.get(fake.key("xon_domains_session", "gone@gone.com")) is None
+    assert not [key for key in fake.entities if key.kind == "xon_domains_session"]
 
     message = FakeMailClient.sent[0]
     stays_url = helpers.build_digest_unsubscribe_url("stays@acme.com")
@@ -344,3 +344,92 @@ def test_full_run_sends_nothing_when_optout_lookup_fails(monkeypatch):
     with pytest.raises(Exception):
         asyncio.run(module.process_monthly_digest_for_all_users())
     assert not FakeMailClient.sent
+
+
+TWO_OWNERS = [
+    {"domain": "acme.com", "email": "me@acme.com", "verified": True},
+    {"domain": "other.com", "email": "someone@other.com", "verified": True},
+]
+
+
+def run_with_target(monkeypatch, target_email):
+    """Run the real digest for a target and return the result and recipients."""
+    fake = RunDatastoreClient(TWO_OWNERS)
+    FakeMailClient.sent = []
+    monkeypatch.setattr(module, "ds_client", fake)
+    monkeypatch.setattr(module, "ENVIRONMENT", "production")
+    monkeypatch.setattr(module.httpx, "AsyncClient", FakeMailClient)
+    result = asyncio.run(module.process_monthly_digest_for_all_users(target_email))
+    return result, [message["To"][0]["Email"] for message in FakeMailClient.sent]
+
+
+def test_target_email_restricts_the_run_to_that_recipient(monkeypatch):
+    """A targeted run mails only the target, matched case-insensitively."""
+    result, recipients = run_with_target(monkeypatch, " Me@Acme.com ")
+
+    assert recipients == ["me@acme.com"]
+    assert result["emails_sent"] == 1
+
+
+@pytest.mark.parametrize("target", ["nobody@nowhere.com", "", "acme.com"])
+def test_unknown_or_empty_target_sends_nothing(monkeypatch, target):
+    """A target that owns no verified domain never falls back to everyone."""
+    result, recipients = run_with_target(monkeypatch, target)
+
+    assert recipients == []
+    assert result["emails_sent"] == 0
+
+
+def test_run_without_target_mails_every_owner(monkeypatch):
+    """Without a target the run still reaches all eligible owners."""
+    result, recipients = run_with_target(monkeypatch, None)
+
+    assert sorted(recipients) == ["me@acme.com", "someone@other.com"]
+    assert result["emails_sent"] == 2
+
+
+class FakeRedis:  # pylint: disable=too-few-public-methods
+    """Redis stub that records the keys the trigger writes."""
+
+    def __init__(self):
+        self.written = {}
+
+    def setex(self, key, _ttl, value):
+        """Record a key written with an expiry."""
+        self.written[key] = value
+
+
+def trigger(monkeypatch, target_email):
+    """Call the real manual trigger route and return its response and Redis."""
+    fake = RunDatastoreClient(TWO_OWNERS)
+    redis = FakeRedis()
+    FakeMailClient.sent = []
+    monkeypatch.setattr(module, "ds_client", fake)
+    monkeypatch.setattr(module, "redis_client", redis)
+    monkeypatch.setattr(module, "ENVIRONMENT", "production")
+    monkeypatch.setattr(module.httpx, "AsyncClient", FakeMailClient)
+    response = asyncio.run(
+        module.trigger_manual_monthly_digest.__wrapped__(
+            make_request("POST"), module.CF_UNBLOCK_MAGIC, target_email
+        )
+    )
+    return response, redis
+
+
+def test_targeted_trigger_does_not_mark_the_month_as_sent(monkeypatch):
+    """A test send must not block the real monthly run."""
+    response, redis = trigger(monkeypatch, "me@acme.com")
+
+    assert len(FakeMailClient.sent) == 1
+    assert response.testing_mode is True
+    assert response.target_email == "me@acme.com"
+    assert not redis.written
+
+
+def test_full_trigger_marks_the_month_as_sent(monkeypatch):
+    """A full manual run records the month and is not reported as a test."""
+    response, redis = trigger(monkeypatch, None)
+
+    assert len(FakeMailClient.sent) == 2
+    assert response.testing_mode is False
+    assert list(redis.written) == [f"{module.ENVIRONMENT}_monthly_digest_last_run"]
