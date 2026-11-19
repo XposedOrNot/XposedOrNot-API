@@ -42,7 +42,7 @@ os.environ.setdefault("ENCRYPTION_KEY", Fernet.generate_key().decode())
 _limiter_stub = types.ModuleType("utils.custom_limiter")
 
 
-def _passthrough_rate_limiter(_rate_limit_str, message=None):  # noqa: ARG001
+def _passthrough_rate_limiter(_rate_limit_str, *_args, **_kwargs):  # noqa: ARG001
     def decorator(func):
         return func
 
@@ -104,10 +104,12 @@ class FakeQuery:
         self.filters = []
 
     def add_filter(self, prop, op, value):
+        """Record an equality filter."""
         assert op == "="
         self.filters.append((prop, value))
 
     def fetch(self, limit=None):
+        """Return entities of this kind matching all filters."""
         out = []
         for key, entity in self.store.entities.items():
             if key.kind != self.kind:
@@ -124,18 +126,23 @@ class FakeDatastoreClient:
         self.entities = {}
 
     def key(self, kind, name):
+        """Return an in-memory key."""
         return FakeKey(kind, name)
 
     def get(self, key):
+        """Return an entity by key."""
         return self.entities.get(key)
 
     def put(self, entity):
+        """Store an entity by key."""
         self.entities[entity.key] = entity
 
     def delete(self, key):
+        """Remove an entity by key."""
         self.entities.pop(key, None)
 
     def query(self, kind):
+        """Return a fake query for a kind."""
         return FakeQuery(self, kind)
 
 
@@ -147,6 +154,7 @@ class FakeResponse:
         self.headers = headers or {}
 
     def raise_for_status(self):
+        """Raise an HTTP status error for 4xx and 5xx responses."""
         if self.status_code >= 400:
             raise httpx.HTTPStatusError(
                 f"HTTP {self.status_code}",
@@ -155,9 +163,11 @@ class FakeResponse:
             )
 
     async def aread(self):
+        """Fail if the response body is read."""
         raise AssertionError("webhook delivery must never read the response body")
 
     def aiter_bytes(self, *args, **kwargs):
+        """Fail if the response body is streamed."""
         raise AssertionError("webhook delivery must never read the response body")
 
 
@@ -199,6 +209,7 @@ class FakeAsyncClient:
         return FakeResponse(code, headers=self.stream_headers.get(url))
 
     async def post(self, url, json=None, content=None, headers=None, timeout=None):
+        """Record a POST call made through the fake client."""
         self.posts.append(
             {
                 "url": url,
@@ -216,6 +227,7 @@ class FakeAsyncClient:
     def stream(
         self, method, url, content=None, headers=None, timeout=None, extensions=None
     ):
+        """Record a streamed request made through the fake client."""
         hdrs = headers or {}
         self.posts.append(
             {
@@ -235,7 +247,7 @@ class FakeAsyncClient:
         )
 
 
-def _public_getaddrinfo(host, port, proto=None):  # noqa: ARG001
+def _public_getaddrinfo(host, port, **_kwargs):  # noqa: ARG001
     if host.startswith("internal") or host in ("localhost",):
         ip = "10.0.0.5"
     elif host == "unresolvable.test":
@@ -246,6 +258,7 @@ def _public_getaddrinfo(host, port, proto=None):  # noqa: ARG001
 
 
 def make_request(headers=None, path="/v1/webhook/setup", query=""):
+    """Build a minimal POST request with the given headers, path and query."""
     raw_headers = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
     scope = {
         "type": "http",
@@ -277,6 +290,7 @@ VALID_URL = {"slack": SLACK_URL, "teams": TEAMS_URL}
 
 
 def run(coro):
+    """Run a coroutine to completion."""
     return asyncio.run(coro)
 
 
@@ -339,6 +353,7 @@ def env(monkeypatch):
 
 
 def req(platform, action, **kw):
+    """Build a channel setup request for a platform and action."""
     data = {"action": action}
     if action == "setup" and "webhook" not in kw:
         data["webhook"] = VALID_URL.get(platform, HOOK_URL)
@@ -347,11 +362,13 @@ def req(platform, action, **kw):
 
 
 def row(env, platform, email=OWNER):
+    """Return the stored channel row for a platform and owner."""
     kind = messaging.PLATFORM_MAP[platform]
     return env.ds.get(FakeKey(kind, email))
 
 
 def code_from_slack_post(post):
+    """Extract the verification code from a Slack post."""
     for block in post["json"]["blocks"]:
         text = block.get("text", {}).get("text", "")
         if text.startswith("```"):
@@ -378,6 +395,7 @@ def _find_code(node):
 
 
 def code_from_webhook_post(post):
+    """Extract the verification code from a webhook post."""
     return json.loads(post["content"])["verification_code"]
 
 
@@ -388,6 +406,7 @@ def code_from_webhook_post(post):
 
 @pytest.mark.parametrize("platform", ["slack", "teams"])
 def test_chat_setup_stores_pending_row_and_posts_code(env, platform):
+    """Setup stores a pending row and posts the verification code."""
     ok, code = run(
         messaging.setup_messaging_channel(req(platform, "setup"), platform, OWNER)
     )
@@ -418,6 +437,7 @@ def test_chat_setup_stores_pending_row_and_posts_code(env, platform):
 
 @pytest.mark.parametrize("platform", ["slack", "teams"])
 def test_chat_setup_rejects_wrong_platform_url(env, platform):
+    """Setup rejects a webhook URL that belongs to the other platform."""
     wrong = TEAMS_URL if platform == "slack" else SLACK_URL
     with pytest.raises(HTTPException) as exc:
         run(
@@ -430,6 +450,7 @@ def test_chat_setup_rejects_wrong_platform_url(env, platform):
 
 
 def test_teams_setup_ssrf_shaped_url_rejected(env):
+    """Teams setup rejects an SSRF-shaped webhook URL."""
     bad = "https://169.254.169.254/x.webhook.office.com/webhookb2/abc"
     with pytest.raises(HTTPException) as exc:
         run(
@@ -442,6 +463,7 @@ def test_teams_setup_ssrf_shaped_url_rejected(env):
 
 @pytest.mark.parametrize("platform", ["slack", "teams"])
 def test_chat_setup_webhook_failure_creates_nothing(env, platform):
+    """A failed webhook post during setup creates no row."""
     env.http.responses[VALID_URL[platform]] = [404]
     with pytest.raises(HTTPException) as exc:
         run(messaging.setup_messaging_channel(req(platform, "setup"), platform, OWNER))
@@ -451,6 +473,7 @@ def test_chat_setup_webhook_failure_creates_nothing(env, platform):
 
 @pytest.mark.parametrize("platform", ["slack", "teams"])
 def test_chat_verify_then_conflict_then_delete(env, platform):
+    """Cover verify, then conflict, then delete for a chat channel."""
     run(messaging.setup_messaging_channel(req(platform, "setup"), platform, OWNER))
     code = row(env, platform)["verify_token"]
 
@@ -512,6 +535,7 @@ def test_chat_verify_then_conflict_then_delete(env, platform):
 
 @pytest.mark.parametrize("platform", ["slack", "teams"])
 def test_chat_unverified_channel_can_be_reinitialised(env, platform):
+    """An unverified chat channel can be set up again."""
     run(messaging.setup_messaging_channel(req(platform, "setup"), platform, OWNER))
     run(messaging.setup_messaging_channel(req(platform, "setup"), platform, OWNER))
     assert len(env.http.posts) == 2
@@ -519,6 +543,7 @@ def test_chat_unverified_channel_can_be_reinitialised(env, platform):
 
 
 def test_verify_missing_code_or_missing_row(env):
+    """Verify fails when the code or the row is missing."""
     with pytest.raises(HTTPException) as exc:
         run(messaging.verify_messaging_channel(req("slack", "verify"), "slack", OWNER))
     assert exc.value.status_code == 400
@@ -532,6 +557,7 @@ def test_verify_missing_code_or_missing_row(env):
 
 
 def test_setup_requires_owner_email(env):
+    """Setup requires an owner email."""
     with pytest.raises(HTTPException) as exc:
         run(messaging.setup_messaging_channel(req("slack", "setup"), "slack", ""))
     assert exc.value.status_code == 400
@@ -558,6 +584,7 @@ def _assert_signed(post, secret, event):
 
 
 def test_webhook_setup_new_channel_signs_ping_and_returns_secret_once(env):
+    """New webhook setup signs the ping and returns the secret once."""
     request = req(
         "webhook",
         "setup",
@@ -602,6 +629,7 @@ def test_webhook_setup_new_channel_signs_ping_and_returns_secret_once(env):
     ],
 )
 def test_webhook_setup_rejects_unsafe_urls(env, url):
+    """Webhook setup rejects unsafe URLs."""
     with pytest.raises(HTTPException) as exc:
         run(
             messaging.setup_webhook_channel(req("webhook", "setup", webhook=url), OWNER)
@@ -622,6 +650,7 @@ def test_webhook_setup_rejects_unsafe_urls(env, url):
     ],
 )
 def test_webhook_setup_rejects_bad_custom_headers(env, headers):
+    """Webhook setup rejects bad custom headers."""
     with pytest.raises(HTTPException) as exc:
         run(
             messaging.setup_webhook_channel(
@@ -633,6 +662,7 @@ def test_webhook_setup_rejects_bad_custom_headers(env, headers):
 
 
 def test_webhook_setup_ping_failure_keeps_pending_row_and_reshows_secret(env):
+    """A failed ping keeps the pending row and shows the secret again."""
     env.http.responses[HOOK_URL] = [500]
     with pytest.raises(HTTPException) as exc:
         run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
@@ -651,6 +681,7 @@ def test_webhook_setup_ping_failure_keeps_pending_row_and_reshows_secret(env):
 
 
 def test_webhook_permanent_4xx_is_not_retried(env):
+    """A permanent 4xx response is not retried."""
     env.http.responses[HOOK_URL] = [404]
     with pytest.raises(HTTPException):
         run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
@@ -705,7 +736,7 @@ def test_webhook_dns_rebinding_between_check_and_connect_is_blocked(env, monkeyp
     which must reject delivery outright.
     """
 
-    def private_now(host, port, proto=None):  # noqa: ARG001
+    def private_now(_host, port, **_kwargs):  # noqa: ARG001
         return [(2, 1, 6, "", ("10.0.0.5", port))]
 
     monkeypatch.setattr(webhook_security.socket, "getaddrinfo", private_now)
@@ -717,6 +748,7 @@ def test_webhook_dns_rebinding_between_check_and_connect_is_blocked(env, monkeyp
 
 
 def test_webhook_verify_update_in_place_url_change_and_rotate(env):
+    """Cover webhook verify, in-place update, URL change and secret rotation."""
     _, secret = run(messaging.setup_webhook_channel(req("webhook", "setup"), OWNER))
     code = code_from_webhook_post(env.http.posts[0])
 
@@ -807,6 +839,7 @@ def test_webhook_verify_update_in_place_url_change_and_rotate(env):
 
 
 def test_webhook_rotate_and_config_missing_channel(env):
+    """Rotate and config handle a missing channel."""
     with pytest.raises(HTTPException) as exc:
         run(messaging.rotate_webhook_secret(OWNER))
     assert exc.value.status_code == 404
@@ -831,6 +864,7 @@ def _verified_webhook(env):
 
 
 def test_send_webhook_alert_success_failure_and_autodisable(env):
+    """Cover webhook alert success, failure and auto-disable."""
     payload = {
         "event": "breach_alert",
         "service": "XposedOrNot",
@@ -881,6 +915,7 @@ def test_send_webhook_alert_success_failure_and_autodisable(env):
 
 
 def test_alerts_for_multiple_domains_share_one_channel(env):
+    """Alerts for multiple domains share one channel."""
     secret = _verified_webhook(env)
     for domain in (DOMAIN, "second.com"):
         payload = {"event": "breach_alert", "domain": domain}
@@ -897,9 +932,10 @@ def test_alerts_for_multiple_domains_share_one_channel(env):
 
 
 def test_webhook_alert_rechecks_ssrf_at_send_time(env, monkeypatch):
+    """Webhook alert re-checks SSRF at send time."""
     _verified_webhook(env)
 
-    def rebinding(host, port, proto=None):  # noqa: ARG001
+    def rebinding(_host, port, **_kwargs):  # noqa: ARG001
         return [(2, 1, 6, "", ("127.0.0.1", port))]
 
     monkeypatch.setattr(webhook_security.socket, "getaddrinfo", rebinding)
@@ -915,6 +951,7 @@ def test_webhook_alert_rechecks_ssrf_at_send_time(env, monkeypatch):
 
 
 def test_resolve_owner_api_key_and_session(env):
+    """Owner resolves through API key and through session."""
     assert (
         run(
             channel_auth.resolve_domain_owner(
@@ -953,6 +990,7 @@ def test_resolve_owner_api_key_and_session(env):
 
 
 def test_resolve_owner_expired_session(env):
+    """An expired session is rejected."""
     env.ds.get(FakeKey("xon_domains_session", OWNER))["magic_timestamp"] = datetime.now(
         timezone.utc
     ) - timedelta(hours=13)
@@ -962,6 +1000,7 @@ def test_resolve_owner_expired_session(env):
 
 
 def test_owns_any_verified_domain(env):
+    """Check ownership of any verified domain."""
     assert run(channel_auth.owns_any_verified_domain(OWNER)) is True
     assert run(channel_auth.owns_any_verified_domain(OWNER.upper())) is True
     assert run(channel_auth.owns_any_verified_domain(OTHER)) is True
@@ -977,10 +1016,12 @@ def test_owns_any_verified_domain(env):
 
 
 def cfg_req(**kw):
+    """Build a channel config request."""
     return ChannelConfigRequest(**kw)
 
 
 def test_webhook_route_lifecycle_and_masked_config(env):
+    """Cover the webhook route lifecycle and masked config."""
     request = make_request({"x-api-key": API_KEY})
     resp = run(
         webhook_routes.setup_webhook_channel_endpoint(
@@ -1027,6 +1068,7 @@ def test_webhook_route_lifecycle_and_masked_config(env):
 
 
 def test_webhook_route_with_session_auth(env):
+    """Webhook route works with session auth."""
     request = make_request()
     resp = run(
         webhook_routes.setup_webhook_channel_endpoint(
@@ -1045,6 +1087,7 @@ def test_webhook_route_with_session_auth(env):
 
 
 def test_route_auth_and_input_failures(env):
+    """Routes reject missing auth and bad input."""
     # no credentials
     with pytest.raises(HTTPException) as exc:
         run(
@@ -1086,6 +1129,8 @@ def test_route_auth_and_input_failures(env):
 
 
 def test_route_unexpected_error_is_masked_and_reported(env, monkeypatch):
+    """An unexpected route error is masked and reported."""
+
     async def explode(*_a, **_k):
         raise RuntimeError("datastore down: secret detail")
 
@@ -1103,6 +1148,7 @@ def test_route_unexpected_error_is_masked_and_reported(env, monkeypatch):
 
 
 def test_service_error_propagates_to_route_handler(env, monkeypatch):
+    """A service error propagates to the route handler."""
     monkeypatch.setattr(messaging, "datastore_client", None)
     with pytest.raises(HTTPException) as exc:
         run(
@@ -1115,6 +1161,7 @@ def test_service_error_propagates_to_route_handler(env, monkeypatch):
 
 
 def test_webhook_route_rejects_private_url_without_touching_store(env):
+    """Webhook route rejects a private URL without touching the store."""
     with pytest.raises(HTTPException) as exc:
         run(
             webhook_routes.setup_webhook_channel_endpoint(
@@ -1143,6 +1190,7 @@ def _verified_chat(env, platform):
 
 
 def test_send_slack_alert_paths(env):
+    """Cover the Slack alert send paths."""
     msg = slack.build_slack_breach_message(
         DOMAIN,
         "ExampleBreach",
@@ -1168,6 +1216,7 @@ def test_send_slack_alert_paths(env):
 
 
 def test_slack_route_full_lifecycle_with_api_key(env):
+    """Cover the full Slack route lifecycle with an API key."""
     request = make_request({"x-api-key": API_KEY}, path="/v1/slack/setup")
     resp = run(
         slack_routes.setup_slack_channel_endpoint(request, req("slack", "setup"))
@@ -1203,6 +1252,7 @@ def test_slack_route_full_lifecycle_with_api_key(env):
 
 
 def test_slack_route_with_session_auth(env):
+    """Slack route works with session auth."""
     request = make_request(path="/v1/slack/setup")
     resp = run(
         slack_routes.setup_slack_channel_endpoint(
@@ -1219,6 +1269,7 @@ def test_slack_route_with_session_auth(env):
 
 
 def test_slack_route_auth_failures(env):
+    """Slack route rejects failed auth."""
     with pytest.raises(HTTPException) as exc:
         run(
             slack_routes.setup_slack_channel_endpoint(
@@ -1265,10 +1316,12 @@ def test_slack_route_auth_failures(env):
     ],
 )
 def test_teams_url_allowlist(url, ok):
+    """Teams URL allowlist accepts and rejects the expected URLs."""
     assert webhook_security.validate_teams_webhook_url(url) is ok
 
 
 def test_teams_powerplatform_setup_sends_adaptive_card(env):
+    """Power Platform setup sends an adaptive card."""
     flow_url = "https://eu.api.powerplatform.com/powerautomate/flows/abc/triggers"
     run(
         messaging.setup_messaging_channel(
@@ -1284,6 +1337,7 @@ def test_teams_powerplatform_setup_sends_adaptive_card(env):
 
 
 def test_send_teams_alert_wraps_adaptive_card(env):
+    """Teams alert wraps the adaptive card."""
     card = teams.build_teams_breach_card(
         DOMAIN, "ExampleBreach", "2026-08-01", 5, ["Emails"], 1
     )
@@ -1308,6 +1362,7 @@ def test_send_teams_alert_wraps_adaptive_card(env):
 
 
 def test_teams_route_full_lifecycle_with_api_key(env):
+    """Cover the full Teams route lifecycle with an API key."""
     request = make_request({"x-api-key": API_KEY}, path="/v1/teams/setup")
     resp = run(
         teams_routes.setup_teams_channel_endpoint(request, req("teams", "setup"))
@@ -1343,6 +1398,7 @@ def test_teams_route_full_lifecycle_with_api_key(env):
 
 
 def test_teams_route_with_session_auth(env):
+    """Teams route works with session auth."""
     request = make_request(path="/v1/teams/setup")
     resp = run(
         teams_routes.setup_teams_channel_endpoint(
@@ -1359,6 +1415,7 @@ def test_teams_route_with_session_auth(env):
 
 
 def test_teams_route_auth_failures(env):
+    """Teams route rejects failed auth."""
     with pytest.raises(HTTPException) as exc:
         run(
             teams_routes.setup_teams_channel_endpoint(
