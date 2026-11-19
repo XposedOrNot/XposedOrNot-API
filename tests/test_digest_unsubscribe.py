@@ -1,6 +1,6 @@
 """Tests for the monthly digest unsubscribe link, routes and send filter."""
 
-# pylint: disable=wrong-import-position,redefined-outer-name
+# pylint: disable=wrong-import-position,redefined-outer-name,protected-access
 
 import asyncio
 import os
@@ -92,6 +92,38 @@ def make_request(method="GET", body=b""):
         },
         receive,
     )
+
+
+class FakeRedis:
+    """Redis stub with the claim, release and last-run operations."""
+
+    def __init__(self):
+        self.claims = {}
+        self.written = {}
+
+    def set(self, key, value, nx=False, ex=None):
+        """Store a key, honouring set-if-absent."""
+        assert nx and ex
+        if key in self.claims:
+            return None
+        self.claims[key] = value
+        return True
+
+    def delete(self, key):
+        """Remove a claimed key."""
+        self.claims.pop(key, None)
+
+    def setex(self, key, _ttl, value):
+        """Record a key written with an expiry."""
+        self.written[key] = value
+
+
+@pytest.fixture(autouse=True)
+def redis(monkeypatch):
+    """Install an in-memory Redis for the send guard."""
+    fake = FakeRedis()
+    monkeypatch.setattr(module, "redis_client", fake)
+    return fake
 
 
 @pytest.fixture
@@ -388,17 +420,6 @@ def test_run_without_target_mails_every_owner(monkeypatch):
     assert result["emails_sent"] == 2
 
 
-class FakeRedis:  # pylint: disable=too-few-public-methods
-    """Redis stub that records the keys the trigger writes."""
-
-    def __init__(self):
-        self.written = {}
-
-    def setex(self, key, _ttl, value):
-        """Record a key written with an expiry."""
-        self.written[key] = value
-
-
 def trigger(monkeypatch, target_email):
     """Call the real manual trigger route and return its response and Redis."""
     fake = RunDatastoreClient(TWO_OWNERS)
@@ -433,3 +454,123 @@ def test_full_trigger_marks_the_month_as_sent(monkeypatch):
     assert len(FakeMailClient.sent) == 2
     assert response.testing_mode is False
     assert list(redis.written) == [f"{module.ENVIRONMENT}_monthly_digest_last_run"]
+
+
+def mail_client(sent, reject=(), raises=None):
+    """Build a mail client stub that can reject or fail for some recipients."""
+
+    class Response:
+        """Mail API response stub with a chosen status."""
+
+        def __init__(self, status_code):
+            self.status_code = status_code
+
+    class Client:
+        """HTTP client stub capturing accepted messages."""
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def post(self, _url, json=None, **_kwargs):
+            """Accept, reject or fail the message by recipient."""
+            recipient = json["Messages"][0]["To"][0]["Email"]
+            if raises is not None:
+                raise raises
+            if recipient in reject:
+                return Response(500)
+            sent.append(recipient)
+            return Response(200)
+
+    return Client
+
+
+def full_run(monkeypatch, sent, target_email=None, **mail_options):
+    """Run the real digest for the two owners with a configurable mail stub."""
+    monkeypatch.setattr(module, "ds_client", RunDatastoreClient(TWO_OWNERS))
+    monkeypatch.setattr(module, "ENVIRONMENT", "production")
+    monkeypatch.setattr(module.httpx, "AsyncClient", mail_client(sent, **mail_options))
+    return asyncio.run(module.process_monthly_digest_for_all_users(target_email))
+
+
+def test_second_full_run_in_the_same_period_sends_nothing(monkeypatch):
+    """A repeated full run cannot mail a recipient twice."""
+    sent = []
+    first = full_run(monkeypatch, sent)
+    second = full_run(monkeypatch, sent)
+
+    assert sorted(sent) == ["me@acme.com", "someone@other.com"]
+    assert first["emails_sent"] == 2
+    assert second["emails_sent"] == 0
+    assert second["skipped_already_sent"] == 2
+    assert second["total_errors"] == 0
+
+
+def test_rerun_after_a_rejected_send_mails_only_the_missed_recipient(monkeypatch):
+    """A recipient the mail API rejected is retried and the rest are not."""
+    sent = []
+    first = full_run(monkeypatch, sent, reject={"someone@other.com"})
+    assert sent == ["me@acme.com"]
+    assert first["email_sending_errors"] == 1
+
+    second = full_run(monkeypatch, sent)
+    assert sorted(sent) == ["me@acme.com", "someone@other.com"]
+    assert second["emails_sent"] == 1
+    assert second["skipped_already_sent"] == 1
+
+
+def test_connection_failure_releases_the_claim_for_retry(monkeypatch, redis):
+    """A send that never reached the mail API can be retried."""
+    sent = []
+    full_run(monkeypatch, sent, raises=module.httpx.ConnectError("refused"))
+    assert not sent
+    assert not redis.claims
+
+    full_run(monkeypatch, sent)
+    assert len(sent) == 2
+
+
+def test_ambiguous_failure_keeps_the_claim_to_avoid_a_duplicate(monkeypatch, redis):
+    """A timeout after the request was sent is not retried automatically."""
+    sent = []
+    full_run(monkeypatch, sent, raises=module.httpx.ReadTimeout("slow"))
+    assert len(redis.claims) == 2
+
+    second = full_run(monkeypatch, sent)
+    assert not sent
+    assert second["skipped_already_sent"] == 2
+
+
+def test_no_redis_means_no_unguarded_sends(monkeypatch):
+    """Without Redis the full run reports errors and mails nobody."""
+    sent = []
+    monkeypatch.setattr(module, "redis_client", None)
+    result = full_run(monkeypatch, sent)
+
+    assert not sent
+    assert result["emails_sent"] == 0
+    assert result["email_sending_errors"] == 2
+
+
+def test_targeted_test_send_ignores_and_does_not_set_the_guard(monkeypatch, redis):
+    """Test sends repeat freely and never block the real monthly send."""
+    sent = []
+    full_run(monkeypatch, sent, target_email="me@acme.com")
+    full_run(monkeypatch, sent, target_email="me@acme.com")
+    assert sent == ["me@acme.com", "me@acme.com"]
+    assert not redis.claims
+
+    full_run(monkeypatch, sent)
+    assert sorted(sent[2:]) == ["me@acme.com", "someone@other.com"]
+
+
+def test_guard_key_is_scoped_to_period_and_hides_the_email():
+    """Each reporting month has its own marker and no address is stored."""
+    october = module._digest_sent_key("2026-10", "me@acme.com")
+    november = module._digest_sent_key("2026-11", "me@acme.com")
+
+    assert october != november
+    assert "me@acme.com" not in october
+    assert october.endswith(module._digest_sent_key("2026-10", "me@acme.com")[-32:])

@@ -1,6 +1,7 @@
 """Monthly digest endpoint for sending breach summaries to validated domain users."""
 
 import asyncio
+import hashlib
 import logging
 import os
 import time
@@ -48,6 +49,43 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
 
 ONE_CLICK_MARKER = b"List-Unsubscribe=One-Click"
+DIGEST_SENT_TTL_SECONDS = 45 * 24 * 60 * 60
+
+
+def _digest_sent_key(period: str, email: str) -> str:
+    """Build the Redis key that marks one recipient as sent for a period."""
+    email_hash = hashlib.sha256(email.encode("utf-8")).hexdigest()[:32]
+    return f"{ENVIRONMENT}_monthly_digest_sent:{period}:{email_hash}"
+
+
+def claim_digest_send(period: str, email: str) -> bool:
+    """
+    Atomically claim the right to send one recipient's digest for a period.
+
+    Returns False when the digest for that period was already claimed, so a
+    repeated or concurrent run cannot mail the same recipient twice. Raises
+    when Redis is unavailable so the caller does not send unguarded.
+    """
+    if not redis_client:
+        raise RuntimeError("Redis unavailable for digest send guard")
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return bool(
+        redis_client.set(
+            _digest_sent_key(period, email), stamp, nx=True, ex=DIGEST_SENT_TTL_SECONDS
+        )
+    )
+
+
+def release_digest_send(period: str, email: str) -> None:
+    """Release a claim after a send that definitely did not go out."""
+    try:
+        redis_client.delete(_digest_sent_key(period, email))
+    except Exception as e:  # pylint: disable=broad-except
+        logger.error(
+            "[MONTHLY-DIGEST] ⚠️ Could not release send claim for %s: %s",
+            mask_email(email),
+            str(e),
+        )
 
 
 def _digest_unsub_page(request: Request, template: str, status_code: int, **context):
@@ -144,6 +182,7 @@ async def process_single_email_optimized(
     user_domains: list,
     all_breach_data: dict,
     client,
+    guard_period: Optional[str] = None,
 ) -> dict:
     """Optimized single email processing with pre-fetched data."""
     try:
@@ -181,6 +220,30 @@ async def process_single_email_optimized(
             ]
         }
 
+        if guard_period:
+            try:
+                claimed = claim_digest_send(guard_period, email)
+            except Exception as e:  # pylint: disable=broad-except
+                error_msg = f"Send guard error: {str(e)}"
+                logger.error(
+                    "[MONTHLY-DIGEST] ❌ Guard error for %s: %s",
+                    mask_email(email),
+                    error_msg,
+                )
+                return {
+                    "email": email,
+                    "status": "error",
+                    "type": "guard_error",
+                    "error": error_msg,
+                }
+            if not claimed:
+                logger.info(
+                    "[MONTHLY-DIGEST] ⏭️ Already sent for %s: %s",
+                    guard_period,
+                    mask_email(email),
+                )
+                return {"email": email, "status": "skipped", "type": "already_sent"}
+
         try:
             async with httpx.AsyncClient() as http_client:
                 response = await http_client.post(
@@ -194,6 +257,8 @@ async def process_single_email_optimized(
                     return {"email": email, "status": "success", "type": "sent"}
                 else:
                     error_msg = f"Mailjet API error: HTTP {response.status_code}"
+                    if guard_period:
+                        release_digest_send(guard_period, email)
                     logger.error(
                         f"[MONTHLY-DIGEST] ❌ API error for {email}: {error_msg}"
                     )
@@ -206,6 +271,10 @@ async def process_single_email_optimized(
 
         except Exception as e:
             error_msg = f"Email sending error: {str(e)}"
+            if guard_period and isinstance(
+                e, (httpx.ConnectError, httpx.ConnectTimeout)
+            ):
+                release_digest_send(guard_period, email)
             logger.error(f"[MONTHLY-DIGEST] ❌ Send error for {email}: {error_msg}")
             return {
                 "email": email,
@@ -351,7 +420,12 @@ async def process_monthly_digest_for_all_users(target_email: Optional[str] = Non
         )
 
         # Process emails with optimized batching
+        guard_period = None
+        if target_email is None:
+            guard_period = all_breach_data["target_month_start"].strftime("%Y-%m")
+
         emails_sent = 0
+        skipped_already_sent = 0
         html_generation_errors = 0
         email_sending_errors = 0
         detailed_errors = []
@@ -387,6 +461,7 @@ async def process_monthly_digest_for_all_users(target_email: Optional[str] = Non
                     user_domains,
                     all_breach_data,
                     client,
+                    guard_period,
                 )
                 batch_tasks.append(task)
 
@@ -403,6 +478,8 @@ async def process_monthly_digest_for_all_users(target_email: Optional[str] = Non
                 elif isinstance(result, dict):
                     if result["status"] == "success":
                         emails_sent += 1
+                    elif result["status"] == "skipped":
+                        skipped_already_sent += 1
                     else:
                         if result["type"] == "html_error":
                             html_generation_errors += 1
@@ -443,6 +520,7 @@ async def process_monthly_digest_for_all_users(target_email: Optional[str] = Non
             "detailed_errors": detailed_errors[:10] if detailed_errors else [],
             "skipped_custid_domains": skipped_custid_domains,
             "skipped_unsubscribed": skipped_unsubscribed,
+            "skipped_already_sent": skipped_already_sent,
             "total_verified_domains": len(verified_domains),
         }
 
@@ -464,6 +542,10 @@ async def process_monthly_digest_for_all_users(target_email: Optional[str] = Non
         logger.info(
             f"[MONTHLY-DIGEST] 🔍 Filtering: {skipped_custid_domains} custid "
             f"domains skipped from {len(verified_domains)} total"
+        )
+        logger.info(
+            "[MONTHLY-DIGEST] ⏭️ Already sent this period: %s recipients skipped",
+            skipped_already_sent,
         )
 
         if detailed_errors:
