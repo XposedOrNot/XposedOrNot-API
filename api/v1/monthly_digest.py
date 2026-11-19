@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import time
+import traceback
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -361,8 +362,6 @@ async def process_monthly_digest_for_all_users():
             f"Monthly digest processing failed after {total_duration:.2f}s: {str(e)}"
         )
         logger.error(f"[MONTHLY-DIGEST] ❌ CRITICAL FAILURE: {error_msg}")
-        import traceback
-
         logger.error(f"[MONTHLY-DIGEST] ❌ Traceback: {traceback.format_exc()}")
         raise Exception(error_msg)
     finally:

@@ -8,6 +8,8 @@ import asyncio
 import datetime
 import hashlib
 import os
+import re
+from contextlib import nullcontext
 
 import pytest
 from fastapi import HTTPException
@@ -62,8 +64,6 @@ class FakeDatastoreClient:
 
     def transaction(self):
         """Return a transaction-compatible context manager."""
-        from contextlib import nullcontext
-
         return nullcontext()
 
 
@@ -131,8 +131,6 @@ def session_key(email):
 
 def bearer_from_link(response):
     """Extract the token (session bearer) from the success page link."""
-    import re
-
     body = response.body.decode()
     match = re.search(r"token=([A-Za-z0-9_\-=]+)", body)
     return match.group(1) if match else None

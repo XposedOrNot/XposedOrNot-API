@@ -1,5 +1,6 @@
 """Custom 404 handler with path-based scanning protection."""
 
+import random
 from datetime import datetime, timedelta
 
 from fastapi import Request, HTTPException
@@ -74,8 +75,6 @@ async def handle_404_with_protection(request: Request, exc: HTTPException):
 
         # Apply progressive request dropping for repeat violators
         if violation_count > 0:
-            import random
-
             if random.random() < drop_percentage:
                 return JSONResponse(
                     status_code=HTTP_429_TOO_MANY_REQUESTS,
