@@ -574,3 +574,76 @@ def test_guard_key_is_scoped_to_period_and_hides_the_email():
     assert october != november
     assert "me@acme.com" not in october
     assert october.endswith(module._digest_sent_key("2026-10", "me@acme.com")[-32:])
+
+
+def test_owner_beyond_the_old_thousand_domain_cap_is_mailed(monkeypatch):
+    """Verified domains past the first thousand rows are still read."""
+    rows = [
+        {"domain": f"d{i}.com", "email": "big@acme.com", "verified": True}
+        for i in range(1100)
+    ]
+    rows.append({"domain": "late.com", "email": "late@late.com", "verified": True})
+    sent = []
+    monkeypatch.setattr(module, "ds_client", RunDatastoreClient(rows))
+    monkeypatch.setattr(module, "ENVIRONMENT", "production")
+    monkeypatch.setattr(module.httpx, "AsyncClient", mail_client(sent))
+
+    result = asyncio.run(module.process_monthly_digest_for_all_users())
+
+    assert module.DIGEST_MAX_VERIFIED_DOMAINS == 10000
+    assert sorted(sent) == ["big@acme.com", "late@late.com"]
+    assert result["total_verified_domains"] == 1101
+
+
+def test_clean_run_reports_success(monkeypatch):
+    """A run with no failed sends keeps the success status."""
+    result = full_run(monkeypatch, [])
+
+    assert result["status"] == "success"
+    assert result["message"] == "Monthly digest processing complete"
+
+
+def test_run_with_some_failed_sends_reports_partial(monkeypatch):
+    """A run where some recipients failed is not reported as success."""
+    result = full_run(monkeypatch, [], reject={"someone@other.com"})
+
+    assert result["status"] == "partial"
+    assert result["emails_sent"] == 1
+    assert "1 failed sends" in result["message"]
+
+
+def test_run_where_every_send_fails_reports_failed(monkeypatch):
+    """A run that delivered nothing is reported as failed."""
+    result = full_run(monkeypatch, [], reject={"me@acme.com", "someone@other.com"})
+
+    assert result["status"] == "failed"
+    assert result["emails_sent"] == 0
+
+
+def test_rerun_that_only_has_failures_left_is_partial_not_failed(monkeypatch):
+    """A retry whose remaining recipient fails again still counts earlier sends."""
+    sent = []
+    full_run(monkeypatch, sent, reject={"someone@other.com"})
+    second = full_run(monkeypatch, sent, reject={"someone@other.com"})
+
+    assert second["status"] == "partial"
+    assert second["skipped_already_sent"] == 1
+
+
+def test_partial_manual_run_does_not_mark_the_month_as_sent(monkeypatch, redis):
+    """The trigger reports the partial status and leaves the month open."""
+    monkeypatch.setattr(module, "ds_client", RunDatastoreClient(TWO_OWNERS))
+    monkeypatch.setattr(module, "ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        module.httpx, "AsyncClient", mail_client([], reject={"someone@other.com"})
+    )
+
+    response = asyncio.run(
+        module.trigger_manual_monthly_digest.__wrapped__(
+            make_request("POST"), module.CF_UNBLOCK_MAGIC, None
+        )
+    )
+
+    assert response.status == "partial"
+    assert "emails sent: 1, failed: 1" in response.message
+    assert not redis.written

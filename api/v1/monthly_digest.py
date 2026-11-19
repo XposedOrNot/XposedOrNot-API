@@ -50,6 +50,7 @@ templates = Jinja2Templates(directory="templates")
 
 ONE_CLICK_MARKER = b"List-Unsubscribe=One-Click"
 DIGEST_SENT_TTL_SECONDS = 45 * 24 * 60 * 60
+DIGEST_MAX_VERIFIED_DOMAINS = 10000
 
 
 def _digest_sent_key(period: str, email: str) -> str:
@@ -317,11 +318,17 @@ async def process_monthly_digest_for_all_users(target_email: Optional[str] = Non
         perf_start = time.time()
         query = client.query(kind="xon_domains")
         query.add_filter("verified", "=", True)
-        verified_domains = list(query.fetch(limit=1000))
+        verified_domains = list(query.fetch(limit=DIGEST_MAX_VERIFIED_DOMAINS))
         logger.info(
             f"[MONTHLY-DIGEST] 📊 PERF: Domain query took {time.time() - perf_start:.2f}s - "
             f"Found {len(verified_domains)} domains"
         )
+        if len(verified_domains) >= DIGEST_MAX_VERIFIED_DOMAINS:
+            logger.error(
+                "[MONTHLY-DIGEST] ⚠️ DOMAIN CAP REACHED: read %s verified domains, "
+                "the limit. Owners beyond the limit will not get a digest.",
+                len(verified_domains),
+            )
 
         if not verified_domains:
             logger.info("[MONTHLY-DIGEST] No verified domains found")
@@ -504,9 +511,28 @@ async def process_monthly_digest_for_all_users(target_email: Optional[str] = Non
             (emails_sent / len(unique_emails_list) * 100) if unique_emails_list else 0
         )
 
+        failed_sends = len(detailed_errors)
+        if not failed_sends:
+            run_status = "success"
+            run_message = "Monthly digest processing complete"
+        else:
+            delivered_any = emails_sent or skipped_already_sent
+            run_status = "partial" if delivered_any else "failed"
+            run_message = (
+                f"Monthly digest finished with {failed_sends} failed sends - "
+                f"run the trigger again to retry them"
+            )
+            logger.error(
+                "[MONTHLY-DIGEST] ⚠️ RUN %s: %s of %s recipients failed, month "
+                "is not marked as done",
+                run_status.upper(),
+                failed_sends,
+                len(unique_emails_list),
+            )
+
         result = {
-            "status": "success",
-            "message": f"Monthly digest processing complete",
+            "status": run_status,
+            "message": run_message,
             "emails_sent": emails_sent,
             "total_unique_emails": len(unique_emails_list),
             "html_generation_errors": html_generation_errors,
@@ -740,10 +766,11 @@ async def trigger_manual_monthly_digest(
         task_id = f"manual_{int(datetime.now(timezone.utc).timestamp())}"
 
         return MonthlyDigestResponse(
-            status="success",
+            status=result.get("status", "success"),
             message=(
                 f"{result.get('message', 'Manual monthly digest triggered')} "
-                f"(emails sent: {result.get('emails_sent', 0)})"
+                f"(emails sent: {result.get('emails_sent', 0)}, "
+                f"failed: {result.get('total_errors', 0)})"
             ),
             task_id=task_id,
             trigger_type="manual",
