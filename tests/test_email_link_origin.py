@@ -5,7 +5,6 @@ import hashlib
 import os
 from pathlib import Path
 
-import pytest
 from starlette.requests import Request
 
 os.environ.setdefault("AUTH_EMAIL", "test@example.com")

@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 # Redis client for tracking last run times
 try:
     from config.settings import ENVIRONMENT
-    from api.v1.monthly_digest import process_monthly_digest_for_all_users
     from config.clients import redis_client
 
     logger.info("📊 SCHEDULER: Redis client initialized for last-run tracking")
